@@ -354,3 +354,139 @@ export async function createStudentResult(data) {
 export async function createReportCard(data) {
   return createCollectionDocument('reportCards', data);
 }
+
+export async function getFeesManagementData() {
+  const [students, feeStructures, feeAssignments, feeCollections, feeAdjustments] = await Promise.all([
+    listCollection('students'),
+    listCollection('feeStructures'),
+    listCollection('feeAssignments'),
+    listCollection('feeCollections'),
+    listCollection('feeAdjustments'),
+  ]);
+
+  return { students, feeStructures, feeAssignments, feeCollections, feeAdjustments };
+}
+
+export async function createFeeStructure(data) {
+  return createCollectionDocument('feeStructures', data);
+}
+
+export async function updateFeeStructure(id, data) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'feeStructures', id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function createFeeAssignment(data) {
+  return createCollectionDocument('feeAssignments', data);
+}
+
+export async function updateFeeAssignment(id, data) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'feeAssignments', id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function createFeeCollection(data) {
+  return createCollectionDocument('feeCollections', data);
+}
+
+export async function createFeeAdjustment(data) {
+  return createCollectionDocument('feeAdjustments', data);
+}
+
+export async function getFinancialReportsData() {
+  const [feeStructures, feeAssignments, feeCollections, feeAdjustments, financialReportSnapshots] = await Promise.all([
+    listCollection('feeStructures'),
+    listCollection('feeAssignments'),
+    listCollection('feeCollections'),
+    listCollection('feeAdjustments'),
+    listCollection('financialReportSnapshots'),
+  ]);
+
+  return { feeStructures, feeAssignments, feeCollections, feeAdjustments, financialReportSnapshots };
+}
+
+export async function createFinancialReportSnapshot(data) {
+  return createCollectionDocument('financialReportSnapshots', data);
+}
+
+export async function getNoticeBoardData() {
+  const [noticeItems] = await Promise.all([
+    listCollection('noticeItems'),
+  ]);
+
+  return { noticeItems };
+}
+
+export async function createNoticeItem(data) {
+  return createCollectionDocument('noticeItems', data);
+}
+
+export async function updateNoticeItem(id, data) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'noticeItems', id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function archiveNoticeItem(id, data = {}) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'noticeItems', id), {
+    ...data,
+    status: 'Archived',
+    archivedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getDocumentManagementData() {
+  const [students, staff, managedDocuments] = await Promise.all([
+    listCollection('students'),
+    listCollection('staffMembers'),
+    listCollection('managedDocuments'),
+  ]);
+
+  return { students, staff, managedDocuments };
+}
+
+export async function createManagedDocument(data) {
+  return createCollectionDocument('managedDocuments', data);
+}
+
+export async function updateManagedDocument(id, data) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'managedDocuments', id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function archiveManagedDocument(id, data = {}) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'managedDocuments', id), {
+    ...data,
+    verificationStatus: 'Archived',
+    archivedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getParentPortalData() {
+  const [students, studentAttendance, marksEntries, studentResults, feeAssignments, noticeItems, managedDocuments] = await Promise.all([
+    listCollection('students'),
+    listCollection('studentAttendanceRecords'),
+    listCollection('marksEntries'),
+    listCollection('studentResults'),
+    listCollection('feeAssignments'),
+    listCollection('noticeItems'),
+    listCollection('managedDocuments'),
+  ]);
+
+  return { students, studentAttendance, marksEntries, studentResults, feeAssignments, noticeItems, managedDocuments };
+}

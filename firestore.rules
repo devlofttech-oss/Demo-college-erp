@@ -122,6 +122,46 @@ service cloud.firestore {
       allow read, create, update: if isSignedIn();
       allow delete: if false;
     }
+
+    match /feeStructures/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /feeAssignments/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /feeCollections/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /feeAdjustments/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /financialReportSnapshots/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /noticeItems/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /managedDocuments/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /parentPortalLinks/{documentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if false;
+    }
   }
 }
 

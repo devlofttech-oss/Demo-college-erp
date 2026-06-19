@@ -73,7 +73,7 @@ export const moduleRegistry = [
     path: '/modules/notice-board',
     group: 'Administration & Operations',
     icon: Bell,
-    status: 'planned',
+    status: 'active',
   },
   {
     id: 'document-management',
@@ -81,7 +81,7 @@ export const moduleRegistry = [
     path: '/modules/document-management',
     group: 'Administration & Operations',
     icon: FileText,
-    status: 'planned',
+    status: 'active',
   },
   {
     id: 'fees',
@@ -89,7 +89,7 @@ export const moduleRegistry = [
     path: '/modules/fees',
     group: 'Finance Management',
     icon: Wallet,
-    status: 'planned',
+    status: 'active',
   },
   {
     id: 'financial-reports',
@@ -97,7 +97,7 @@ export const moduleRegistry = [
     path: '/modules/financial-reports',
     group: 'Finance Management',
     icon: TrendingUp,
-    status: 'planned',
+    status: 'active',
   },
   {
     id: 'parent-portal',
@@ -105,7 +105,7 @@ export const moduleRegistry = [
     path: '/modules/parent-portal',
     group: 'Parent Portal',
     icon: Users,
-    status: 'planned',
+    status: 'active',
   },
   {
     id: 'settings',

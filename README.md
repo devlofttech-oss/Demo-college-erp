@@ -380,3 +380,214 @@ Role permissions:
 - `exams.marks`
 - `exams.results`
 - `exams.reportCards`
+
+## Fees Management Status
+
+Implemented workflows:
+
+- Fee structure setup by class and academic year.
+- Student fee assignment from active class-wise structures.
+- Manual/offline fee collection records.
+- Due tracking with paid, partially paid, due, overdue, due soon, and upcoming states.
+- Fee adjustment and waiver logging.
+- Collection, outstanding, adjustment, and due-student summaries.
+- Permission-aware controls for setup, assignment, collection, adjustment, and reports.
+- Demo fallback data when Firebase is not configured.
+
+Excluded for now:
+
+- Online payment support.
+- Receipt generation.
+
+Current structure:
+
+- `src/modules/fees/FeesManagement.jsx`
+- `src/modules/fees/feeUtils.js`
+- `src/modules/fees/demoFees.js`
+- `src/modules/fees/components/FeeAdjustmentModal.jsx`
+- `src/modules/fees/components/FeeAssignmentTable.jsx`
+- `src/modules/fees/components/FeeCollectionModal.jsx`
+- `src/modules/fees/components/FeeReportsPanel.jsx`
+- `src/modules/fees/components/FeeStructureModal.jsx`
+- `src/modules/fees/components/FeeStructurePanel.jsx`
+
+Firebase collections:
+
+- `feeStructures`
+- `feeAssignments`
+- `feeCollections`
+- `feeAdjustments`
+
+Role permissions:
+
+- `fees.view`
+- `fees.setup`
+- `fees.assign`
+- `fees.collect`
+- `fees.adjust`
+- `fees.reports`
+
+## Financial Reports Status
+
+Implemented workflows:
+
+- Collection reports with date, class, and payment-mode filters.
+- Outstanding reports with overdue and due-soon aging.
+- Class-wise fee analytics with collection rate.
+- Financial summaries for assigned, collected, adjusted, outstanding, overdue, and due-soon amounts.
+- Saved financial report summary snapshots.
+- Permission-aware controls for viewing, exporting, and saving summaries.
+- Demo fallback data when Firebase is not configured.
+
+Current structure:
+
+- `src/modules/financialReports/FinancialReports.jsx`
+- `src/modules/financialReports/financialReportUtils.js`
+- `src/modules/financialReports/demoFinancialReports.js`
+- `src/modules/financialReports/components/AnalyticsPanel.jsx`
+- `src/modules/financialReports/components/CollectionReportTable.jsx`
+- `src/modules/financialReports/components/OutstandingReportTable.jsx`
+- `src/modules/financialReports/components/ReportFilters.jsx`
+
+Firebase collections:
+
+- `feeStructures`
+- `feeAssignments`
+- `feeCollections`
+- `feeAdjustments`
+- `financialReportSnapshots`
+
+Role permissions:
+
+- `financialReports.view`
+- `financialReports.export`
+- `financialReports.snapshots`
+
+## Notice Board & Announcements Status
+
+Implemented workflows:
+
+- Digital notices.
+- Circular management.
+- Event announcements.
+- Audience targeting for all, students, faculty, parents, and administration.
+- Draft, scheduled, published, expired, and archived states.
+- Priority tagging for normal, important, and urgent announcements.
+- Preview panel for announcement review.
+- Permission-aware controls for viewing, creating, editing, and archiving.
+- Demo fallback data when Firebase is not configured.
+
+Excluded for now:
+
+- SMS integration.
+- Email notifications.
+- Parent communication system.
+
+Current structure:
+
+- `src/modules/notices/NoticeBoardManagement.jsx`
+- `src/modules/notices/noticeUtils.js`
+- `src/modules/notices/demoNotices.js`
+- `src/modules/notices/components/NoticeModal.jsx`
+- `src/modules/notices/components/NoticePreviewPanel.jsx`
+- `src/modules/notices/components/NoticeTable.jsx`
+
+Firebase collections:
+
+- `noticeItems`
+
+Role permissions:
+
+- `notices.view`
+- `notices.create`
+- `notices.edit`
+- `notices.archive`
+
+## Document Management Status
+
+Implemented workflows:
+
+- Student document management.
+- Staff document management.
+- Academic records archive.
+- Firebase Storage-backed uploads for managed documents.
+- Metadata-only document records when a file is not selected or Storage is unavailable.
+- Document verification and rejection workflow.
+- Document archive workflow.
+- Filters by owner type, category, status, and search text.
+- Preview panel with file metadata and verification details.
+- Permission-aware controls for viewing, uploading, verifying, and archiving.
+- Demo fallback data when Firebase is not configured.
+
+Current structure:
+
+- `src/modules/documents/DocumentManagement.jsx`
+- `src/modules/documents/documentUtils.js`
+- `src/modules/documents/demoDocuments.js`
+- `src/modules/documents/components/DocumentArchivePanel.jsx`
+- `src/modules/documents/components/DocumentPreviewPanel.jsx`
+- `src/modules/documents/components/DocumentTable.jsx`
+- `src/modules/documents/components/DocumentUploadModal.jsx`
+
+Firebase collections:
+
+- `managedDocuments`
+- `students`
+- `staffMembers`
+
+Firebase Storage paths:
+
+- `managed-documents/{ownerType}/{ownerId}/{fileName}`
+
+Role permissions:
+
+- `documents.view`
+- `documents.upload`
+- `documents.verify`
+- `documents.archive`
+
+## Parent Portal Status
+
+Implemented workflows:
+
+- Linked student overview for parent accounts.
+- Student attendance monitoring.
+- Academic performance tracking from marks and generated results.
+- Fee status monitoring from fee assignments.
+- Published parent/student notice visibility.
+- Verified student document visibility.
+- Read-only parent-facing dashboard with role-aware access.
+- Demo fallback data when Firebase is not configured.
+
+Excluded for now:
+
+- Parent communication system.
+- SMS integration.
+- Email notifications.
+
+Current structure:
+
+- `src/modules/parentPortal/ParentPortal.jsx`
+- `src/modules/parentPortal/parentPortalUtils.js`
+- `src/modules/parentPortal/demoParentPortal.js`
+- `src/modules/parentPortal/components/AttendanceCard.jsx`
+- `src/modules/parentPortal/components/FeeStatusCard.jsx`
+- `src/modules/parentPortal/components/ParentDocumentsPanel.jsx`
+- `src/modules/parentPortal/components/ParentNoticePanel.jsx`
+- `src/modules/parentPortal/components/PerformanceCard.jsx`
+- `src/modules/parentPortal/components/StudentSwitcher.jsx`
+
+Firebase collections read:
+
+- `students`
+- `studentAttendanceRecords`
+- `marksEntries`
+- `studentResults`
+- `feeAssignments`
+- `noticeItems`
+- `managedDocuments`
+- `parentPortalLinks`
+
+Role permissions:
+
+- `parentPortal.view`

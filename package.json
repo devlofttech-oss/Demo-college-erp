@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node scripts/testStudentUtils.js && node scripts/testUserRoles.js && node scripts/testFacultyStaff.js && node scripts/testAttendance.js && node scripts/testTimetable.js && node scripts/testExams.js",
+    "test": "node scripts/testStudentUtils.js && node scripts/testUserRoles.js && node scripts/testFacultyStaff.js && node scripts/testAttendance.js && node scripts/testTimetable.js && node scripts/testExams.js && node scripts/testFees.js && node scripts/testFinancialReports.js && node scripts/testNotices.js && node scripts/testDocuments.js && node scripts/testParentPortal.js",
     "preview": "vite preview"
   },
   "dependencies": {

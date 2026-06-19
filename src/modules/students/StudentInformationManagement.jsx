@@ -45,6 +45,11 @@ import FacultyStaffManagement from '../facultyStaff/FacultyStaffManagement';
 import AttendanceManagement from '../attendance/AttendanceManagement';
 import TimetableManagement from '../timetable/TimetableManagement';
 import ExaminationResultManagement from '../exams/ExaminationResultManagement';
+import FeesManagement from '../fees/FeesManagement';
+import FinancialReports from '../financialReports/FinancialReports';
+import NoticeBoardManagement from '../notices/NoticeBoardManagement';
+import DocumentManagement from '../documents/DocumentManagement';
+import ParentPortal from '../parentPortal/ParentPortal';
 
 const tabs = [
   { id: 'admissions', label: 'Admissions', icon: <Plus size={15} /> },
@@ -648,6 +653,16 @@ export default function StudentInformationManagement({ user, onLogout }) {
                   <TimetableManagement currentUser={user} />
                 ) : activePage === 'examination-results' ? (
                   <ExaminationResultManagement currentUser={user} />
+                ) : activePage === 'fees' ? (
+                  <FeesManagement currentUser={user} />
+                ) : activePage === 'financial-reports' ? (
+                  <FinancialReports currentUser={user} />
+                ) : activePage === 'notice-board' ? (
+                  <NoticeBoardManagement currentUser={user} />
+                ) : activePage === 'document-management' ? (
+                  <DocumentManagement currentUser={user} />
+                ) : activePage === 'parent-portal' ? (
+                  <ParentPortal currentUser={user} />
                 ) : activePage === 'user-roles' ? (
                   <UserRoleManagement currentUser={user} />
                 ) : (

@@ -10,5 +10,10 @@ service firebase.storage {
       allow read, write: if isSignedIn();
       allow delete: if false;
     }
+
+    match /managed-documents/{ownerType}/{ownerId}/{fileName} {
+      allow read, write: if isSignedIn();
+      allow delete: if false;
+    }
   }
 }

@@ -1,0 +1,63 @@
+import { demoStudents } from '../students/demoStudents';
+import { demoStaffMembers } from '../facultyStaff/demoFacultyStaff';
+
+export const demoDocumentStudents = demoStudents;
+export const demoDocumentStaff = demoStaffMembers;
+
+export const demoManagedDocuments = [
+  {
+    id: 'demo-managed-doc-1',
+    ownerType: 'Student',
+    ownerRecordId: 'demo-4449',
+    ownerId: 'STU-4449',
+    ownerName: 'Vivek Sharma',
+    documentType: 'Aadhaar Card',
+    category: 'Identity',
+    fileName: 'vivek-aadhaar.pdf',
+    fileSize: 248000,
+    fileType: 'application/pdf',
+    fileUrl: '',
+    storagePath: '',
+    verificationStatus: 'Verified',
+    uploadedAtText: '10 Jun 2026',
+    verifiedAtText: '11 Jun 2026',
+    tags: 'identity, student',
+  },
+  {
+    id: 'demo-managed-doc-2',
+    ownerType: 'Staff',
+    ownerRecordId: 'demo-staff-1001',
+    ownerId: 'EMP-1001',
+    ownerName: 'Dr. Kavita Menon',
+    documentType: 'Qualification Certificate',
+    category: 'HR',
+    fileName: 'kavita-phd-certificate.pdf',
+    fileSize: 510000,
+    fileType: 'application/pdf',
+    fileUrl: '',
+    storagePath: '',
+    verificationStatus: 'Pending Review',
+    uploadedAtText: '12 Jun 2026',
+    verifiedAtText: '',
+    tags: 'faculty, qualification',
+  },
+  {
+    id: 'demo-managed-doc-3',
+    ownerType: 'Academic Archive',
+    ownerRecordId: '',
+    ownerId: 'ARCHIVE-2026-001',
+    ownerName: 'Academic Records Archive',
+    archiveTitle: 'Class XII Board Result Register',
+    documentType: 'Result Register',
+    category: 'Academic',
+    fileName: 'class-xii-result-register-2026.xlsx',
+    fileSize: 78000,
+    fileType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    fileUrl: '',
+    storagePath: '',
+    verificationStatus: 'Verified',
+    uploadedAtText: '15 Jun 2026',
+    verifiedAtText: '16 Jun 2026',
+    tags: 'results, archive',
+  },
+];

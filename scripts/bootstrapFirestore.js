@@ -154,6 +154,38 @@ const collections = {
     purpose: 'Report card generation metadata',
     fields: ['studentRecordId', 'studentId', 'examName', 'status', 'generatedAtText'],
   },
+  feeStructures: {
+    purpose: 'Class-wise fee structure setup',
+    fields: ['name', 'classKey', 'academicYear', 'tuitionFee', 'libraryFee', 'labFee', 'transportFee', 'totalAmount', 'dueDate', 'status', 'createdAtText', 'updatedAtText'],
+  },
+  feeAssignments: {
+    purpose: 'Student fee assignment and due tracking',
+    fields: ['feeStructureId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'academicYear', 'totalAmount', 'paidAmount', 'adjustmentAmount', 'dueAmount', 'dueDate', 'status', 'assignedAtText', 'updatedAtText'],
+  },
+  feeCollections: {
+    purpose: 'Manual/offline fee collection records',
+    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'paymentMode', 'referenceNo', 'paymentDate', 'collectedBy', 'status', 'createdAtText'],
+  },
+  feeAdjustments: {
+    purpose: 'Fee concessions, waivers, and approved adjustments',
+    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'reason', 'status', 'createdAtText'],
+  },
+  financialReportSnapshots: {
+    purpose: 'Saved financial report summary snapshots',
+    fields: ['reportName', 'filters', 'totalAssigned', 'lifetimeCollected', 'filteredCollected', 'totalAdjusted', 'totalOutstanding', 'overdueAmount', 'dueSoonAmount', 'collectionRate', 'classCount', 'dueStudentCount', 'status', 'createdAtText'],
+  },
+  noticeItems: {
+    purpose: 'Digital notices, circulars, and event announcements',
+    fields: ['type', 'title', 'referenceNo', 'audience', 'priority', 'body', 'publishDate', 'expiryDate', 'status', 'createdByName', 'createdAtText', 'updatedAtText', 'archivedAtText'],
+  },
+  managedDocuments: {
+    purpose: 'Student, staff, and academic archive document metadata',
+    fields: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'archiveTitle', 'documentType', 'category', 'fileName', 'fileSize', 'fileType', 'fileUrl', 'storagePath', 'verificationStatus', 'uploadedAtText', 'verifiedAtText', 'archivedAtText', 'tags'],
+  },
+  parentPortalLinks: {
+    purpose: 'Optional parent-to-student relationship map for portal filtering',
+    fields: ['parentUserId', 'parentEmail', 'studentRecordId', 'studentId', 'relationship', 'status'],
+  },
 };
 
 const app = initializeApp(firebaseConfig);
