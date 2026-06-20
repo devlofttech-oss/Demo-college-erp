@@ -32,7 +32,7 @@ import FeeReportsPanel from './components/FeeReportsPanel';
 import FeeStructureModal from './components/FeeStructureModal';
 import FeeStructurePanel from './components/FeeStructurePanel';
 
-export default function FeesManagement({ currentUser }) {
+export default function FeesManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoFeeStudents);
   const [structures, setStructures] = useState(demoFeeStructures);
   const [assignments, setAssignments] = useState(demoFeeAssignments);
@@ -50,7 +50,7 @@ export default function FeesManagement({ currentUser }) {
   useEffect(() => {
     const loadFees = async () => {
       try {
-        const data = await getFeesManagementData();
+        const data = await getFeesManagementData(academicYear);
         if (data.students.length) setStudents(data.students.filter((student) => student.status !== 'Archived'));
         setStructures(data.feeStructures);
         setAssignments(data.feeAssignments);
@@ -64,7 +64,7 @@ export default function FeesManagement({ currentUser }) {
       }
     };
     loadFees();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canSetup = canAccess(defaultRoles, currentRoleId, 'fees.setup');
@@ -210,6 +210,7 @@ export default function FeesManagement({ currentUser }) {
       studentId: assignment.studentId,
       studentName: assignment.studentName,
       amount,
+      academicYear: assignment.academicYear || academicYear,
       paymentMode: form.paymentMode,
       referenceNo: form.referenceNo.trim(),
       paymentDate: form.paymentDate,
@@ -259,6 +260,7 @@ export default function FeesManagement({ currentUser }) {
       studentId: assignment.studentId,
       studentName: assignment.studentName,
       amount,
+      academicYear: assignment.academicYear || academicYear,
       reason: form.reason.trim(),
       status: 'Approved',
       createdAtText: formatDisplayDate(),

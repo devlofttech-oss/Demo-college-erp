@@ -30,7 +30,7 @@ import ParentNoticePanel from './components/ParentNoticePanel';
 import PerformanceCard from './components/PerformanceCard';
 import StudentSwitcher from './components/StudentSwitcher';
 
-export default function ParentPortal({ currentUser }) {
+export default function ParentPortal({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoParentStudents);
   const [attendance, setAttendance] = useState(demoParentAttendance);
   const [marks, setMarks] = useState(demoParentMarks);
@@ -45,7 +45,7 @@ export default function ParentPortal({ currentUser }) {
   useEffect(() => {
     const loadPortal = async () => {
       try {
-        const data = await getParentPortalData();
+        const data = await getParentPortalData(academicYear);
         if (data.students.length) {
           const linked = getParentLinkedStudents(data.students, currentUser);
           setStudents(linked);

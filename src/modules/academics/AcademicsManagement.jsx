@@ -15,7 +15,7 @@ const tabs = [
   ['calendar', 'Calendar'],
 ];
 
-export default function AcademicsManagement({ currentUser }) {
+export default function AcademicsManagement({ currentUser, academicYear = '2026-2027' }) {
   const [programs, setPrograms] = useState(demoAcademicPrograms);
   const [subjects, setSubjects] = useState(demoAcademicSubjects);
   const [batches, setBatches] = useState(demoAcademicBatches);
@@ -28,7 +28,7 @@ export default function AcademicsManagement({ currentUser }) {
   useEffect(() => {
     const loadAcademics = async () => {
       try {
-        const data = await getAcademicsData();
+        const data = await getAcademicsData(academicYear);
         setPrograms(data.academicPrograms);
         setSubjects(data.academicSubjects);
         setBatches(data.academicBatches);
@@ -41,7 +41,7 @@ export default function AcademicsManagement({ currentUser }) {
       }
     };
     loadAcademics();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canManage = canAccess(defaultRoles, currentRoleId, 'academics.manage');
@@ -66,25 +66,25 @@ export default function AcademicsManagement({ currentUser }) {
     const createdAtText = formatDisplayDate();
     try {
       if (activeTab === 'programs') {
-        const payload = { name: `Academic Program ${programs.length + 1}`, code: `PRG-${programs.length + 1}`, academicYear: '2026-2027', status: 'Active', createdAtText };
+        const payload = { name: `Academic Program ${programs.length + 1}`, code: `PRG-${programs.length + 1}`, academicYear, status: 'Active', createdAtText };
         const message = validateProgram(payload);
         if (message) return toast.error(message);
         const id = await createAcademicProgram(payload);
         setPrograms((prev) => [{ id: id || `local-program-${Date.now()}`, ...payload }, ...prev]);
       } else if (activeTab === 'subjects') {
-        const payload = { subjectName: `Subject ${subjects.length + 1}`, subjectCode: `SUB-${subjects.length + 1}`, programName: programs[0]?.name || 'General', creditHours: 5, status: 'Active', createdAtText };
+        const payload = { subjectName: `Subject ${subjects.length + 1}`, subjectCode: `SUB-${subjects.length + 1}`, programName: programs[0]?.name || 'General', creditHours: 5, academicYear, status: 'Active', createdAtText };
         const message = validateSubject(payload);
         if (message) return toast.error(message);
         const id = await createAcademicSubject(payload);
         setSubjects((prev) => [{ id: id || `local-subject-${Date.now()}`, ...payload }, ...prev]);
       } else if (activeTab === 'batches') {
-        const payload = { className: `Class ${batches.length + 1}`, section: 'A', programName: programs[0]?.name || 'General', classTeacher: 'Unassigned', capacity: 45, status: 'Active', createdAtText };
+        const payload = { className: `Class ${batches.length + 1}`, section: 'A', programName: programs[0]?.name || 'General', classTeacher: 'Unassigned', capacity: 45, academicYear, status: 'Active', createdAtText };
         const message = validateBatch(payload);
         if (message) return toast.error(message);
         const id = await createAcademicBatch(payload);
         setBatches((prev) => [{ id: id || `local-batch-${Date.now()}`, ...payload }, ...prev]);
       } else {
-        const payload = { title: `Academic Event ${events.length + 1}`, eventType: 'Academic', eventDate: new Date().toISOString().slice(0, 10), audience: 'All', status: 'Published', createdAtText };
+        const payload = { title: `Academic Event ${events.length + 1}`, eventType: 'Academic', eventDate: new Date().toISOString().slice(0, 10), audience: 'All', academicYear, status: 'Published', createdAtText };
         const message = validateCalendarEvent(payload);
         if (message) return toast.error(message);
         const id = await createAcademicCalendarEvent(payload);

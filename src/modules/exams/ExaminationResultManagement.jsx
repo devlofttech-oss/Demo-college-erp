@@ -21,7 +21,7 @@ import ExamScheduleTable from './components/ExamScheduleTable';
 import MarksEntryModal from './components/MarksEntryModal';
 import ResultsPanel from './components/ResultsPanel';
 
-export default function ExaminationResultManagement({ currentUser }) {
+export default function ExaminationResultManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoExamStudents);
   const [staff, setStaff] = useState(demoExamStaff);
   const [schedules, setSchedules] = useState(demoExamSchedules);
@@ -39,7 +39,7 @@ export default function ExaminationResultManagement({ currentUser }) {
   useEffect(() => {
     const loadExams = async () => {
       try {
-        const data = await getExaminationResultData();
+        const data = await getExaminationResultData(academicYear);
         if (data.students.length) setStudents(data.students.filter((student) => student.status !== 'Archived'));
         if (data.staff.length) setStaff(data.staff.filter((member) => member.staffType === 'Faculty' && member.status !== 'Archived'));
         setSchedules(data.examSchedules);
@@ -55,7 +55,7 @@ export default function ExaminationResultManagement({ currentUser }) {
       }
     };
     loadExams();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canSchedule = canAccess(defaultRoles, currentRoleId, 'exams.schedule');
@@ -120,7 +120,7 @@ export default function ExaminationResultManagement({ currentUser }) {
       }
       return;
     }
-    const createPayload = { ...payload, createdAtText: formatDisplayDate() };
+    const createPayload = { ...payload, academicYear, createdAtText: formatDisplayDate() };
     try {
       const id = await createExamSchedule(createPayload);
       setSchedules((prev) => [{ id: id || `local-exam-${Date.now()}`, ...createPayload }, ...prev]);
@@ -149,6 +149,7 @@ export default function ExaminationResultManagement({ currentUser }) {
       subject: base.subject,
       maxMarks: 20,
       status: 'Active',
+      academicYear,
       createdAtText: formatDisplayDate(),
     };
     try {
@@ -181,6 +182,7 @@ export default function ExaminationResultManagement({ currentUser }) {
       studentName: student.name,
       classKey: schedule.classKey,
       subject: schedule.subject,
+      academicYear,
       marksObtained: Number(form.marksObtained),
       maxMarks: Number(schedule.maxMarks),
       percentage,
@@ -222,6 +224,7 @@ export default function ExaminationResultManagement({ currentUser }) {
         studentName: student.name,
         classKey: `${student.className} - ${student.section}`,
         examName: 'Combined Result',
+        academicYear,
         ...summary,
         status: calculateResultStatus(summary.percentage),
         generatedAtText: formatDisplayDate(),
@@ -246,6 +249,7 @@ export default function ExaminationResultManagement({ currentUser }) {
       studentRecordId: result.studentRecordId,
       studentId: result.studentId,
       examName: result.examName,
+      academicYear,
       status: 'Generated',
       generatedAtText: formatDisplayDate(),
     }));

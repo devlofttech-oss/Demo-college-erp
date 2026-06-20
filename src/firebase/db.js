@@ -13,6 +13,16 @@ import {
 import { db } from './config';
 
 const SCHEMA_DOC_ID = '__schema';
+export const DEFAULT_ACADEMIC_YEAR = '2026-2027';
+
+function filterByAcademicYear(records = [], academicYear = '') {
+  if (!academicYear) return records;
+  return records.filter((record) => record.academicYear === academicYear);
+}
+
+function academicYearWhere(academicYear = '') {
+  return academicYear ? [where('academicYear', '==', academicYear)] : [];
+}
 
 async function listCollection(collectionName, constraints = []) {
   if (!db) return [];
@@ -34,7 +44,7 @@ async function createCollectionDocument(collectionName, data) {
 }
 
 export async function getStudentInformationData(academicYear = '') {
-  const yearConstraints = academicYear ? [where('academicYear', '==', academicYear)] : [];
+  const yearConstraints = academicYearWhere(academicYear);
   const [
     students,
     admissions,
@@ -170,15 +180,16 @@ export async function updateRole(id, data) {
   });
 }
 
-export async function getFacultyStaffData() {
+export async function getFacultyStaffData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [staff, departments, leaveRecords, attendanceRecords] = await Promise.all([
     listCollection('staffMembers'),
     listCollection('departments'),
-    listCollection('staffLeaveRecords'),
-    listCollection('staffAttendanceRecords'),
+    listCollection('staffLeaveRecords', yearConstraints),
+    listCollection('staffAttendanceRecords', yearConstraints),
   ]);
 
-  return { staff, departments, leaveRecords, attendanceRecords };
+  return { staff, departments, leaveRecords: filterByAcademicYear(leaveRecords, academicYear), attendanceRecords: filterByAcademicYear(attendanceRecords, academicYear) };
 }
 
 export async function createStaffMember(data) {
@@ -233,16 +244,17 @@ export async function createStaffAttendanceRecord(data) {
   return createCollectionDocument('staffAttendanceRecords', data);
 }
 
-export async function getAttendanceManagementData() {
+export async function getAttendanceManagementData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [students, staff, studentAttendance, staffAttendance, notifications] = await Promise.all([
-    listCollection('students'),
+    listCollection('students', yearConstraints),
     listCollection('staffMembers'),
-    listCollection('studentAttendanceRecords'),
-    listCollection('staffAttendanceRecords'),
-    listCollection('attendanceNotifications'),
+    listCollection('studentAttendanceRecords', yearConstraints),
+    listCollection('staffAttendanceRecords', yearConstraints),
+    listCollection('attendanceNotifications', yearConstraints),
   ]);
 
-  return { students, staff, studentAttendance, staffAttendance, notifications };
+  return { students: filterByAcademicYear(students, academicYear), staff, studentAttendance: filterByAcademicYear(studentAttendance, academicYear), staffAttendance: filterByAcademicYear(staffAttendance, academicYear), notifications: filterByAcademicYear(notifications, academicYear) };
 }
 
 export async function createStudentAttendanceRecord(data) {
@@ -261,16 +273,17 @@ export async function createAttendanceNotification(data) {
   return createCollectionDocument('attendanceNotifications', data);
 }
 
-export async function getTimetableManagementData() {
+export async function getTimetableManagementData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [students, staff, classrooms, timetableEntries, publications] = await Promise.all([
-    listCollection('students'),
+    listCollection('students', yearConstraints),
     listCollection('staffMembers'),
     listCollection('classrooms'),
-    listCollection('timetableEntries'),
-    listCollection('timetablePublications'),
+    listCollection('timetableEntries', yearConstraints),
+    listCollection('timetablePublications', yearConstraints),
   ]);
 
-  return { students, staff, classrooms, timetableEntries, publications };
+  return { students: filterByAcademicYear(students, academicYear), staff, classrooms, timetableEntries: filterByAcademicYear(timetableEntries, academicYear), publications: filterByAcademicYear(publications, academicYear) };
 }
 
 export async function createClassroom(data) {
@@ -303,18 +316,19 @@ export async function createTimetablePublication(data) {
   return createCollectionDocument('timetablePublications', data);
 }
 
-export async function getExaminationResultData() {
+export async function getExaminationResultData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [students, staff, examSchedules, assessments, marks, results, reportCards] = await Promise.all([
-    listCollection('students'),
+    listCollection('students', yearConstraints),
     listCollection('staffMembers'),
-    listCollection('examSchedules'),
-    listCollection('internalAssessments'),
-    listCollection('marksEntries'),
-    listCollection('studentResults'),
-    listCollection('reportCards'),
+    listCollection('examSchedules', yearConstraints),
+    listCollection('internalAssessments', yearConstraints),
+    listCollection('marksEntries', yearConstraints),
+    listCollection('studentResults', yearConstraints),
+    listCollection('reportCards', yearConstraints),
   ]);
 
-  return { students, staff, examSchedules, assessments, marks, results, reportCards };
+  return { students: filterByAcademicYear(students, academicYear), staff, examSchedules: filterByAcademicYear(examSchedules, academicYear), assessments: filterByAcademicYear(assessments, academicYear), marks: filterByAcademicYear(marks, academicYear), results: filterByAcademicYear(results, academicYear), reportCards: filterByAcademicYear(reportCards, academicYear) };
 }
 
 export async function createExamSchedule(data) {
@@ -353,16 +367,17 @@ export async function createReportCard(data) {
   return createCollectionDocument('reportCards', data);
 }
 
-export async function getFeesManagementData() {
+export async function getFeesManagementData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [students, feeStructures, feeAssignments, feeCollections, feeAdjustments] = await Promise.all([
-    listCollection('students'),
-    listCollection('feeStructures'),
-    listCollection('feeAssignments'),
-    listCollection('feeCollections'),
-    listCollection('feeAdjustments'),
+    listCollection('students', yearConstraints),
+    listCollection('feeStructures', yearConstraints),
+    listCollection('feeAssignments', yearConstraints),
+    listCollection('feeCollections', yearConstraints),
+    listCollection('feeAdjustments', yearConstraints),
   ]);
 
-  return { students, feeStructures, feeAssignments, feeCollections, feeAdjustments };
+  return { students: filterByAcademicYear(students, academicYear), feeStructures: filterByAcademicYear(feeStructures, academicYear), feeAssignments: filterByAcademicYear(feeAssignments, academicYear), feeCollections: filterByAcademicYear(feeCollections, academicYear), feeAdjustments: filterByAcademicYear(feeAdjustments, academicYear) };
 }
 
 export async function createFeeStructure(data) {
@@ -397,28 +412,30 @@ export async function createFeeAdjustment(data) {
   return createCollectionDocument('feeAdjustments', data);
 }
 
-export async function getFinancialReportsData() {
+export async function getFinancialReportsData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [feeStructures, feeAssignments, feeCollections, feeAdjustments, financialReportSnapshots] = await Promise.all([
-    listCollection('feeStructures'),
-    listCollection('feeAssignments'),
-    listCollection('feeCollections'),
-    listCollection('feeAdjustments'),
-    listCollection('financialReportSnapshots'),
+    listCollection('feeStructures', yearConstraints),
+    listCollection('feeAssignments', yearConstraints),
+    listCollection('feeCollections', yearConstraints),
+    listCollection('feeAdjustments', yearConstraints),
+    listCollection('financialReportSnapshots', yearConstraints),
   ]);
 
-  return { feeStructures, feeAssignments, feeCollections, feeAdjustments, financialReportSnapshots };
+  return { feeStructures: filterByAcademicYear(feeStructures, academicYear), feeAssignments: filterByAcademicYear(feeAssignments, academicYear), feeCollections: filterByAcademicYear(feeCollections, academicYear), feeAdjustments: filterByAcademicYear(feeAdjustments, academicYear), financialReportSnapshots: filterByAcademicYear(financialReportSnapshots, academicYear) };
 }
 
 export async function createFinancialReportSnapshot(data) {
   return createCollectionDocument('financialReportSnapshots', data);
 }
 
-export async function getNoticeBoardData() {
+export async function getNoticeBoardData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [noticeItems] = await Promise.all([
-    listCollection('noticeItems'),
+    listCollection('noticeItems', yearConstraints),
   ]);
 
-  return { noticeItems };
+  return { noticeItems: filterByAcademicYear(noticeItems, academicYear) };
 }
 
 export async function createNoticeItem(data) {
@@ -443,14 +460,15 @@ export async function archiveNoticeItem(id, data = {}) {
   });
 }
 
-export async function getDocumentManagementData() {
+export async function getDocumentManagementData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [students, staff, managedDocuments] = await Promise.all([
-    listCollection('students'),
+    listCollection('students', yearConstraints),
     listCollection('staffMembers'),
-    listCollection('managedDocuments'),
+    listCollection('managedDocuments', yearConstraints),
   ]);
 
-  return { students, staff, managedDocuments };
+  return { students: filterByAcademicYear(students, academicYear), staff, managedDocuments: filterByAcademicYear(managedDocuments, academicYear) };
 }
 
 export async function createManagedDocument(data) {
@@ -475,29 +493,31 @@ export async function archiveManagedDocument(id, data = {}) {
   });
 }
 
-export async function getParentPortalData() {
+export async function getParentPortalData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [students, studentAttendance, marksEntries, studentResults, feeAssignments, noticeItems, managedDocuments] = await Promise.all([
-    listCollection('students'),
-    listCollection('studentAttendanceRecords'),
-    listCollection('marksEntries'),
-    listCollection('studentResults'),
-    listCollection('feeAssignments'),
-    listCollection('noticeItems'),
-    listCollection('managedDocuments'),
+    listCollection('students', yearConstraints),
+    listCollection('studentAttendanceRecords', yearConstraints),
+    listCollection('marksEntries', yearConstraints),
+    listCollection('studentResults', yearConstraints),
+    listCollection('feeAssignments', yearConstraints),
+    listCollection('noticeItems', yearConstraints),
+    listCollection('managedDocuments', yearConstraints),
   ]);
 
-  return { students, studentAttendance, marksEntries, studentResults, feeAssignments, noticeItems, managedDocuments };
+  return { students: filterByAcademicYear(students, academicYear), studentAttendance: filterByAcademicYear(studentAttendance, academicYear), marksEntries: filterByAcademicYear(marksEntries, academicYear), studentResults: filterByAcademicYear(studentResults, academicYear), feeAssignments: filterByAcademicYear(feeAssignments, academicYear), noticeItems: filterByAcademicYear(noticeItems, academicYear), managedDocuments: filterByAcademicYear(managedDocuments, academicYear) };
 }
 
-export async function getAcademicsData() {
+export async function getAcademicsData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
   const [academicPrograms, academicSubjects, academicBatches, academicCalendarEvents] = await Promise.all([
-    listCollection('academicPrograms'),
-    listCollection('academicSubjects'),
-    listCollection('academicBatches'),
-    listCollection('academicCalendarEvents'),
+    listCollection('academicPrograms', yearConstraints),
+    listCollection('academicSubjects', yearConstraints),
+    listCollection('academicBatches', yearConstraints),
+    listCollection('academicCalendarEvents', yearConstraints),
   ]);
 
-  return { academicPrograms, academicSubjects, academicBatches, academicCalendarEvents };
+  return { academicPrograms: filterByAcademicYear(academicPrograms, academicYear), academicSubjects: filterByAcademicYear(academicSubjects, academicYear), academicBatches: filterByAcademicYear(academicBatches, academicYear), academicCalendarEvents: filterByAcademicYear(academicCalendarEvents, academicYear) };
 }
 
 export async function createAcademicProgram(data) {

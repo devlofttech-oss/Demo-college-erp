@@ -25,7 +25,7 @@ import {
 import AttendanceReports from './components/AttendanceReports';
 import AttendanceTable from './components/AttendanceTable';
 
-export default function AttendanceManagement({ currentUser }) {
+export default function AttendanceManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoAttendanceStudents);
   const [staff, setStaff] = useState(demoAttendanceStaff);
   const [studentAttendance, setStudentAttendance] = useState(demoStudentAttendance);
@@ -41,7 +41,7 @@ export default function AttendanceManagement({ currentUser }) {
   useEffect(() => {
     const loadAttendance = async () => {
       try {
-        const data = await getAttendanceManagementData();
+        const data = await getAttendanceManagementData(academicYear);
         if (data.students.length) setStudents(data.students.filter((student) => student.status !== 'Archived'));
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         setStudentAttendance(data.studentAttendance);
@@ -55,7 +55,7 @@ export default function AttendanceManagement({ currentUser }) {
       }
     };
     loadAttendance();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canMarkStudents = canAccess(defaultRoles, currentRoleId, 'attendance.markStudents');
@@ -98,6 +98,7 @@ export default function AttendanceManagement({ currentUser }) {
       entityRecordId: entity.id,
       entityId,
       entityName: entity.name,
+      academicYear,
       className: entity.className || '',
       section: entity.section || '',
       department: entity.department || '',
@@ -134,6 +135,7 @@ export default function AttendanceManagement({ currentUser }) {
       studentId: student.studentId,
       studentName: student.name,
       channel: 'Parent Portal',
+      academicYear,
       reason: `Absent on ${attendanceRecord.dateText}`,
       status: 'Queued',
       attendanceRecordId: attendanceRecord.id,

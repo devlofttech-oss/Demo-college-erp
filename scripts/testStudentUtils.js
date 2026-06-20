@@ -29,6 +29,7 @@ assert.equal(
     className: 'Class XI',
     section: 'A',
     program: 'PU Science',
+    academicYear: '2026-2027',
   }),
   ''
 );
@@ -44,6 +45,7 @@ assert.equal(
     className: 'Class XI',
     section: 'A',
     program: 'PU Science',
+    academicYear: '2026-2027',
   }),
   'Enter a valid phone number.'
 );

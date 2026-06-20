@@ -17,7 +17,7 @@ import DocumentPreviewPanel from './components/DocumentPreviewPanel';
 import DocumentTable from './components/DocumentTable';
 import DocumentUploadModal from './components/DocumentUploadModal';
 
-export default function DocumentManagement({ currentUser }) {
+export default function DocumentManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoDocumentStudents);
   const [staff, setStaff] = useState(demoDocumentStaff);
   const [documents, setDocuments] = useState(demoManagedDocuments);
@@ -31,7 +31,7 @@ export default function DocumentManagement({ currentUser }) {
   useEffect(() => {
     const loadDocuments = async () => {
       try {
-        const data = await getDocumentManagementData();
+        const data = await getDocumentManagementData(academicYear);
         if (data.students.length) setStudents(data.students.filter((student) => student.status !== 'Archived'));
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         setDocuments(data.managedDocuments);
@@ -44,7 +44,7 @@ export default function DocumentManagement({ currentUser }) {
       }
     };
     loadDocuments();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canUpload = canAccess(defaultRoles, currentRoleId, 'documents.upload');
@@ -99,20 +99,20 @@ export default function DocumentManagement({ currentUser }) {
       const fileData = file
         ? await uploadManagedDocumentFile({ ownerType: form.ownerType, ownerId: ownerKey, file })
         : {};
-      const payload = buildDocumentPayload(form, fileData);
+      const payload = { ...buildDocumentPayload(form, fileData), academicYear };
       const id = await createManagedDocument(payload);
       const created = { id: id || `local-document-${Date.now()}`, ...payload };
       setDocuments((prev) => [created, ...prev]);
       setSelectedId(created.id);
       toast.success(id ? 'Document saved' : 'Document saved locally');
     } catch {
-      const payload = buildDocumentPayload(form, file ? {
+      const payload = { ...buildDocumentPayload(form, file ? {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type || 'application/octet-stream',
         fileUrl: '',
         storagePath: '',
-      } : {});
+      } : {}), academicYear };
       const id = await createManagedDocument(payload);
       const created = { id: id || `local-document-${Date.now()}`, ...payload };
       setDocuments((prev) => [created, ...prev]);

@@ -10,6 +10,7 @@
     "test": "node scripts/testStudentUtils.js && node scripts/testUserRoles.js && node scripts/testFacultyStaff.js && node scripts/testAttendance.js && node scripts/testTimetable.js && node scripts/testExams.js && node scripts/testFees.js && node scripts/testFinancialReports.js && node scripts/testNotices.js && node scripts/testDocuments.js && node scripts/testParentPortal.js && node scripts/testModuleRegistry.js && node scripts/testAcademicsSettings.js",
     "firebase:seed": "node scripts/resetAndSeedFirebase.js",
     "firebase:reset-seed": "node scripts/resetAndSeedFirebase.js --reset --yes-i-understand-this-deletes-data",
+    "firebase:backfill-academic-year": "node scripts/backfillAcademicYear.js",
     "preview": "vite preview"
   },
   "dependencies": {

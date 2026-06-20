@@ -112,7 +112,7 @@ const collections = {
   },
   staffAttendanceRecords: {
     purpose: 'Faculty and staff daily attendance tracking',
-    fields: ['staffRecordId', 'employeeId', 'dateText', 'status', 'markedAtText'],
+    fields: ['staffRecordId', 'employeeId', 'academicYear', 'dateText', 'status', 'markedAtText'],
   },
   studentAttendanceRecords: {
     purpose: 'Student daily attendance tracking',
@@ -120,7 +120,7 @@ const collections = {
   },
   attendanceNotifications: {
     purpose: 'Parent notification queue metadata for attendance events',
-    fields: ['studentRecordId', 'studentId', 'studentName', 'channel', 'reason', 'status', 'attendanceRecordId', 'createdAtText'],
+    fields: ['studentRecordId', 'studentId', 'studentName', 'channel', 'academicYear', 'reason', 'status', 'attendanceRecordId', 'createdAtText'],
   },
   classrooms: {
     purpose: 'Classroom master data for timetable allocation',
@@ -128,31 +128,31 @@ const collections = {
   },
   timetableEntries: {
     purpose: 'Class and faculty timetable entries',
-    fields: ['classKey', 'subject', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status', 'createdAtText', 'updatedAtText', 'archivedAtText'],
+    fields: ['classKey', 'subject', 'academicYear', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status', 'createdAtText', 'updatedAtText', 'archivedAtText'],
   },
   timetablePublications: {
     purpose: 'Timetable publishing metadata',
-    fields: ['classKey', 'status', 'publishedAtText', 'entryCount'],
+    fields: ['classKey', 'academicYear', 'status', 'publishedAtText', 'entryCount'],
   },
   examSchedules: {
     purpose: 'Exam schedule records',
-    fields: ['examName', 'classKey', 'subject', 'examDate', 'maxMarks', 'facultyId', 'facultyName', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['examName', 'classKey', 'subject', 'academicYear', 'examDate', 'maxMarks', 'facultyId', 'facultyName', 'status', 'createdAtText', 'updatedAtText'],
   },
   internalAssessments: {
     purpose: 'Internal assessment setup records',
-    fields: ['title', 'classKey', 'subject', 'maxMarks', 'status', 'createdAtText'],
+    fields: ['title', 'classKey', 'subject', 'academicYear', 'maxMarks', 'status', 'createdAtText'],
   },
   marksEntries: {
     purpose: 'Student marks entry records',
-    fields: ['examScheduleId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'subject', 'marksObtained', 'maxMarks', 'percentage', 'grade', 'status', 'enteredAtText'],
+    fields: ['examScheduleId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'subject', 'academicYear', 'marksObtained', 'maxMarks', 'percentage', 'grade', 'status', 'enteredAtText'],
   },
   studentResults: {
     purpose: 'Generated student result summaries',
-    fields: ['studentRecordId', 'studentId', 'studentName', 'classKey', 'examName', 'totalObtained', 'totalMax', 'percentage', 'grade', 'status', 'generatedAtText'],
+    fields: ['studentRecordId', 'studentId', 'studentName', 'classKey', 'examName', 'academicYear', 'totalObtained', 'totalMax', 'percentage', 'grade', 'status', 'generatedAtText'],
   },
   reportCards: {
     purpose: 'Report card generation metadata',
-    fields: ['studentRecordId', 'studentId', 'examName', 'status', 'generatedAtText'],
+    fields: ['studentRecordId', 'studentId', 'examName', 'academicYear', 'status', 'generatedAtText'],
   },
   feeStructures: {
     purpose: 'Class-wise fee structure setup',
@@ -164,11 +164,11 @@ const collections = {
   },
   feeCollections: {
     purpose: 'Manual/offline fee collection records',
-    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'paymentMode', 'referenceNo', 'paymentDate', 'collectedBy', 'status', 'createdAtText'],
+    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'collectedBy', 'status', 'createdAtText'],
   },
   feeAdjustments: {
     purpose: 'Fee concessions, waivers, and approved adjustments',
-    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'reason', 'status', 'createdAtText'],
+    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'reason', 'status', 'createdAtText'],
   },
   financialReportSnapshots: {
     purpose: 'Saved financial report summary snapshots',
@@ -176,7 +176,7 @@ const collections = {
   },
   noticeItems: {
     purpose: 'Digital notices, circulars, and event announcements',
-    fields: ['type', 'title', 'referenceNo', 'audience', 'priority', 'body', 'publishDate', 'expiryDate', 'status', 'createdByName', 'createdAtText', 'updatedAtText', 'archivedAtText'],
+    fields: ['type', 'title', 'referenceNo', 'audience', 'academicYear', 'priority', 'body', 'publishDate', 'expiryDate', 'status', 'createdByName', 'createdAtText', 'updatedAtText', 'archivedAtText'],
   },
   managedDocuments: {
     purpose: 'Student, staff, and academic archive document metadata',
@@ -200,7 +200,7 @@ const collections = {
   },
   academicCalendarEvents: {
     purpose: 'Academic calendar event records',
-    fields: ['title', 'eventType', 'eventDate', 'audience', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['title', 'eventType', 'eventDate', 'audience', 'academicYear', 'status', 'createdAtText', 'updatedAtText'],
   },
   systemSettings: {
     purpose: 'Institute profile, academic year, ID formats, and module defaults',

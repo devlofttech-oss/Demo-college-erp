@@ -24,6 +24,7 @@ export function validateStudentProfile(form) {
     ['className', 'Class'],
     ['section', 'Section'],
     ['program', 'Program'],
+    ['academicYear', 'Academic year'],
   ];
 
   const missing = requiredFields.find(([key]) => !String(form[key] || '').trim());

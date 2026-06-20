@@ -15,7 +15,7 @@ import NoticeModal from './components/NoticeModal';
 import NoticePreviewPanel from './components/NoticePreviewPanel';
 import NoticeTable from './components/NoticeTable';
 
-export default function NoticeBoardManagement({ currentUser }) {
+export default function NoticeBoardManagement({ currentUser, academicYear = '2026-2027' }) {
   const [notices, setNotices] = useState(demoNoticeItems);
   const [selectedId, setSelectedId] = useState(demoNoticeItems[0]?.id || '');
   const [filters, setFilters] = useState({ search: '', type: '', audience: '', status: '' });
@@ -27,7 +27,7 @@ export default function NoticeBoardManagement({ currentUser }) {
   useEffect(() => {
     const loadNotices = async () => {
       try {
-        const data = await getNoticeBoardData();
+        const data = await getNoticeBoardData(academicYear);
         setNotices(data.noticeItems);
         setSelectedId(data.noticeItems[0]?.id || '');
       } catch (error) {
@@ -38,7 +38,7 @@ export default function NoticeBoardManagement({ currentUser }) {
       }
     };
     loadNotices();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canCreate = canAccess(defaultRoles, currentRoleId, 'notices.create');
@@ -93,7 +93,7 @@ export default function NoticeBoardManagement({ currentUser }) {
       toast.error('You do not have permission to create announcements.');
       return;
     }
-    const createPayload = { ...payload, createdAtText: formatDisplayDate() };
+    const createPayload = { ...payload, academicYear, createdAtText: formatDisplayDate() };
     try {
       const id = await createNoticeItem(createPayload);
       const created = { id: id || `local-notice-${Date.now()}`, ...createPayload };

@@ -26,7 +26,7 @@ import CollectionReportTable from './components/CollectionReportTable';
 import OutstandingReportTable from './components/OutstandingReportTable';
 import ReportFilters from './components/ReportFilters';
 
-export default function FinancialReports({ currentUser }) {
+export default function FinancialReports({ currentUser, academicYear = '2026-2027' }) {
   const [structures, setStructures] = useState(demoFinancialStructures);
   const [assignments, setAssignments] = useState(demoFinancialAssignments);
   const [collections, setCollections] = useState(demoFinancialCollections);
@@ -45,7 +45,7 @@ export default function FinancialReports({ currentUser }) {
   useEffect(() => {
     const loadReports = async () => {
       try {
-        const data = await getFinancialReportsData();
+        const data = await getFinancialReportsData(academicYear);
         setStructures(data.feeStructures);
         setAssignments(data.feeAssignments);
         const assignmentClassMap = data.feeAssignments.reduce((map, item) => {
@@ -63,7 +63,7 @@ export default function FinancialReports({ currentUser }) {
       }
     };
     loadReports();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canView = canAccess(defaultRoles, currentRoleId, 'financialReports.view');

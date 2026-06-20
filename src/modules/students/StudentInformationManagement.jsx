@@ -239,8 +239,8 @@ export default function StudentInformationManagement({ user, onLogout }) {
     return [...years].sort().reverse();
   }, [admissions, promotions, studentDocuments, students, transfers]);
 
-  const studentBelongsToYear = (student) => (student.academicYear || '2026-2027') === academicYear;
-  const recordBelongsToYear = (record) => !record.academicYear || record.academicYear === academicYear;
+  const studentBelongsToYear = (student) => student.academicYear === academicYear;
+  const recordBelongsToYear = (record) => record.academicYear === academicYear;
   const yearStudents = useMemo(() => students.filter(studentBelongsToYear), [academicYear, students]);
 
   const selectedStudent = yearStudents.find((student) => student.id === selectedId) || yearStudents[0] || null;
@@ -283,13 +283,14 @@ export default function StudentInformationManagement({ user, onLogout }) {
     }
 
     const nextNumber = String(4450 + students.length).padStart(5, '0');
+    const selectedAcademicYear = form.academicYear;
     const createdAtText = formatDisplayDate();
     const payload = {
       ...form,
       admissionNo: `ADM-2026-${nextNumber}`,
       studentId: `STU-${nextNumber}`,
       institute: 'COLLEGE NAME',
-      academicYear,
+      academicYear: selectedAcademicYear,
       status: 'Admission Review',
       createdAtText,
     };
@@ -301,7 +302,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
         studentRecordId: created.id,
         studentId: created.studentId,
         admissionNo: created.admissionNo,
-        academicYear,
+        academicYear: selectedAcademicYear,
         idHolder: created.idHolder,
         status: 'Admission Review',
         submittedAtText: createdAtText,
@@ -310,7 +311,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
         studentRecordId: created.id,
         studentId: created.studentId,
         documentType: 'Admission Form',
-        academicYear,
+        academicYear: selectedAcademicYear,
         uploadedBy: user?.name || 'Admin',
         fileName: `${created.admissionNo}-admission-form.pdf`,
         verificationStatus: 'Pending Review',
@@ -329,6 +330,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
       }
 
       setStudents((prev) => [created, ...prev]);
+      setAcademicYear(selectedAcademicYear);
       setSelectedId(created.id);
       toast.success(id ? 'Student admission saved' : 'Student added locally. Add Firebase keys to persist.');
     } catch {
@@ -338,7 +340,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
         studentRecordId: local.id,
         studentId: local.studentId,
         admissionNo: local.admissionNo,
-        academicYear,
+        academicYear: selectedAcademicYear,
         idHolder: local.idHolder,
         status: 'Admission Review',
         submittedAtText: createdAtText,
@@ -348,13 +350,14 @@ export default function StudentInformationManagement({ user, onLogout }) {
         studentRecordId: local.id,
         studentId: local.studentId,
         documentType: 'Admission Form',
-        academicYear,
+        academicYear: selectedAcademicYear,
         uploadedBy: user?.name || 'Admin',
         fileName: `${local.admissionNo}-admission-form.pdf`,
         verificationStatus: 'Pending Review',
         uploadedAtText: createdAtText,
       };
       setStudents((prev) => [local, ...prev]);
+      setAcademicYear(selectedAcademicYear);
       setAdmissions((prev) => [admission, ...prev]);
       setStudentDocuments((prev) => [admissionForm, ...prev]);
       setSelectedId(local.id);
@@ -795,25 +798,25 @@ export default function StudentInformationManagement({ user, onLogout }) {
                     onBack={() => setActivePage('dashboard')}
                   />
                 ) : activePage === 'faculty-staff' ? (
-                  <FacultyStaffManagement currentUser={user} />
+                  <FacultyStaffManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'academics' ? (
-                  <AcademicsManagement currentUser={user} />
+                  <AcademicsManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'attendance' ? (
-                  <AttendanceManagement currentUser={user} />
+                  <AttendanceManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'timetable' ? (
-                  <TimetableManagement currentUser={user} />
+                  <TimetableManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'examination-results' ? (
-                  <ExaminationResultManagement currentUser={user} />
+                  <ExaminationResultManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'fees' ? (
-                  <FeesManagement currentUser={user} />
+                  <FeesManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'financial-reports' ? (
-                  <FinancialReports currentUser={user} />
+                  <FinancialReports currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'notice-board' ? (
-                  <NoticeBoardManagement currentUser={user} />
+                  <NoticeBoardManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'document-management' ? (
-                  <DocumentManagement currentUser={user} />
+                  <DocumentManagement currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'parent-portal' ? (
-                  <ParentPortal currentUser={user} />
+                  <ParentPortal currentUser={user} academicYear={academicYear} />
                 ) : activePage === 'user-roles' ? (
                   <UserRoleManagement currentUser={user} />
                 ) : activePage === 'settings' ? (
@@ -830,10 +833,12 @@ export default function StudentInformationManagement({ user, onLogout }) {
             </footer>
           </main>
         </div>
-      {showModal && <StudentModal onClose={() => setShowModal(false)} onSave={saveStudent} />}
+      {showModal && <StudentModal academicYearOptions={academicYearOptions} initialAcademicYear={academicYear} onClose={() => setShowModal(false)} onSave={saveStudent} />}
       {editingStudent && (
         <StudentModal
           mode="edit"
+          academicYearOptions={academicYearOptions}
+          initialAcademicYear={academicYear}
           initialStudent={editingStudent}
           onClose={() => setEditingStudent(null)}
           onSave={saveStudentProfile}

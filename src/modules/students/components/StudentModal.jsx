@@ -5,6 +5,7 @@ const defaultForm = {
   className: 'Class XI',
   section: 'A',
   program: 'PU Science',
+  academicYear: '2026-2027',
   guardianName: '',
   idHolder: '',
   phone: '',
@@ -12,9 +13,10 @@ const defaultForm = {
   status: 'Admission Review',
 };
 
-export default function StudentModal({ initialStudent = null, mode = 'create', onClose, onSave }) {
+export default function StudentModal({ academicYearOptions = ['2026-2027'], initialAcademicYear = '2026-2027', initialStudent = null, mode = 'create', onClose, onSave }) {
   const [form, setForm] = useState({
     ...defaultForm,
+    academicYear: initialStudent?.academicYear || initialAcademicYear,
     ...initialStudent,
   });
   const isEdit = mode === 'edit';
@@ -26,6 +28,7 @@ export default function StudentModal({ initialStudent = null, mode = 'create', o
       className: form.className.trim(),
       section: form.section.trim(),
       program: form.program.trim(),
+      academicYear: form.academicYear,
       guardianName: form.guardianName.trim(),
       idHolder: form.idHolder.trim(),
       phone: form.phone.trim(),
@@ -47,6 +50,19 @@ export default function StudentModal({ initialStudent = null, mode = 'create', o
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full hover:bg-slate-100 text-slate-500">x</button>
         </div>
         <div className="p-6 grid sm:grid-cols-2 gap-4">
+          <label>
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Academic Year</span>
+            <select
+              required
+              value={form.academicYear}
+              onChange={(event) => setForm((prev) => ({ ...prev, academicYear: event.target.value }))}
+              className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
+            >
+              {academicYearOptions.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </label>
           {[
             ['name', 'Student Name'],
             ['guardianName', 'Guardian Name'],

@@ -33,29 +33,29 @@ const schemas = {
   staffMembers: ['employeeId', 'name', 'staffType', 'department', 'designation', 'phone', 'email', 'qualification', 'status'],
   departments: ['name', 'headName', 'status'],
   staffLeaveRecords: ['staffRecordId', 'employeeId', 'leaveType', 'fromDate', 'toDate', 'reason', 'status'],
-  staffAttendanceRecords: ['staffRecordId', 'employeeId', 'dateText', 'status', 'markedAtText'],
-  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'dateText', 'status'],
-  attendanceNotifications: ['studentRecordId', 'studentId', 'studentName', 'channel', 'reason', 'status'],
+  staffAttendanceRecords: ['staffRecordId', 'employeeId', 'academicYear', 'dateText', 'status', 'markedAtText'],
+  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'academicYear', 'dateText', 'status'],
+  attendanceNotifications: ['studentRecordId', 'studentId', 'studentName', 'channel', 'academicYear', 'reason', 'status'],
   classrooms: ['roomNo', 'building', 'capacity', 'status'],
-  timetableEntries: ['classKey', 'subject', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status'],
-  timetablePublications: ['classKey', 'status', 'publishedAtText', 'entryCount'],
-  examSchedules: ['examName', 'classKey', 'subject', 'examDate', 'maxMarks', 'facultyId', 'facultyName', 'status'],
-  internalAssessments: ['title', 'classKey', 'subject', 'maxMarks', 'status'],
-  marksEntries: ['examScheduleId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'subject', 'marksObtained', 'maxMarks', 'percentage', 'grade', 'status'],
-  studentResults: ['studentRecordId', 'studentId', 'studentName', 'classKey', 'examName', 'totalObtained', 'totalMax', 'percentage', 'grade', 'status'],
-  reportCards: ['studentRecordId', 'studentId', 'examName', 'status', 'generatedAtText'],
+  timetableEntries: ['classKey', 'subject', 'academicYear', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status'],
+  timetablePublications: ['classKey', 'academicYear', 'status', 'publishedAtText', 'entryCount'],
+  examSchedules: ['examName', 'classKey', 'subject', 'academicYear', 'examDate', 'maxMarks', 'facultyId', 'facultyName', 'status'],
+  internalAssessments: ['title', 'classKey', 'subject', 'academicYear', 'maxMarks', 'status'],
+  marksEntries: ['examScheduleId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'subject', 'academicYear', 'marksObtained', 'maxMarks', 'percentage', 'grade', 'status'],
+  studentResults: ['studentRecordId', 'studentId', 'studentName', 'classKey', 'examName', 'academicYear', 'totalObtained', 'totalMax', 'percentage', 'grade', 'status'],
+  reportCards: ['studentRecordId', 'studentId', 'examName', 'academicYear', 'status', 'generatedAtText'],
   feeStructures: ['name', 'classKey', 'academicYear', 'tuitionFee', 'libraryFee', 'labFee', 'transportFee', 'totalAmount', 'dueDate', 'status'],
   feeAssignments: ['feeStructureId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'academicYear', 'totalAmount', 'paidAmount', 'adjustmentAmount', 'dueAmount', 'dueDate', 'status'],
-  feeCollections: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'paymentMode', 'referenceNo', 'paymentDate', 'status'],
-  feeAdjustments: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'reason', 'status'],
+  feeCollections: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'status'],
+  feeAdjustments: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'reason', 'status'],
   financialReportSnapshots: ['reportName', 'totalAssigned', 'lifetimeCollected', 'totalOutstanding', 'collectionRate', 'status'],
-  noticeItems: ['type', 'title', 'referenceNo', 'audience', 'priority', 'body', 'publishDate', 'expiryDate', 'status'],
-  managedDocuments: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'documentType', 'category', 'fileName', 'verificationStatus'],
+  noticeItems: ['type', 'title', 'referenceNo', 'audience', 'academicYear', 'priority', 'body', 'publishDate', 'expiryDate', 'status'],
+  managedDocuments: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'documentType', 'category', 'academicYear', 'fileName', 'verificationStatus'],
   parentPortalLinks: ['parentEmail', 'studentRecordId', 'studentId', 'relationship', 'status'],
   academicPrograms: ['name', 'code', 'academicYear', 'status'],
-  academicSubjects: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'status'],
-  academicBatches: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'status'],
-  academicCalendarEvents: ['title', 'eventType', 'eventDate', 'audience', 'status'],
+  academicSubjects: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'status'],
+  academicBatches: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'academicYear', 'status'],
+  academicCalendarEvents: ['title', 'eventType', 'eventDate', 'audience', 'academicYear', 'status'],
   systemSettings: ['id', 'name', 'email', 'phone', 'startsOn', 'endsOn', 'student', 'admission', 'employee', 'moduleDefaults'],
 };
 
@@ -112,32 +112,32 @@ const seed = {
     'seed-leave-ramesh': { staffRecordId: 'seed-staff-ramesh', employeeId: 'EMP-1002', leaveType: 'Casual Leave', fromDate: '2026-06-20', toDate: '2026-06-21', reason: 'Family function', status: 'Pending Review', requestedAtText: '18 Jun 2026' },
   },
   staffAttendanceRecords: {
-    'seed-staff-att-kavita': { staffRecordId: 'seed-staff-kavita', employeeId: 'EMP-1001', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026' },
+    'seed-staff-att-kavita': { staffRecordId: 'seed-staff-kavita', employeeId: 'EMP-1001', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026' },
   },
   studentAttendanceRecords: {
-    'seed-student-att-vivek': { entityType: 'Student', entityRecordId: 'seed-student-vivek', entityId: 'STU-4449', entityName: 'Vivek Sharma', className: 'Class XII', section: 'A', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026', parentNotified: false },
-    'seed-student-att-vaibhavi': { entityType: 'Student', entityRecordId: 'seed-student-vaibhavi', entityId: 'STU-4450', entityName: 'Vaibhavi Aggarwal', className: 'Class XI', section: 'B', dateText: '18 Jun 2026', status: 'Absent', markedAtText: '18 Jun 2026', parentNotified: true },
+    'seed-student-att-vivek': { entityType: 'Student', entityRecordId: 'seed-student-vivek', entityId: 'STU-4449', entityName: 'Vivek Sharma', className: 'Class XII', section: 'A', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026', parentNotified: false },
+    'seed-student-att-vaibhavi': { entityType: 'Student', entityRecordId: 'seed-student-vaibhavi', entityId: 'STU-4450', entityName: 'Vaibhavi Aggarwal', className: 'Class XI', section: 'B', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Absent', markedAtText: '18 Jun 2026', parentNotified: true },
   },
   attendanceNotifications: {
-    'seed-att-note-vaibhavi': { studentRecordId: 'seed-student-vaibhavi', studentId: 'STU-4450', studentName: 'Vaibhavi Aggarwal', channel: 'Parent Portal', reason: 'Absent on 18 Jun 2026', status: 'Queued', createdAtText: '18 Jun 2026' },
+    'seed-att-note-vaibhavi': { studentRecordId: 'seed-student-vaibhavi', studentId: 'STU-4450', studentName: 'Vaibhavi Aggarwal', channel: 'Parent Portal', academicYear: '2026-2027', reason: 'Absent on 18 Jun 2026', status: 'Queued', createdAtText: '18 Jun 2026' },
   },
   classrooms: {
-    'seed-room-101': { roomNo: '101', building: 'Main Block', capacity: 45, status: 'Active' },
+    'seed-room-101': { roomNo: '101', building: 'Main Block', capacity: 45, academicYear: '2026-2027', status: 'Active' },
   },
   timetableEntries: {
-    'seed-tt-physics': { classKey: 'Class XII - A', subject: 'Physics', facultyId: 'seed-staff-kavita', facultyName: 'Dr. Kavita Menon', classroomId: 'seed-room-101', classroomName: '101', day: 'Monday', timeSlot: '09:00 - 10:00', status: 'Published', createdAtText: '10 Jun 2026' },
+    'seed-tt-physics': { classKey: 'Class XII - A', subject: 'Physics', academicYear: '2026-2027', facultyId: 'seed-staff-kavita', facultyName: 'Dr. Kavita Menon', classroomId: 'seed-room-101', classroomName: '101', day: 'Monday', timeSlot: '09:00 - 10:00', status: 'Published', createdAtText: '10 Jun 2026' },
   },
   timetablePublications: {
-    'seed-tt-pub-xii-a': { classKey: 'Class XII - A', status: 'Published', publishedAtText: '10 Jun 2026', entryCount: 1 },
+    'seed-tt-pub-xii-a': { classKey: 'Class XII - A', academicYear: '2026-2027', status: 'Published', publishedAtText: '10 Jun 2026', entryCount: 1 },
   },
   examSchedules: {
-    'seed-exam-physics': { examName: 'Mid Term Examination', classKey: 'Class XII - A', subject: 'Physics', examDate: '2026-06-25', maxMarks: 50, facultyId: 'seed-staff-kavita', facultyName: 'Dr. Kavita Menon', status: 'Scheduled', createdAtText: '12 Jun 2026' },
+    'seed-exam-physics': { examName: 'Mid Term Examination', classKey: 'Class XII - A', subject: 'Physics', academicYear: '2026-2027', examDate: '2026-06-25', maxMarks: 50, facultyId: 'seed-staff-kavita', facultyName: 'Dr. Kavita Menon', status: 'Scheduled', createdAtText: '12 Jun 2026' },
   },
   internalAssessments: {
-    'seed-assessment-physics': { title: 'Physics Internal Assessment', classKey: 'Class XII - A', subject: 'Physics', maxMarks: 20, status: 'Active', createdAtText: '12 Jun 2026' },
+    'seed-assessment-physics': { title: 'Physics Internal Assessment', classKey: 'Class XII - A', subject: 'Physics', academicYear: '2026-2027', maxMarks: 20, status: 'Active', createdAtText: '12 Jun 2026' },
   },
   marksEntries: {
-    'seed-marks-vivek-physics': { examScheduleId: 'seed-exam-physics', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', classKey: 'Class XII - A', subject: 'Physics', marksObtained: 45, maxMarks: 50, percentage: 90, grade: 'A+', status: 'Entered', enteredAtText: '18 Jun 2026' },
+    'seed-marks-vivek-physics': { examScheduleId: 'seed-exam-physics', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', classKey: 'Class XII - A', subject: 'Physics', academicYear: '2026-2027', marksObtained: 45, maxMarks: 50, percentage: 90, grade: 'A+', status: 'Entered', enteredAtText: '18 Jun 2026' },
   },
   studentResults: {
     'seed-result-vivek': { studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', classKey: 'Class XII - A', examName: 'Combined Result', totalObtained: 45, totalMax: 50, percentage: 90, grade: 'A+', status: 'Pass', generatedAtText: '18 Jun 2026' },
@@ -152,17 +152,17 @@ const seed = {
     'seed-fee-vivek': { feeStructureId: 'seed-fee-xii-a', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', classKey: 'Class XII - A', academicYear: '2026-2027', totalAmount: 65000, paidAmount: 40000, adjustmentAmount: 0, dueAmount: 25000, dueDate: '2026-07-15', status: 'Partially Paid', assignedAtText: '02 Jun 2026' },
   },
   feeCollections: {
-    'seed-fee-collection-vivek': { assignmentId: 'seed-fee-vivek', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', amount: 40000, paymentMode: 'Cash', referenceNo: 'OFF-1001', paymentDate: '2026-06-10', collectedBy: 'Admin Office', status: 'Posted', createdAtText: '10 Jun 2026' },
+    'seed-fee-collection-vivek': { assignmentId: 'seed-fee-vivek', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', amount: 40000, academicYear: '2026-2027', paymentMode: 'Cash', referenceNo: 'OFF-1001', paymentDate: '2026-06-10', collectedBy: 'Admin Office', status: 'Posted', createdAtText: '10 Jun 2026' },
   },
   feeAdjustments: {},
   financialReportSnapshots: {
     'seed-finance-summary-june': { reportName: 'June 2026 Finance Summary', totalAssigned: 65000, lifetimeCollected: 40000, totalOutstanding: 25000, totalAdjusted: 0, collectionRate: 62, status: 'Generated', createdAtText: '19 Jun 2026' },
   },
   noticeItems: {
-    'seed-notice-library': { type: 'Digital Notice', title: 'Library timing update', referenceNo: 'NOTICE-2026-001', audience: 'Students', priority: 'Normal', body: 'Library hours are extended until 6 PM during revision week.', publishDate: '2026-06-18', expiryDate: '2026-06-30', status: 'Published', createdByName: 'Admin Office', createdAtText: '18 Jun 2026' },
+    'seed-notice-library': { type: 'Digital Notice', title: 'Library timing update', referenceNo: 'NOTICE-2026-001', audience: 'Students', academicYear: '2026-2027', priority: 'Normal', body: 'Library hours are extended until 6 PM during revision week.', publishDate: '2026-06-18', expiryDate: '2026-06-30', status: 'Published', createdByName: 'Admin Office', createdAtText: '18 Jun 2026' },
   },
   managedDocuments: {
-    'seed-managed-doc-vivek': { ownerType: 'Student', ownerRecordId: 'seed-student-vivek', ownerId: 'STU-4449', ownerName: 'Vivek Sharma', documentType: 'Aadhaar Card', category: 'Identity', fileName: 'vivek-aadhaar.pdf', fileSize: 248000, fileType: 'application/pdf', fileUrl: '', storagePath: '', verificationStatus: 'Verified', uploadedAtText: '10 Jun 2026', verifiedAtText: '11 Jun 2026', tags: 'identity, student' },
+    'seed-managed-doc-vivek': { ownerType: 'Student', ownerRecordId: 'seed-student-vivek', ownerId: 'STU-4449', ownerName: 'Vivek Sharma', documentType: 'Aadhaar Card', category: 'Identity', academicYear: '2026-2027', fileName: 'vivek-aadhaar.pdf', fileSize: 248000, fileType: 'application/pdf', fileUrl: '', storagePath: '', verificationStatus: 'Verified', uploadedAtText: '10 Jun 2026', verifiedAtText: '11 Jun 2026', tags: 'identity, student' },
   },
   parentPortalLinks: {
     'seed-parent-link-vivek': { parentUserId: 'seed-parent-user', parentEmail: 'parent.vivek@example.com', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', relationship: 'Father', status: 'Active' },
@@ -171,13 +171,13 @@ const seed = {
     'seed-program-science': { name: 'CBSE Science', code: 'SCI-XII', academicYear: '2026-2027', status: 'Active', createdAtText: '01 Jun 2026' },
   },
   academicSubjects: {
-    'seed-subject-physics': { subjectName: 'Physics', subjectCode: 'PHY-12', programName: 'CBSE Science', creditHours: 6, status: 'Active', createdAtText: '02 Jun 2026' },
+    'seed-subject-physics': { subjectName: 'Physics', subjectCode: 'PHY-12', programName: 'CBSE Science', creditHours: 6, academicYear: '2026-2027', status: 'Active', createdAtText: '02 Jun 2026' },
   },
   academicBatches: {
-    'seed-batch-xii-a': { className: 'Class XII', section: 'A', programName: 'CBSE Science', classTeacher: 'Dr. Kavita Menon', capacity: 45, status: 'Active', createdAtText: '03 Jun 2026' },
+    'seed-batch-xii-a': { className: 'Class XII', section: 'A', programName: 'CBSE Science', classTeacher: 'Dr. Kavita Menon', capacity: 45, academicYear: '2026-2027', status: 'Active', createdAtText: '03 Jun 2026' },
   },
   academicCalendarEvents: {
-    'seed-calendar-orientation': { title: 'Orientation Day', eventType: 'Academic', eventDate: '2026-06-01', audience: 'All', status: 'Published', createdAtText: '25 May 2026' },
+    'seed-calendar-orientation': { title: 'Orientation Day', eventType: 'Academic', eventDate: '2026-06-01', audience: 'All', academicYear: '2026-2027', status: 'Published', createdAtText: '25 May 2026' },
   },
   systemSettings: {
     institute: { id: 'institute', name: 'COLLEGE NAME', email: 'admin@college.edu', phone: '+91 98765 00000', address: 'Main Campus Road', city: 'Bengaluru', status: 'Active', updatedAtText: '19 Jun 2026' },

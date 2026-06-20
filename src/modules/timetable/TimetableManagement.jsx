@@ -19,7 +19,7 @@ import TimetableEntryModal from './components/TimetableEntryModal';
 import TimetableGrid from './components/TimetableGrid';
 import TimetableSidePanel from './components/TimetableSidePanel';
 
-export default function TimetableManagement({ currentUser }) {
+export default function TimetableManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoStudents);
   const [staff, setStaff] = useState(demoStaffMembers);
   const [classrooms, setClassrooms] = useState(demoClassrooms);
@@ -35,7 +35,7 @@ export default function TimetableManagement({ currentUser }) {
   useEffect(() => {
     const loadTimetable = async () => {
       try {
-        const data = await getTimetableManagementData();
+        const data = await getTimetableManagementData(academicYear);
         if (data.students.length) setStudents(data.students);
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         if (data.classrooms.length) setClassrooms(data.classrooms);
@@ -49,7 +49,7 @@ export default function TimetableManagement({ currentUser }) {
       }
     };
     loadTimetable();
-  }, []);
+  }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canCreate = canAccess(defaultRoles, currentRoleId, 'timetable.create');
@@ -127,7 +127,7 @@ export default function TimetableManagement({ currentUser }) {
     }
 
     const createdAtText = formatDisplayDate();
-    const createPayload = { ...payload, createdAtText };
+    const createPayload = { ...payload, academicYear, createdAtText };
     try {
       const id = await createTimetableEntry(createPayload);
       setEntries((prev) => [{ id: id || `local-tt-${Date.now()}`, ...createPayload }, ...prev]);

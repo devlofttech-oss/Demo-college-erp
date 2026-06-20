@@ -21,7 +21,7 @@ import StaffModal from './components/StaffModal';
 import StaffProfilePanel from './components/StaffProfilePanel';
 import StaffTable from './components/StaffTable';
 
-export default function FacultyStaffManagement({ currentUser }) {
+export default function FacultyStaffManagement({ currentUser, academicYear = '2026-2027' }) {
   const [staffMembers, setStaffMembers] = useState(demoStaffMembers);
   const [departments, setDepartments] = useState(demoDepartments);
   const [leaveRecords, setLeaveRecords] = useState(demoLeaveRecords);
@@ -39,7 +39,7 @@ export default function FacultyStaffManagement({ currentUser }) {
   useEffect(() => {
     const loadFacultyStaff = async () => {
       try {
-        const data = await getFacultyStaffData();
+        const data = await getFacultyStaffData(academicYear);
         if (data.staff.length) {
           setStaffMembers(data.staff);
           setSelectedId(data.staff[0].id);
@@ -55,7 +55,7 @@ export default function FacultyStaffManagement({ currentUser }) {
       }
     };
     loadFacultyStaff();
-  }, []);
+  }, [academicYear]);
 
   const selectedStaff = staffMembers.find((member) => member.id === selectedId) || staffMembers[0];
   const selectedLeaves = leaveRecords.filter((record) => relationMatchesStaff(record, selectedStaff));
@@ -263,6 +263,7 @@ export default function FacultyStaffManagement({ currentUser }) {
     const payload = {
       staffRecordId: selectedStaff.id,
       employeeId: selectedStaff.employeeId,
+      academicYear,
       dateText,
       status,
       markedAtText: dateText,
