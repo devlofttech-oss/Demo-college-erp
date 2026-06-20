@@ -50,8 +50,8 @@ export default function App() {
       <ParticleBackground />
       <Routes>
       <Route path="/" element={<Navigate to={user ? '/students' : '/login'} replace />} />
-      <Route path="/login" element={<AuthPage mode="login" />} />
-      <Route path="/register" element={<AuthPage mode="register" />} />
+      <Route path="/login" element={user ? <Navigate to="/students" replace /> : <AuthPage mode="login" />} />
+      <Route path="/register" element={user ? <Navigate to="/students" replace /> : <AuthPage mode="register" />} />
       <Route
         path="/students"
         element={user ? <StudentInformationManagement user={user} onLogout={logout} /> : <Navigate to="/login" replace />}
