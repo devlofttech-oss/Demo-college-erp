@@ -2,6 +2,13 @@ import { Archive, ArchiveRestore, CalendarCheck, Edit3, UserRound } from 'lucide
 import StatusBadge from '../../students/components/StatusBadge';
 
 export default function StaffTable({ staff, canArchive, canEdit, canManageLeave, onArchive, onEdit, onLeave, onRestore, onSelect, selectedId }) {
+  const handleRowKeyDown = (event, memberId) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect(memberId);
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm border-separate border-spacing-y-2">
@@ -16,9 +23,16 @@ export default function StaffTable({ staff, canArchive, canEdit, canManageLeave,
         </thead>
         <tbody>
           {staff.map((member) => (
-            <tr key={member.id} className={`bg-white shadow-[0_0_0_1px_rgba(226,232,240,0.9)] rounded-lg ${selectedId === member.id ? 'outline outline-2 outline-orange-100' : ''}`}>
+            <tr
+              key={member.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(member.id)}
+              onKeyDown={(event) => handleRowKeyDown(event, member.id)}
+              className={`bg-white shadow-[0_0_0_1px_rgba(226,232,240,0.9)] rounded-lg cursor-pointer transition-colors ${selectedId === member.id ? 'staff-row-selected' : ''}`}
+            >
               <td className="px-5 py-4 rounded-l-lg">
-                <button onClick={() => onSelect(member.id)} className="flex items-center gap-3 text-left">
+                <div className="flex items-center gap-3 text-left">
                   <span className="h-10 w-10 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center">
                     <UserRound size={20} />
                   </span>
@@ -26,7 +40,7 @@ export default function StaffTable({ staff, canArchive, canEdit, canManageLeave,
                     <span className="block font-bold text-slate-900">{member.name}</span>
                     <span className="block text-xs text-slate-500">{member.employeeId} / {member.staffType}</span>
                   </span>
-                </button>
+                </div>
               </td>
               <td className="px-5 py-4">
                 <div>{member.department}</div>
@@ -39,19 +53,19 @@ export default function StaffTable({ staff, canArchive, canEdit, canManageLeave,
               <td className="px-5 py-4"><StatusBadge value={member.status} /></td>
               <td className="px-5 py-4 rounded-r-lg">
                 <div className="flex justify-end gap-2">
-                  <button disabled={!canEdit} onClick={() => onEdit(member)} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Edit record">
+                  <button disabled={!canEdit} onClick={(event) => { event.stopPropagation(); onEdit(member); }} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Edit record">
                     <Edit3 size={15} />
                   </button>
-                  <button disabled={!canManageLeave} onClick={() => onLeave(member)} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Leave request">
+                  <button disabled={!canManageLeave} onClick={(event) => { event.stopPropagation(); onLeave(member); }} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Leave request">
                     <CalendarCheck size={15} />
                   </button>
                   {member.status !== 'Archived' && (
-                    <button disabled={!canArchive} onClick={() => onArchive(member)} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Archive record">
+                    <button disabled={!canArchive} onClick={(event) => { event.stopPropagation(); onArchive(member); }} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Archive record">
                       <Archive size={15} />
                     </button>
                   )}
                   {member.status === 'Archived' && (
-                    <button disabled={!canArchive} onClick={() => onRestore(member)} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Restore record">
+                    <button disabled={!canArchive} onClick={(event) => { event.stopPropagation(); onRestore(member); }} className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center disabled:opacity-40" title="Restore record">
                       <ArchiveRestore size={15} />
                     </button>
                   )}

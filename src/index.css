@@ -322,3 +322,25 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.2);color:#fff}::-w
   border-color:rgba(0,255,136,.28)!important;
   color:#ffffff!important;
 }
+
+.erp-shell table tbody tr.staff-row-selected,
+.erp-shell table tbody tr.staff-row-selected td {
+  background:rgba(0,255,136,.055)!important;
+  box-shadow:0 0 0 1px rgba(0,255,136,.18)!important;
+}
+
+.erp-shell table tbody tr.staff-row-selected:hover,
+.erp-shell table tbody tr.staff-row-selected:hover td {
+  background:rgba(0,255,136,.075)!important;
+}
+
+.erp-shell.light-mode table tbody tr.staff-row-selected,
+.erp-shell.light-mode table tbody tr.staff-row-selected td {
+  background:#f1f4ff!important;
+  box-shadow:0 0 0 1px rgba(101,118,216,.18)!important;
+}
+
+.erp-shell.light-mode table tbody tr.staff-row-selected:hover,
+.erp-shell.light-mode table tbody tr.staff-row-selected:hover td {
+  background:#ecf0ff!important;
+}
