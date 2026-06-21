@@ -422,3 +422,71 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   color:#64748b!important;
   box-shadow:none!important;
 }
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] {
+  background:rgba(30,37,51,.28)!important;
+  backdrop-filter:blur(10px)!important;
+}
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form {
+  background:#ffffff!important;
+  border-color:#d8deeb!important;
+  box-shadow:0 24px 70px rgba(39,51,82,.22)!important;
+  overflow:hidden!important;
+}
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form > div:first-child,
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form > div:last-child {
+  background:#f8f9fd!important;
+  border-color:#e4e8f2!important;
+}
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form input,
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form select,
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form textarea {
+  background:#ffffff!important;
+  border-color:#d8deeb!important;
+  color:#1e2533!important;
+  box-shadow:0 1px 0 rgba(30,37,51,.03)!important;
+}
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form input:focus,
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form select:focus,
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form textarea:focus {
+  border-color:#6576d8!important;
+  box-shadow:0 0 0 3px rgba(101,118,216,.14)!important;
+  outline:none!important;
+}
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form button[type="button"][class*="rounded-full"] {
+  background:#ffffff!important;
+  border:1px solid #d8deeb!important;
+  color:#657084!important;
+  box-shadow:0 8px 18px rgba(39,51,82,.08)!important;
+}
+
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form button[type="button"][class*="rounded-full"]:hover {
+  background:#eef2ff!important;
+  color:#6576d8!important;
+}
+
+.erp-shell:not(.light-mode) div[class*="fixed"][class*="inset-0"][class*="z-50"] > form {
+  background:#07151b!important;
+  border-color:rgba(191,219,254,.55)!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.48), 0 0 0 1px rgba(0,255,136,.08)!important;
+  overflow:hidden!important;
+}
+
+.erp-shell:not(.light-mode) div[class*="fixed"][class*="inset-0"][class*="z-50"] > form > div:first-child,
+.erp-shell:not(.light-mode) div[class*="fixed"][class*="inset-0"][class*="z-50"] > form > div:last-child {
+  background:rgba(255,255,255,.015)!important;
+  border-color:rgba(255,255,255,.10)!important;
+}
+
+.erp-shell:not(.light-mode) div[class*="fixed"][class*="inset-0"][class*="z-50"] > form input,
+.erp-shell:not(.light-mode) div[class*="fixed"][class*="inset-0"][class*="z-50"] > form select,
+.erp-shell:not(.light-mode) div[class*="fixed"][class*="inset-0"][class*="z-50"] > form textarea {
+  background:rgba(255,255,255,.92)!important;
+  border-color:rgba(255,255,255,.20)!important;
+  color:#1e2533!important;
+}
