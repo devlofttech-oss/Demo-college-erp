@@ -1,8 +1,19 @@
-import { LogOut, Menu, MessageSquareText, UserRound } from 'lucide-react';
+import { LogOut, Menu, MessageSquareText, Moon, Sun, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { canAccess, defaultRoles, getRoleById } from '../../userRoles/rolePermissions';
 
-export default function TopHeader({ academicYear, academicYears = [], institute, onAcademicYearChange, onMenuToggle, onNavigate, user, onLogout }) {
+export default function TopHeader({
+  academicYear,
+  academicYears = [],
+  institute,
+  onAcademicYearChange,
+  onMenuToggle,
+  onNavigate,
+  onThemeToggle,
+  themeMode = 'dark',
+  user,
+  onLogout,
+}) {
   const currentRoleId = user?.roleId || 'admin';
   const currentRole = getRoleById(defaultRoles, currentRoleId);
   const canViewNotices = canAccess(defaultRoles, currentRoleId, 'notices.view');
@@ -44,6 +55,13 @@ export default function TopHeader({ academicYear, academicYears = [], institute,
       </div>
 
       <div className="flex items-center gap-5">
+        <button
+          onClick={onThemeToggle}
+          className="erp-theme-toggle h-10 w-10 rounded-full border border-slate-200 flex items-center justify-center"
+          title={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
         <button onClick={openNoticeBoard} className="erp-notification-button relative h-10 w-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-500" title="Open notice board">
           <MessageSquareText size={18} />
           {canViewNotices && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-orange-500 border border-white" />}

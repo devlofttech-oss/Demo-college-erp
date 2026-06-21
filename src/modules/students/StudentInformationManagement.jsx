@@ -188,6 +188,7 @@ function StudentReportView({ academicYear, admissions, documents, promotions, st
 }
 
 export default function StudentInformationManagement({ user, onLogout }) {
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('erpThemeMode') || 'dark');
   const [students, setStudents] = useState(demoStudents);
   const [activePage, setActivePage] = useState('dashboard');
   const [activeTab, setActiveTab] = useState('admissions');
@@ -223,6 +224,10 @@ export default function StudentInformationManagement({ user, onLogout }) {
   const canOpenActiveModule = activePage === 'reports'
     ? canViewStudents
     : !activeModule?.permission || canAccess(defaultRoles, currentRoleId, activeModule.permission);
+
+  useEffect(() => {
+    localStorage.setItem('erpThemeMode', themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     const isActivePageAllowed = activePage === 'reports'
@@ -624,7 +629,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
   };
 
   return (
-    <div className="erp-shell min-h-screen bg-white text-slate-900">
+    <div className={`erp-shell ${themeMode === 'light' ? 'light-mode' : ''} min-h-screen bg-white text-slate-900`}>
         <div className="flex min-h-screen">
           <Sidebar activePage={activePage} collapsed={sidebarCollapsed} currentUser={user} institute={institute} onNavigate={setActivePage} />
           <main className="flex-1 min-w-0 bg-[#f0f1f3] flex flex-col">
@@ -635,6 +640,8 @@ export default function StudentInformationManagement({ user, onLogout }) {
               onAcademicYearChange={setAcademicYear}
               onMenuToggle={() => setSidebarCollapsed((prev) => !prev)}
               onNavigate={setActivePage}
+              onThemeToggle={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              themeMode={themeMode}
               user={{ ...user, selectedCollege: { ...user?.selectedCollege, name: institute.name, code: institute.instituteId || institute.code } }}
               onLogout={onLogout}
             />
