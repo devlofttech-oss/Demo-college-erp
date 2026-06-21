@@ -349,3 +349,76 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode table tbody tr.erp-row-selected:hover td {
   background:#ecf0ff!important;
 }
+
+.erp-shell.light-mode .erp-modal-overlay {
+  background:rgba(30,37,51,.28)!important;
+  backdrop-filter:blur(10px)!important;
+}
+
+.erp-shell.light-mode .erp-modal-form {
+  background:#ffffff!important;
+  border-color:#d8deeb!important;
+  box-shadow:0 24px 70px rgba(39,51,82,.22)!important;
+}
+
+.erp-shell.light-mode .erp-modal-header,
+.erp-shell.light-mode .erp-modal-footer {
+  background:#f8f9fd!important;
+  border-color:#e4e8f2!important;
+}
+
+.erp-shell.light-mode .erp-modal-form label span {
+  color:#657084!important;
+}
+
+.erp-shell.light-mode .erp-modal-form input,
+.erp-shell.light-mode .erp-modal-form select {
+  background:#ffffff!important;
+  border-color:#d8deeb!important;
+  color:#1e2533!important;
+  box-shadow:0 1px 0 rgba(30,37,51,.03)!important;
+}
+
+.erp-shell.light-mode .erp-modal-form input:focus,
+.erp-shell.light-mode .erp-modal-form select:focus {
+  border-color:#6576d8!important;
+  box-shadow:0 0 0 3px rgba(101,118,216,.14)!important;
+  outline:none!important;
+}
+
+.erp-shell.light-mode .erp-modal-close {
+  background:#ffffff!important;
+  border:1px solid #d8deeb!important;
+  color:#657084!important;
+  box-shadow:0 8px 18px rgba(39,51,82,.08)!important;
+}
+
+.erp-shell.light-mode .erp-modal-close:hover {
+  background:#eef2ff!important;
+  color:#6576d8!important;
+}
+
+.erp-shell:not(.light-mode) .erp-modal-form {
+  background:#07151b!important;
+  border-color:rgba(191,219,254,.55)!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.48), 0 0 0 1px rgba(0,255,136,.08)!important;
+}
+
+.erp-shell:not(.light-mode) .erp-modal-header,
+.erp-shell:not(.light-mode) .erp-modal-footer {
+  background:rgba(255,255,255,.015)!important;
+  border-color:rgba(255,255,255,.10)!important;
+}
+
+.erp-shell:not(.light-mode) .erp-modal-form input,
+.erp-shell:not(.light-mode) .erp-modal-form select {
+  background:rgba(255,255,255,.92)!important;
+  border-color:rgba(255,255,255,.20)!important;
+  color:#1e2533!important;
+}
+
+.erp-shell:not(.light-mode) .erp-modal-close {
+  background:rgba(255,255,255,.92)!important;
+  color:#64748b!important;
+  box-shadow:none!important;
+}
