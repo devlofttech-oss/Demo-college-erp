@@ -297,3 +297,15 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.2);color:#fff}::-w
   border-color:rgba(0,255,136,.72)!important;
   color:#4dffaa!important;
 }
+
+.erp-shell:not(.light-mode) div[class~="h-12"][class~="w-12"][class~="bg-white"][class*="text-[#34363d]"] {
+  background:rgba(0,255,136,.10)!important;
+  border:1px solid rgba(0,255,136,.20)!important;
+  color:#00ff88!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04), 0 0 18px rgba(0,255,136,.08)!important;
+}
+
+.erp-shell:not(.light-mode) div[class~="h-12"][class~="w-12"][class~="bg-white"][class*="text-[#34363d]"] svg {
+  color:#00ff88!important;
+  stroke:#00ff88!important;
+}
