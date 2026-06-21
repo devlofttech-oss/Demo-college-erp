@@ -6,193 +6,350 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdminProfile() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roleId in ['super-admin', 'admin'];
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function userPath(userId) {
+      return /databases/$(database)/documents/users/$(userId);
+    }
+
+    function rolePath(roleId) {
+      return /databases/$(database)/documents/roles/$(roleId);
+    }
+
+    function userProfileExists() {
+      return isSignedIn() && exists(userPath(uid()));
+    }
+
+    function userProfile() {
+      return get(userPath(uid())).data;
+    }
+
+    function isActive() {
+      return userProfileExists() && userProfile().get('status', '') == 'Active';
+    }
+
+    function myRoleId() {
+      return isActive() ? userProfile().get('roleId', '') : '';
+    }
+
+    function isSuperAdmin() {
+      return isActive() && myRoleId() == 'super-admin';
+    }
+
+    function isAdminTier() {
+      return isActive() && myRoleId() in ['super-admin', 'admin'];
+    }
+
+    function isStaff() {
+      return isActive() && myRoleId() in ['super-admin', 'admin', 'faculty'];
+    }
+
+    function isParent() {
+      return isActive() && myRoleId() == 'parent';
+    }
+
+    function roleDocExists() {
+      return isActive() && exists(rolePath(myRoleId()));
+    }
+
+    function hasPermission(permission) {
+      return isSuperAdmin()
+        || (
+          roleDocExists()
+          && permission in get(rolePath(myRoleId())).data.get('permissions', [])
+        );
+    }
+
+    function staffCan(permission) {
+      return isStaff() && hasPermission(permission);
+    }
+
+    function adminCan(permission) {
+      return isAdminTier() && hasPermission(permission);
+    }
+
+    function linkedStudentRecordIds() {
+      return userProfile().get('linkedStudentRecordIds', []);
+    }
+
+    function linkedStudentIds() {
+      return userProfile().get('linkedStudentIds', []);
+    }
+
+    function isLinkedStudentRecord(studentRecordId) {
+      return isParent()
+        && studentRecordId is string
+        && studentRecordId in linkedStudentRecordIds();
+    }
+
+    function isLinkedStudentId(studentId) {
+      return isParent()
+        && studentId is string
+        && studentId in linkedStudentIds();
+    }
+
+    function isLinkedStudent(studentRecordId, studentId) {
+      return isLinkedStudentRecord(studentRecordId) || isLinkedStudentId(studentId);
+    }
+
+    function canReadStudentRecord(data) {
+      return isLinkedStudent(
+        data.get('studentRecordId', data.get('entityRecordId', data.get('ownerRecordId', ''))),
+        data.get('studentId', data.get('entityId', data.get('ownerId', '')))
+      );
+    }
+
+    function canParentReadManagedDocument(data) {
+      return data.get('ownerType', '') == 'Student'
+        && isLinkedStudent(data.get('ownerRecordId', ''), data.get('ownerId', ''));
+    }
+
+    function safeUserSelfUpdate(userId) {
+      return isActive()
+        && uid() == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name',
+          'displayName',
+          'phone',
+          'updatedAt',
+          'updatedAtText'
+        ]);
     }
 
     match /colleges/{documentId} {
-      allow read: if isSignedIn();
-      allow create, update: if isAdminProfile();
+      allow read: if isActive();
+      allow create, update: if isSuperAdmin();
       allow delete: if false;
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create, update: if isAdminProfile();
+      allow get: if (isActive() && uid() == userId) || staffCan('users.view') || adminCan('users.edit');
+      allow list: if staffCan('users.view') || adminCan('users.edit');
+      allow create: if adminCan('users.create');
+      allow update: if adminCan('users.edit') || safeUserSelfUpdate(userId);
       allow delete: if false;
     }
 
     match /roles/{roleId} {
-      allow read: if isSignedIn();
-      allow create, update: if isAdminProfile();
+      allow read: if staffCan('roles.view') || adminCan('roles.edit');
+      allow create, update: if adminCan('roles.edit');
       allow delete: if false;
     }
 
-    match /students/{documentId} {
-      allow read, create, update: if isSignedIn();
+    match /students/{studentRecordId} {
+      allow get: if staffCan('students.view') || isLinkedStudent(studentRecordId, resource.data.get('studentId', ''));
+      allow list: if staffCan('students.view') || isLinkedStudent(studentRecordId, resource.data.get('studentId', ''));
+      allow create: if staffCan('students.create');
+      allow update: if staffCan('students.edit') || staffCan('students.archive');
       allow delete: if false;
     }
 
     match /studentAdmissions/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('students.view');
+      allow create: if staffCan('students.create');
+      allow update: if staffCan('students.edit');
       allow delete: if false;
     }
 
     match /studentDocuments/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('students.view') || canReadStudentRecord(resource.data);
+      allow create: if staffCan('students.documents');
+      allow update: if staffCan('students.documents') || staffCan('students.verifyDocuments');
       allow delete: if false;
     }
 
     match /studentPromotions/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('students.view');
+      allow create, update: if staffCan('students.promote');
       allow delete: if false;
     }
 
     match /studentTransfers/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('students.view');
+      allow create, update: if staffCan('students.promote');
       allow delete: if false;
     }
 
     match /studentIdCards/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('students.view');
+      allow create, update: if staffCan('students.create') || staffCan('students.edit');
       allow delete: if false;
     }
 
     match /staffMembers/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('staff.view');
+      allow create: if staffCan('staff.create');
+      allow update: if staffCan('staff.edit') || staffCan('staff.archive');
       allow delete: if false;
     }
 
     match /departments/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isStaff();
+      allow create, update: if staffCan('staff.create') || staffCan('staff.edit');
       allow delete: if false;
     }
 
     match /staffLeaveRecords/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('staff.view');
+      allow create, update: if staffCan('staff.leave');
       allow delete: if false;
     }
 
     match /staffAttendanceRecords/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('staff.view');
+      allow create, update: if staffCan('staff.attendance') || staffCan('attendance.markStaff');
       allow delete: if false;
     }
 
     match /studentAttendanceRecords/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('attendance.view') || canReadStudentRecord(resource.data);
+      allow create, update: if staffCan('attendance.markStudents');
       allow delete: if false;
     }
 
     match /attendanceNotifications/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('attendance.view') || canReadStudentRecord(resource.data);
+      allow create, update: if staffCan('attendance.notifyParents');
       allow delete: if false;
     }
+
     match /classrooms/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('timetable.classrooms');
       allow delete: if false;
     }
 
     match /timetableEntries/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('timetable.create') || staffCan('timetable.edit');
       allow delete: if false;
     }
 
     match /timetablePublications/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('timetable.publish');
       allow delete: if false;
     }
 
     match /examSchedules/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('exams.view');
+      allow create, update: if staffCan('exams.schedule');
       allow delete: if false;
     }
 
     match /internalAssessments/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('exams.view');
+      allow create, update: if staffCan('exams.assessments');
       allow delete: if false;
     }
 
     match /marksEntries/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('exams.view') || canReadStudentRecord(resource.data);
+      allow create, update: if staffCan('exams.marks');
       allow delete: if false;
     }
 
     match /studentResults/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('exams.view') || canReadStudentRecord(resource.data);
+      allow create, update: if staffCan('exams.results');
       allow delete: if false;
     }
 
     match /reportCards/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('exams.view') || canReadStudentRecord(resource.data);
+      allow create, update: if staffCan('exams.reportCards');
       allow delete: if false;
     }
 
     match /feeStructures/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('fees.view');
+      allow create, update: if staffCan('fees.setup');
       allow delete: if false;
     }
 
     match /feeAssignments/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('fees.view') || canReadStudentRecord(resource.data);
+      allow create, update: if staffCan('fees.assign');
       allow delete: if false;
     }
 
     match /feeCollections/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('fees.view');
+      allow create, update: if staffCan('fees.collect');
       allow delete: if false;
     }
 
     match /feeAdjustments/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if staffCan('fees.view');
+      allow create, update: if staffCan('fees.adjust');
       allow delete: if false;
     }
 
     match /financialReportSnapshots/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if adminCan('financialReports.view');
+      allow create, update: if adminCan('financialReports.snapshots');
       allow delete: if false;
     }
 
     match /noticeItems/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create: if staffCan('notices.create');
+      allow update: if staffCan('notices.edit') || staffCan('notices.archive');
       allow delete: if false;
     }
 
     match /managedDocuments/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow get, list: if staffCan('documents.view') || canParentReadManagedDocument(resource.data);
+      allow create: if staffCan('documents.upload');
+      allow update: if staffCan('documents.verify') || staffCan('documents.archive');
       allow delete: if false;
     }
 
-    match /parentPortalLinks/{documentId} {
-      allow read, create, update: if isSignedIn();
+    match /parentPortalLinks/{linkId} {
+      allow read: if adminCan('users.view') || adminCan('users.edit');
+      allow create, update: if adminCan('users.edit');
       allow delete: if false;
     }
 
     match /academicPrograms/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('academics.manage');
       allow delete: if false;
     }
 
     match /academicSubjects/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('academics.manage');
       allow delete: if false;
     }
 
     match /academicBatches/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('academics.manage');
       allow delete: if false;
     }
 
     match /academicCalendarEvents/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isActive();
+      allow create, update: if staffCan('academics.manage');
       allow delete: if false;
     }
 
     match /systemSettings/{documentId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isStaff();
+      allow create, update: if adminCan('settings.manage');
       allow delete: if false;
+    }
+
+    match /auditLogs/{documentId} {
+      allow read: if isAdminTier();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
-

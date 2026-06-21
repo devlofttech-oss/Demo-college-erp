@@ -58,8 +58,8 @@ assert.equal(canAccess(defaultRoles, 'faculty', 'settings.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'academicCurriculum.view'), true);
 assert.equal(canAccess(defaultRoles, 'parent', 'academics.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'timetable.view'), true);
-assert.equal(canAccess(defaultRoles, 'parent', 'exams.view'), true);
-assert.equal(canAccess(defaultRoles, 'parent', 'documents.view'), true);
+assert.equal(canAccess(defaultRoles, 'parent', 'exams.view'), false);
+assert.equal(canAccess(defaultRoles, 'parent', 'documents.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'parentPortal.view'), true);
 assert.equal(canAccess(defaultRoles, 'parent', 'notices.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'attendance.view'), false);
@@ -87,13 +87,13 @@ assert.equal(
     password: '123',
     roleId: 'admin',
   }),
-  'Password must be at least 6 characters.'
+  'Password must be at least 12 characters.'
 );
 assert.equal(
   validateUserForm({
     name: 'Admin',
     email: 'admin@college.edu',
-    password: '123456',
+    password: '123456789012',
     roleId: 'admin',
   }),
   ''

@@ -14,10 +14,15 @@ const students = [
   { id: 's2', studentId: 'STU-2', name: 'Two', guardianEmail: 'other@test.com', status: 'Active' },
 ];
 
-const linked = getParentLinkedStudents(students, { roleId: 'parent', email: 'parent@test.com' });
+const linked = getParentLinkedStudents(students, {
+  roleId: 'parent',
+  linkedStudentRecordIds: ['s1'],
+  linkedStudentIds: ['STU-1'],
+});
 assert.equal(linked.length, 1);
 assert.equal(linked[0].id, 's1');
 assert.equal(getParentLinkedStudents(students, { roleId: 'admin' }).length, 2);
+assert.equal(getParentLinkedStudents(students, { roleId: 'parent', linkedStudentIds: [] }).length, 0);
 
 const records = [
   { id: 'r1', entityRecordId: 's1', entityId: 'STU-1', status: 'Present', dateText: '18 Jun 2026' },

@@ -15,6 +15,13 @@ import { db } from './config';
 const SCHEMA_DOC_ID = '__schema';
 export const DEFAULT_ACADEMIC_YEAR = '2026-2027';
 
+function requireDb() {
+  if (!db) {
+    throw new Error('Firebase Firestore is not configured.');
+  }
+  return db;
+}
+
 function filterByAcademicYear(records = [], academicYear = '') {
   if (!academicYear) return records;
   return records.filter((record) => record.academicYear === academicYear);
@@ -24,6 +31,28 @@ function academicYearWhere(academicYear = '') {
   return academicYear ? [where('academicYear', '==', academicYear)] : [];
 }
 
+function uniqueValues(values = []) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function chunkValues(values = [], size = 10) {
+  const chunks = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function mergeById(groups = []) {
+  const byId = new Map();
+  groups.flat().forEach((record) => {
+    if (record?.id && record.id !== SCHEMA_DOC_ID) {
+      byId.set(record.id, record);
+    }
+  });
+  return [...byId.values()];
+}
+
 async function listCollection(collectionName, constraints = []) {
   if (!db) return [];
   const collectionRef = collection(db, collectionName);
@@ -31,6 +60,35 @@ async function listCollection(collectionName, constraints = []) {
   return snapshot.docs
     .filter((item) => item.id !== SCHEMA_DOC_ID)
     .map((item) => ({ id: item.id, ...item.data() }));
+}
+
+async function getCollectionDocuments(collectionName, ids = []) {
+  if (!db) return [];
+  const snapshots = await Promise.all(
+    uniqueValues(ids).map((id) => getDoc(doc(db, collectionName, id)))
+  );
+  return snapshots
+    .filter((snapshot) => snapshot.exists() && snapshot.id !== SCHEMA_DOC_ID)
+    .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
+}
+
+async function listCollectionWhereIn(collectionName, fieldName, values = [], constraints = []) {
+  if (!db) return [];
+  const ids = uniqueValues(values);
+  if (!ids.length) return [];
+
+  const collectionRef = collection(db, collectionName);
+  const snapshots = await Promise.all(
+    chunkValues(ids).map((chunk) =>
+      getDocs(firestoreQuery(collectionRef, ...constraints, where(fieldName, 'in', chunk)))
+    )
+  );
+
+  return mergeById(
+    snapshots.map((snapshot) =>
+      snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
+    )
+  );
 }
 
 async function createCollectionDocument(collectionName, data) {
@@ -493,8 +551,65 @@ export async function archiveManagedDocument(id, data = {}) {
   });
 }
 
-export async function getParentPortalData(academicYear = '') {
+export async function getParentPortalData(academicYear = '', currentUser = {}) {
   const yearConstraints = academicYearWhere(academicYear);
+
+  if (currentUser?.roleId === 'parent') {
+    const profile = currentUser?.uid ? await getUserProfile(currentUser.uid).catch(() => null) : null;
+    const linkedStudentRecordIds = uniqueValues([
+      ...(currentUser.linkedStudentRecordIds || []),
+      ...(profile?.linkedStudentRecordIds || []),
+    ]);
+    const linkedStudentIds = uniqueValues([
+      ...(currentUser.linkedStudentIds || []),
+      ...(profile?.linkedStudentIds || []),
+    ]);
+
+    const [studentsByRecordId, studentsByStudentId] = await Promise.all([
+      getCollectionDocuments('students', linkedStudentRecordIds),
+      listCollectionWhereIn('students', 'studentId', linkedStudentIds, yearConstraints),
+    ]);
+    const students = filterByAcademicYear(mergeById([studentsByRecordId, studentsByStudentId]), academicYear);
+    const studentRecordIds = uniqueValues([...linkedStudentRecordIds, ...students.map((student) => student.id)]);
+    const studentIds = uniqueValues([...linkedStudentIds, ...students.map((student) => student.studentId)]);
+
+    const [
+      attendanceByRecordId,
+      attendanceByStudentId,
+      marksByRecordId,
+      marksByStudentId,
+      resultsByRecordId,
+      resultsByStudentId,
+      feesByRecordId,
+      feesByStudentId,
+      documentsByRecordId,
+      documentsByStudentId,
+      noticeItems,
+    ] = await Promise.all([
+      listCollectionWhereIn('studentAttendanceRecords', 'entityRecordId', studentRecordIds, yearConstraints),
+      listCollectionWhereIn('studentAttendanceRecords', 'entityId', studentIds, yearConstraints),
+      listCollectionWhereIn('marksEntries', 'studentRecordId', studentRecordIds, yearConstraints),
+      listCollectionWhereIn('marksEntries', 'studentId', studentIds, yearConstraints),
+      listCollectionWhereIn('studentResults', 'studentRecordId', studentRecordIds, yearConstraints),
+      listCollectionWhereIn('studentResults', 'studentId', studentIds, yearConstraints),
+      listCollectionWhereIn('feeAssignments', 'studentRecordId', studentRecordIds, yearConstraints),
+      listCollectionWhereIn('feeAssignments', 'studentId', studentIds, yearConstraints),
+      listCollectionWhereIn('managedDocuments', 'ownerRecordId', studentRecordIds, [where('ownerType', '==', 'Student'), ...yearConstraints]),
+      listCollectionWhereIn('managedDocuments', 'ownerId', studentIds, [where('ownerType', '==', 'Student'), ...yearConstraints]),
+      listCollection('noticeItems', yearConstraints),
+    ]);
+
+    return {
+      students,
+      studentAttendance: mergeById([attendanceByRecordId, attendanceByStudentId]),
+      marksEntries: mergeById([marksByRecordId, marksByStudentId]),
+      studentResults: mergeById([resultsByRecordId, resultsByStudentId]),
+      feeAssignments: mergeById([feesByRecordId, feesByStudentId]),
+      noticeItems: filterByAcademicYear(noticeItems, academicYear),
+      managedDocuments: mergeById([documentsByRecordId, documentsByStudentId]),
+    };
+  }
+
   const [students, studentAttendance, marksEntries, studentResults, feeAssignments, noticeItems, managedDocuments] = await Promise.all([
     listCollection('students', yearConstraints),
     listCollection('studentAttendanceRecords', yearConstraints),

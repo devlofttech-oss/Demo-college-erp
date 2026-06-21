@@ -43,7 +43,22 @@ export default function FeeVisualGraph({ assignments = [], collections = [], sum
   const collectionRate = totalAssigned ? Math.round((Number(summary.totalCollected || 0) / totalAssigned) * 100) : 0;
   const netRealized = Number(summary.totalCollected || 0) + Number(summary.totalAdjusted || 0);
   const segmentTotal = Math.max(netRealized + Number(summary.totalOutstanding || 0), 1);
-  let cursor = -110;
+  const { arcs: donutArcs } = donutSegments.reduce((state, [label, key, color]) => {
+    const value = Number(summary[key] || 0);
+    if (!value) return state;
+    const angle = (value / segmentTotal) * 360;
+    return {
+      cursor: state.cursor + angle,
+      arcs: [
+        ...state.arcs,
+        {
+          label,
+          color,
+          path: arcPath(110, 110, 76, state.cursor, state.cursor + angle),
+        },
+      ],
+    };
+  }, { cursor: -110, arcs: [] });
   const classDues = Object.entries(assignments.reduce((map, item) => {
     const key = item.classKey || 'Unassigned';
     map[key] = (map[key] || 0) + Number(item.dueAmount || 0);
@@ -71,14 +86,9 @@ export default function FeeVisualGraph({ assignments = [], collections = [], sum
           <div className="relative h-56 flex items-center justify-center">
             <svg viewBox="0 0 220 220" className="h-56 w-56">
               <circle cx="110" cy="110" r="76" fill="none" stroke="rgba(148,163,184,.16)" strokeWidth="28" />
-              {donutSegments.map(([label, key, color]) => {
-                const value = Number(summary[key] || 0);
-                if (!value) return null;
-                const angle = (value / segmentTotal) * 360;
-                const path = arcPath(110, 110, 76, cursor, cursor + angle);
-                cursor += angle;
-                return <path key={label} d={path} fill="none" stroke={color} strokeWidth="28" strokeLinecap="round" />;
-              })}
+              {donutArcs.map(({ label, path, color }) => (
+                <path key={label} d={path} fill="none" stroke={color} strokeWidth="28" strokeLinecap="round" />
+              ))}
               <circle cx="110" cy="110" r="50" fill="rgba(148,163,184,.10)" />
             </svg>
             <div className="absolute text-center">

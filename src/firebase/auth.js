@@ -8,7 +8,6 @@ import {
 } from 'firebase/auth';
 import { deleteApp, getApp, initializeApp } from 'firebase/app';
 import { auth, firebaseConfig, isFirebaseConfigured } from './config';
-import { getFallbackRoleId } from './demoRoles';
 
 function requireAuth() {
   if (!isFirebaseConfigured || !auth) {
@@ -19,12 +18,11 @@ function requireAuth() {
 
 export function toAppUser(firebaseUser) {
   if (!firebaseUser) return null;
-  const roleId = getFallbackRoleId(firebaseUser.email);
   return {
     uid: firebaseUser.uid,
-    name: firebaseUser.displayName || 'Admin',
+    name: firebaseUser.displayName || '',
     email: firebaseUser.email,
-    roleId,
+    roleId: 'pending',
   };
 }
 
@@ -39,19 +37,6 @@ export function subscribeToAuthState(callback) {
 export async function loginWithEmail(email, password) {
   const result = await signInWithEmailAndPassword(requireAuth(), email, password);
   return toAppUser(result.user);
-}
-
-export async function registerWithEmail({ name, email, password }) {
-  const result = await createUserWithEmailAndPassword(requireAuth(), email, password);
-  if (name) {
-    await updateProfile(result.user, { displayName: name });
-  }
-  return {
-    uid: result.user.uid,
-    name: name || result.user.displayName || 'Admin',
-    email: result.user.email,
-    roleId: getFallbackRoleId(result.user.email),
-  };
 }
 
 export async function logoutUser() {

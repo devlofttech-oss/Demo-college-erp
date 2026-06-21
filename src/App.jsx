@@ -4,7 +4,6 @@ import { Building2, GraduationCap } from 'lucide-react';
 import AuthPage from './pages/AuthPage';
 import StudentInformationManagement from './modules/students/StudentInformationManagement';
 import { logoutUser, subscribeToAuthState } from './firebase/auth';
-import { getFallbackRoleId } from './firebase/demoRoles';
 import { getSettingsData, getUserProfile } from './firebase/db';
 import ParticleBackground from './components/ParticleBackground';
 import { demoInstituteSettings } from './modules/settings/demoSettings';
@@ -57,6 +56,32 @@ function CollegeSelection({ colleges, onSelect }) {
   );
 }
 
+function AccessPending({ user, onLogout }) {
+  const status = user?.status || 'Pending Approval';
+  return (
+    <main className="relative z-[1] min-h-screen bg-[#f1f2f4] flex items-center justify-center p-6">
+      <section className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-[0_18px_60px_rgba(15,23,42,0.12)] p-7 text-center">
+        <div className="h-14 w-14 rounded-full bg-[#33373e] text-white flex items-center justify-center mx-auto mb-5">
+          <GraduationCap size={30} />
+        </div>
+        <h1 className="text-xl font-bold text-slate-900">Access pending</h1>
+        <p className="text-sm text-slate-500 mt-2">
+          This login does not have an active ERP profile yet. Ask an administrator to activate the account.
+        </p>
+        <div className="mt-4 rounded-lg bg-[#f5f5f6] px-4 py-3 text-sm text-slate-600">
+          {user?.email || 'Signed-in user'} - {status}
+        </div>
+        <button
+          onClick={onLogout}
+          className="mt-5 h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm"
+        >
+          Logout
+        </button>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [institute, setInstitute] = useState(demoInstituteSettings);
@@ -77,14 +102,15 @@ export default function App() {
       }
 
       const profile = await getUserProfile(nextUser.uid).catch(() => null);
-      const roleId = profile?.roleId || getFallbackRoleId(nextUser.email);
       setUser({
         ...nextUser,
-        roleId,
-        status: profile?.status || 'Active',
+        roleId: profile?.roleId || 'pending',
+        status: profile?.status || 'Pending Approval',
         permissions: profile?.permissions || [],
         displayId: profile?.displayId || profile?.adminId || profile?.employeeId || '',
         collegeIds: profile?.collegeIds || ['main-campus'],
+        linkedStudentIds: profile?.linkedStudentIds || [],
+        linkedStudentRecordIds: profile?.linkedStudentRecordIds || [],
       });
       setAuthLoading(false);
     });
@@ -125,7 +151,8 @@ export default function App() {
     );
   }
 
-  const needsCollegeSelection = user?.roleId === 'super-admin' && !selectedCollege;
+  const hasActiveProfile = user?.status === 'Active' && user?.roleId && user.roleId !== 'pending';
+  const needsCollegeSelection = hasActiveProfile && user?.roleId === 'super-admin' && !selectedCollege;
   const colleges = [buildCollegeFromInstitute(institute)];
 
   return (
@@ -133,12 +160,14 @@ export default function App() {
       <ParticleBackground />
       <Routes>
       <Route path="/" element={<Navigate to={user ? '/students' : '/login'} replace />} />
-      <Route path="/login" element={user ? <Navigate to="/students" replace /> : <AuthPage mode="login" />} />
-      <Route path="/register" element={user ? <Navigate to="/students" replace /> : <AuthPage mode="register" />} />
+      <Route path="/login" element={user ? <Navigate to="/students" replace /> : <AuthPage />} />
+      <Route path="/register" element={<Navigate to={user ? '/students' : '/login'} replace />} />
       <Route
         path="/students"
         element={user ? (
-          needsCollegeSelection ? (
+          !hasActiveProfile ? (
+            <AccessPending user={user} onLogout={logout} />
+          ) : needsCollegeSelection ? (
             <CollegeSelection colleges={colleges} onSelect={selectCollege} />
           ) : (
             <StudentInformationManagement user={{ ...user, selectedCollege }} onLogout={logout} />

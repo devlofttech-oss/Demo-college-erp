@@ -1,8 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap, Lock, Mail, UserRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { GraduationCap, Lock, Mail } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { loginWithEmail, registerWithEmail } from '../firebase/auth';
+import { loginWithEmail } from '../firebase/auth';
 import { isFirebaseConfigured } from '../firebase/config';
 
 function getAuthErrorMessage(error) {
@@ -14,31 +14,20 @@ function getAuthErrorMessage(error) {
   return error?.message || 'Authentication failed. Please try again.';
 }
 
-export default function AuthPage({ mode = 'login' }) {
+export default function AuthPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    name: 'Admin',
     email: '',
     password: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
-  const isRegister = mode === 'register';
-
   const submit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     try {
-      if (isRegister) {
-        await registerWithEmail({
-          name: form.name.trim() || 'Admin',
-          email: form.email.trim(),
-          password: form.password,
-        });
-      } else {
-        await loginWithEmail(form.email.trim(), form.password);
-      }
-      toast.success(isRegister ? 'Account created' : 'Signed in');
+      await loginWithEmail(form.email.trim(), form.password);
+      toast.success('Signed in');
       navigate('/students');
     } catch (error) {
       toast.error(getAuthErrorMessage(error));
@@ -60,25 +49,11 @@ export default function AuthPage({ mode = 'login' }) {
 
         <form onSubmit={submit} className="p-7 space-y-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">{isRegister ? 'Create account' : 'Admin login'}</h2>
+            <h2 className="text-xl font-bold text-slate-900">ERP login</h2>
             <p className="text-sm text-slate-500 mt-1">
               {isFirebaseConfigured ? 'Use your registered ERP account.' : 'Add Firebase values to .env before signing in.'}
             </p>
           </div>
-
-          {isRegister && (
-            <label className="block">
-              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Name</span>
-              <div className="relative">
-                <UserRound size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={form.name}
-                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="w-full h-11 rounded-lg bg-[#f5f5f6] border border-slate-200 pl-10 pr-3 outline-none focus:ring-2 focus:ring-orange-100"
-                />
-              </div>
-            </label>
-          )}
 
           <label className="block">
             <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Email</span>
@@ -115,14 +90,11 @@ export default function AuthPage({ mode = 'login' }) {
             disabled={!isFirebaseConfigured || submitting}
             className="w-full h-11 rounded-full bg-[#fb9a5b] text-white font-bold disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {submitting ? 'Please wait...' : isRegister ? 'Register' : 'Login'}
+            {submitting ? 'Please wait...' : 'Login'}
           </button>
 
           <p className="text-sm text-center text-slate-500">
-            {isRegister ? 'Already have an account?' : 'Need an account?'}{' '}
-            <Link className="font-bold text-[#fb8d49]" to={isRegister ? '/login' : '/register'}>
-              {isRegister ? 'Login' : 'Register'}
-            </Link>
+            Need an account? Ask an administrator to create one for you.
           </p>
         </form>
       </section>

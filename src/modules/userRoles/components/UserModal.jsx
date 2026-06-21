@@ -1,14 +1,35 @@
 import { useState } from 'react';
 
-export default function UserModal({ initialUser = null, mode = 'create', roles, onClose, onSave }) {
+export default function UserModal({ initialUser = null, mode = 'create', roles, students = [], onClose, onSave }) {
   const isEdit = mode === 'edit';
+  const initialLinkedRecordIds = new Set(initialUser?.linkedStudentRecordIds || []);
+  const initialLinkedStudentIds = new Set(initialUser?.linkedStudentIds || []);
+  students.forEach((student) => {
+    if (initialLinkedStudentIds.has(student.studentId)) {
+      initialLinkedRecordIds.add(student.id);
+    }
+  });
   const [form, setForm] = useState({
     name: initialUser?.name || '',
     email: initialUser?.email || '',
     password: '',
     roleId: initialUser?.roleId || roles[0]?.id || '',
     status: initialUser?.status || 'Active',
+    linkedStudentRecordIds: [...initialLinkedRecordIds],
   });
+  const isParentRole = form.roleId === 'parent';
+
+  const toggleLinkedStudent = (studentId) => {
+    setForm((prev) => {
+      const selected = new Set(prev.linkedStudentRecordIds || []);
+      if (selected.has(studentId)) {
+        selected.delete(studentId);
+      } else {
+        selected.add(studentId);
+      }
+      return { ...prev, linkedStudentRecordIds: [...selected] };
+    });
+  };
 
   const submit = (event) => {
     event.preventDefault();
@@ -52,7 +73,7 @@ export default function UserModal({ initialUser = null, mode = 'create', roles, 
               <span className="block text-xs font-semibold text-slate-500 mb-1.5">Password</span>
               <input
                 type="password"
-                minLength={6}
+                minLength={12}
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
                 className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
@@ -71,6 +92,31 @@ export default function UserModal({ initialUser = null, mode = 'create', roles, 
               ))}
             </select>
           </label>
+          {isParentRole && (
+            <fieldset className="sm:col-span-2 rounded-lg border border-slate-200 p-4">
+              <legend className="px-1 text-xs font-semibold text-slate-500">Linked students</legend>
+              {students.length ? (
+                <div className="max-h-40 overflow-y-auto divide-y divide-slate-100">
+                  {students.map((student) => (
+                    <label key={student.id} className="flex items-center gap-3 py-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={form.linkedStudentRecordIds.includes(student.id)}
+                        onChange={() => toggleLinkedStudent(student.id)}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      <span>
+                        <span className="font-semibold">{student.name}</span>
+                        <span className="text-slate-500"> / {student.studentId || student.id}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No active students are available to link.</p>
+              )}
+            </fieldset>
+          )}
           {isEdit && (
             <label>
               <span className="block text-xs font-semibold text-slate-500 mb-1.5">Status</span>

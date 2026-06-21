@@ -2,16 +2,16 @@ import { summarizeAttendance } from '../attendance/attendanceUtils.js';
 import { calculateDueAmount } from '../fees/feeUtils.js';
 
 export function getParentLinkedStudents(students = [], currentUser = {}) {
-  const email = currentUser.email?.toLowerCase();
-  if (!email || currentUser.roleId !== 'parent') {
+  if (currentUser.roleId !== 'parent') {
     return students.filter((student) => student.status !== 'Archived');
   }
-  const linked = students.filter((student) =>
-    [student.parentEmail, student.guardianEmail, student.email]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase() === email)
+
+  const linkedRecordIds = new Set(currentUser.linkedStudentRecordIds || []);
+  const linkedStudentIds = new Set(currentUser.linkedStudentIds || []);
+  return students.filter((student) =>
+    student.status !== 'Archived' &&
+    (linkedRecordIds.has(student.id) || linkedStudentIds.has(student.studentId))
   );
-  return linked.length ? linked : students.filter((student) => student.status !== 'Archived').slice(0, 1);
 }
 
 export function recordsForStudent(records = [], student = {}) {

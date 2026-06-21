@@ -6,14 +6,61 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function userPath(userId) {
+      return /databases/(default)/documents/users/$(userId);
+    }
+
+    function userProfileExists() {
+      return isSignedIn() && firestore.exists(userPath(uid()));
+    }
+
+    function userProfile() {
+      return firestore.get(userPath(uid())).data;
+    }
+
+    function isActive() {
+      return userProfileExists() && userProfile().get('status', '') == 'Active';
+    }
+
+    function isActiveStaff() {
+      return isActive() && userProfile().get('roleId', '') in ['super-admin', 'admin', 'faculty'];
+    }
+
+    function isActiveParentOf(studentId) {
+      return isActive()
+        && userProfile().get('roleId', '') == 'parent'
+        && studentId in userProfile().get('linkedStudentIds', []);
+    }
+
+    function isAllowedDocumentUpload() {
+      return request.resource != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType in [
+          'application/pdf',
+          'image/jpeg',
+          'image/png',
+          'image/webp'
+        ];
+    }
+
     match /student-documents/{studentId}/{fileName} {
-      allow read, write: if isSignedIn();
+      allow read: if isActiveStaff() || isActiveParentOf(studentId);
+      allow write: if isActiveStaff() && isAllowedDocumentUpload();
       allow delete: if false;
     }
 
     match /managed-documents/{ownerType}/{ownerId}/{fileName} {
-      allow read, write: if isSignedIn();
+      allow read: if isActiveStaff() || (ownerType == 'Student' && isActiveParentOf(ownerId));
+      allow write: if isActiveStaff() && isAllowedDocumentUpload();
       allow delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

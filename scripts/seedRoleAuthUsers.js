@@ -21,7 +21,11 @@ if (!getApps().length) {
 
 const auth = getAuth();
 const db = getFirestore();
-const temporaryPassword = process.env.SEED_USER_PASSWORD || 'CollegeERP@2026';
+const temporaryPassword = process.env.SEED_USER_PASSWORD;
+
+if (!temporaryPassword || temporaryPassword.length < 12) {
+  throw new Error('Set SEED_USER_PASSWORD to a strong temporary password with at least 12 characters.');
+}
 
 const roleUsers = [
   {
@@ -47,6 +51,8 @@ const roleUsers = [
     email: 'parent.vivek@example.com',
     roleId: 'parent',
     displayId: 'PAR-001',
+    linkedStudentRecordIds: ['seed-student-vivek'],
+    linkedStudentIds: ['STU-4449'],
   },
 ];
 
@@ -82,6 +88,8 @@ for (const user of roleUsers) {
     displayId: user.displayId,
     collegeIds: ['main-campus'],
     status: 'Active',
+    linkedStudentRecordIds: user.roleId === 'parent' ? user.linkedStudentRecordIds || [] : [],
+    linkedStudentIds: user.roleId === 'parent' ? user.linkedStudentIds || [] : [],
     createdAtText: '21 Jun 2026',
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
@@ -89,4 +97,4 @@ for (const user of roleUsers) {
   console.log(`${action}: ${user.email} -> ${user.roleId}`);
 }
 
-console.log(`Temporary password for seeded role users: ${temporaryPassword}`);
+console.log('Seeded role users with the password supplied through SEED_USER_PASSWORD.');

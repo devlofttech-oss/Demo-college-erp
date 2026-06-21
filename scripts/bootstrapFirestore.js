@@ -96,7 +96,7 @@ const collections = {
   },
   users: {
     purpose: 'ERP user profiles linked to Firebase Auth users',
-    fields: ['uid', 'name', 'email', 'roleId', 'displayId', 'collegeIds', 'status', 'createdBy', 'createdAtText', 'updatedAtText'],
+    fields: ['uid', 'name', 'email', 'roleId', 'displayId', 'collegeIds', 'status', 'linkedStudentRecordIds', 'linkedStudentIds', 'createdBy', 'createdAtText', 'updatedAtText'],
   },
   roles: {
     purpose: 'ERP role definitions and permission maps',

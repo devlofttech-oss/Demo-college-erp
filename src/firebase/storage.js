@@ -1,6 +1,14 @@
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { storage, isFirebaseConfigured } from './config';
 
+const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
 function sanitizePathSegment(value) {
   return String(value || 'unknown')
     .trim()
@@ -8,10 +16,23 @@ function sanitizePathSegment(value) {
     .replace(/-+/g, '-');
 }
 
+function validateDocumentFile(file) {
+  if (!file) {
+    throw new Error('Choose a file to upload.');
+  }
+  if (file.size > MAX_DOCUMENT_SIZE) {
+    throw new Error('Document uploads must be 10 MB or smaller.');
+  }
+  if (!ALLOWED_DOCUMENT_TYPES.has(file.type)) {
+    throw new Error('Only PDF, JPEG, PNG, and WebP documents can be uploaded.');
+  }
+}
+
 export async function uploadStudentDocumentFile({ student, file }) {
   if (!isFirebaseConfigured || !storage) {
     throw new Error('Firebase Storage is not configured.');
   }
+  validateDocumentFile(file);
 
   const studentKey = sanitizePathSegment(student.studentId || student.id);
   const timestamp = Date.now();
@@ -42,6 +63,7 @@ export async function uploadManagedDocumentFile({ ownerType, ownerId, file }) {
   if (!isFirebaseConfigured || !storage) {
     throw new Error('Firebase Storage is not configured.');
   }
+  validateDocumentFile(file);
 
   const ownerKey = sanitizePathSegment(ownerId);
   const typeKey = sanitizePathSegment(ownerType);

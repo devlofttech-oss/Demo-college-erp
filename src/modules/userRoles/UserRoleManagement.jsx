@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import {
   createRole,
   createUserProfile,
+  getStudentInformationData,
   getUserRoleData,
   updateRole,
   updateUserProfile,
@@ -32,6 +33,7 @@ export default function UserRoleManagement({ currentUser }) {
   const [loadError, setLoadError] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [studentOptions, setStudentOptions] = useState([]);
 
   useEffect(() => {
     const loadUsersAndRoles = async () => {
@@ -39,6 +41,8 @@ export default function UserRoleManagement({ currentUser }) {
         const data = await getUserRoleData();
         setRoles(mergeRoles(data.roles));
         if (data.users.length) setUsers(data.users);
+        const studentData = await getStudentInformationData().catch(() => ({ students: [] }));
+        setStudentOptions(studentData.students.filter((student) => student.status !== 'Archived'));
       } catch (error) {
         console.warn('Using demo users and roles because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore users/roles. Showing demo/local records.');
@@ -65,6 +69,21 @@ export default function UserRoleManagement({ currentUser }) {
         .some((value) => value.toLowerCase().includes(term))
     );
   }, [rolesById, search, users]);
+
+  const getLinkedStudentPayload = (form) => {
+    if (form.roleId !== 'parent') {
+      return {
+        linkedStudentRecordIds: [],
+        linkedStudentIds: [],
+      };
+    }
+
+    const selected = studentOptions.filter((student) => form.linkedStudentRecordIds?.includes(student.id));
+    return {
+      linkedStudentRecordIds: selected.map((student) => student.id),
+      linkedStudentIds: selected.map((student) => student.studentId).filter(Boolean),
+    };
+  };
 
   const stats = [
     { label: 'Users', value: users.length, icon: <UserRound size={22} /> },
@@ -145,6 +164,7 @@ export default function UserRoleManagement({ currentUser }) {
         status: 'Active',
         createdBy: currentUser?.uid || '',
         createdAtText,
+        ...getLinkedStudentPayload(form),
       };
       await createUserProfile(authUser.uid, profile);
       setUsers((prev) => [profile, ...prev]);
@@ -158,6 +178,7 @@ export default function UserRoleManagement({ currentUser }) {
         status: 'Active',
         createdBy: currentUser?.uid || '',
         createdAtText,
+        ...getLinkedStudentPayload(form),
       };
       setUsers((prev) => [localUser, ...prev]);
       toast.success(isFirebaseConfigured ? 'User saved locally. Check Firebase Auth permissions.' : 'User saved locally. Add Firebase keys to persist.');
@@ -184,6 +205,7 @@ export default function UserRoleManagement({ currentUser }) {
       roleId: form.roleId,
       status: form.status,
       updatedAtText: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      ...getLinkedStudentPayload(form),
     };
 
     try {
@@ -278,6 +300,7 @@ export default function UserRoleManagement({ currentUser }) {
       {showUserModal && (
         <UserModal
           roles={roles}
+          students={studentOptions}
           onClose={() => setShowUserModal(false)}
           onSave={createUser}
         />
@@ -287,6 +310,7 @@ export default function UserRoleManagement({ currentUser }) {
           mode="edit"
           initialUser={editingUser}
           roles={roles}
+          students={studentOptions}
           onClose={() => setEditingUser(null)}
           onSave={updateUser}
         />

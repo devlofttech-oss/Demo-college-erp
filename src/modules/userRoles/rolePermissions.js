@@ -166,8 +166,6 @@ export const defaultRoles = [
     permissions: [
       'academicCurriculum.view',
       'timetable.view',
-      'exams.view',
-      'documents.view',
       'parentPortal.view',
     ],
   },
@@ -199,7 +197,7 @@ export function validateUserForm(form) {
   if (!form.name?.trim()) return 'Name is required.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email || '')) return 'Valid email is required.';
   if (!form.roleId) return 'Role is required.';
-  if (!form.password || form.password.length < 6) return 'Password must be at least 6 characters.';
+  if (!form.password || form.password.length < 12) return 'Password must be at least 12 characters.';
   return '';
 }
 

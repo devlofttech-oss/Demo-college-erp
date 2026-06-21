@@ -45,7 +45,7 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027' }
   useEffect(() => {
     const loadPortal = async () => {
       try {
-        const data = await getParentPortalData(academicYear);
+        const data = await getParentPortalData(academicYear, currentUser);
         if (data.students.length) {
           const linked = getParentLinkedStudents(data.students, currentUser);
           setStudents(linked);
@@ -65,7 +65,7 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027' }
       }
     };
     loadPortal();
-  }, [currentUser]);
+  }, [academicYear, currentUser]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canView = canAccess(defaultRoles, currentRoleId, 'parentPortal.view');

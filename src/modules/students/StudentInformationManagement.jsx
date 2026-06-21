@@ -235,7 +235,8 @@ export default function StudentInformationManagement({ user, onLogout }) {
       ? canViewStudents
       : accessibleModules.some((module) => module.id === activePage);
     if (!isActivePageAllowed) {
-      setActivePage(accessibleModules[0]?.id || 'dashboard');
+      const nextPage = accessibleModules[0]?.id || 'dashboard';
+      queueMicrotask(() => setActivePage(nextPage));
     }
   }, [accessibleModules, activePage, canViewStudents]);
 
@@ -281,9 +282,8 @@ export default function StudentInformationManagement({ user, onLogout }) {
     return [...years].sort().reverse();
   }, [admissions, promotions, studentDocuments, students, transfers]);
 
-  const studentBelongsToYear = (student) => student.academicYear === academicYear;
   const recordBelongsToYear = (record) => record.academicYear === academicYear;
-  const yearStudents = useMemo(() => students.filter(studentBelongsToYear), [academicYear, students]);
+  const yearStudents = useMemo(() => students.filter((student) => student.academicYear === academicYear), [academicYear, students]);
 
   const selectedStudent = yearStudents.find((student) => student.id === selectedId) || yearStudents[0] || null;
   const suggestedPromotionClass = getNextClassName(selectedStudent?.className || '');

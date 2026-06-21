@@ -29,7 +29,7 @@ const schemas = {
   studentDocuments: ['studentRecordId', 'studentId', 'documentType', 'academicYear', 'uploadedBy', 'fileName', 'verificationStatus', 'uploadedAtText'],
   studentPromotions: ['studentRecordId', 'studentId', 'fromClass', 'toClass', 'academicYear', 'status', 'approvedBy', 'approvedAtText'],
   studentTransfers: ['studentRecordId', 'studentId', 'transferType', 'reason', 'academicYear', 'status', 'requestedAtText'],
-  users: ['uid', 'name', 'email', 'roleId', 'displayId', 'collegeIds', 'status', 'createdAtText'],
+  users: ['uid', 'name', 'email', 'roleId', 'displayId', 'collegeIds', 'status', 'linkedStudentRecordIds', 'linkedStudentIds', 'createdAtText'],
   roles: ['id', 'name', 'description', 'locked', 'permissions'],
   staffMembers: ['employeeId', 'name', 'staffType', 'department', 'designation', 'phone', 'email', 'qualification', 'status'],
   departments: ['name', 'headName', 'status'],
@@ -97,8 +97,6 @@ const facultyPermissions = [
 const parentPermissions = [
   'academicCurriculum.view',
   'timetable.view',
-  'exams.view',
-  'documents.view',
   'parentPortal.view',
 ];
 
@@ -129,9 +127,9 @@ const seed = {
     parent: { id: 'parent', name: 'Parent', description: 'Parent portal access for academic visibility.', locked: false, permissions: parentPermissions },
   },
   users: {
-    'seed-super-admin-user': { uid: 'seed-super-admin-user', name: 'Super Admin', email: 'superadmin@college.edu', roleId: 'super-admin', displayId: 'SA-001', collegeIds: ['main-campus'], status: 'Active', createdAtText: '19 Jun 2026' },
-    'seed-admin-user': { uid: 'seed-admin-user', name: 'ERP Admin', email: 'admin@college.edu', roleId: 'admin', displayId: 'ADM-001', collegeIds: ['main-campus'], status: 'Active', createdAtText: '19 Jun 2026' },
-    'seed-parent-user': { uid: 'seed-parent-user', name: 'Rajesh Sharma', email: 'parent.vivek@example.com', roleId: 'parent', displayId: 'PAR-001', collegeIds: ['main-campus'], status: 'Active', createdAtText: '19 Jun 2026' },
+    'seed-super-admin-user': { uid: 'seed-super-admin-user', name: 'Super Admin', email: 'superadmin@college.edu', roleId: 'super-admin', displayId: 'SA-001', collegeIds: ['main-campus'], status: 'Active', linkedStudentRecordIds: [], linkedStudentIds: [], createdAtText: '19 Jun 2026' },
+    'seed-admin-user': { uid: 'seed-admin-user', name: 'ERP Admin', email: 'admin@college.edu', roleId: 'admin', displayId: 'ADM-001', collegeIds: ['main-campus'], status: 'Active', linkedStudentRecordIds: [], linkedStudentIds: [], createdAtText: '19 Jun 2026' },
+    'seed-parent-user': { uid: 'seed-parent-user', name: 'Rajesh Sharma', email: 'parent.vivek@example.com', roleId: 'parent', displayId: 'PAR-001', collegeIds: ['main-campus'], status: 'Active', linkedStudentRecordIds: ['seed-student-vivek'], linkedStudentIds: ['STU-4449'], createdAtText: '19 Jun 2026' },
   },
   departments: {
     'seed-dept-science': { name: 'Science', headName: 'Dr. Kavita Menon', status: 'Active' },
