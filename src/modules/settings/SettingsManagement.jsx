@@ -55,8 +55,11 @@ export default function SettingsManagement({ currentUser }) {
         saveSystemSetting('moduleDefaults', { ...moduleDefaults, updatedAtText }),
       ]);
       toast.success('Settings saved');
-    } catch {
-      toast.success('Settings saved locally');
+      setLoadError('');
+    } catch (error) {
+      console.error('Unable to save Firestore settings.', error);
+      setLoadError('Unable to save Firestore settings. Deploy Firestore rules before changing settings.');
+      toast.error('Settings were not saved to Firestore.');
     }
   };
 
