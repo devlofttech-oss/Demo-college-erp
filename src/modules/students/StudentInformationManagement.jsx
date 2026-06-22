@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRight,
   CheckCircle,
   Download,
   Edit3,
@@ -193,6 +194,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
   const [students, setStudents] = useState(demoStudents);
   const [activePage, setActivePage] = useState('dashboard');
   const [activeTab, setActiveTab] = useState('admissions');
+  const [activeStudentTask, setActiveStudentTask] = useState('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(demoStudents[0].id);
   const [admissions, setAdmissions] = useState([]);
@@ -315,6 +317,60 @@ export default function StudentInformationManagement({ user, onLogout }) {
     { label: 'Admissions', value: admissions.filter((item) => item.academicYear === academicYear).length || yearStudents.filter((s) => s.status !== 'Archived').length, icon: <Users size={22} /> },
     { label: 'Profiles Completed', value: yearStudents.filter((s) => s.status !== 'Archived' && s.email && s.guardianName && s.idHolder).length, icon: <UserRound size={22} /> },
     { label: 'Documents Stored', value: studentDocuments.filter((item) => item.academicYear === academicYear).length || yearStudents.reduce((sum, s) => sum + (s.documents?.length || 0), 0), icon: <FileText size={22} /> },
+  ];
+  const studentTaskOptions = [
+    {
+      id: 'admissions',
+      title: 'Admissions',
+      description: 'Start a new admission or review recently created admission records.',
+      icon: <Plus size={22} />,
+      actionLabel: canCreateAdmission ? 'New or review admission' : 'Review admissions',
+      onOpen: () => {
+        setActiveTab('admissions');
+        setActiveStudentTask('admissions');
+      },
+    },
+    {
+      id: 'profiles',
+      title: 'Student Profiles',
+      description: 'Find a student, check their details, edit profile data, or download the record.',
+      icon: <UserRound size={22} />,
+      actionLabel: 'Search and manage profiles',
+      onOpen: () => {
+        setActiveTab('profiles');
+        setActiveStudentTask('profiles');
+      },
+    },
+    {
+      id: 'documents',
+      title: 'Documents',
+      description: 'Open the document repository for a selected student and verify or upload files.',
+      icon: <FileText size={22} />,
+      actionLabel: 'Manage documents',
+      onOpen: () => {
+        setActiveTab('documents');
+        setActiveStudentTask('documents');
+      },
+    },
+    {
+      id: 'promotion',
+      title: 'Promotion & Transfer',
+      description: 'Review promotion status, update next class, and keep transfer notes together.',
+      icon: <GraduationCap size={22} />,
+      actionLabel: 'Open promotion flow',
+      onOpen: () => {
+        setActiveTab('promotion');
+        setActiveStudentTask('promotion');
+      },
+    },
+    {
+      id: 'reports',
+      title: 'Student Reports',
+      description: 'View, print, or download academic-year student summaries.',
+      icon: <Eye size={22} />,
+      actionLabel: 'View reports',
+      onOpen: () => setActivePage('reports'),
+    },
   ];
 
   const saveStudent = async (form) => {
@@ -659,7 +715,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
                   <div>
                     <div className="text-sm font-bold text-slate-500 mb-2">Academics / <span className="text-[#f39a5f]">Student Information Management</span></div>
                     <h1 className="text-2xl font-bold text-slate-900">Student Information Management</h1>
-                    <p className="text-sm text-slate-500 mt-1">Admissions, profiles, documents, promotion and transfer management.</p>
+                    <p className="text-sm text-slate-500 mt-1">Choose one student task at a time. All existing admission, profile, document, and promotion tools stay available inside the selected task.</p>
                     {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist records.</p>}
                     {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
                   </div>
@@ -680,13 +736,51 @@ export default function StudentInformationManagement({ user, onLogout }) {
 
                 <StudentStats loading={loading} stats={stats} />
 
+                {!activeStudentTask ? (
+                  <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {studentTaskOptions.map((task) => (
+                      <button
+                        key={task.id}
+                        onClick={task.onOpen}
+                        className="group min-h-44 text-left rounded-lg border border-slate-100 bg-white p-5 shadow-sm hover:-translate-y-1 transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="h-12 w-12 rounded-lg bg-[#f5f5f6] text-[#34363d] flex items-center justify-center">
+                            {task.icon}
+                          </div>
+                          <ArrowRight size={18} className="text-slate-400 group-hover:text-[#fb8d49] transition-colors" />
+                        </div>
+                        <h2 className="text-lg font-bold text-slate-900 mt-5">{task.title}</h2>
+                        <p className="text-sm text-slate-500 mt-2 leading-6">{task.description}</p>
+                        <div className="mt-4 text-xs font-bold uppercase tracking-wide text-[#fb8d49]">{task.actionLabel}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                <>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-5 rounded-lg bg-[#f5f5f6] p-4">
+                  <div>
+                    <div className="text-xs font-bold text-slate-500">Students / Choose Task / <span className="text-[#fb8d49]">{tabs.find((tab) => tab.id === activeTab)?.label || 'Reports'}</span></div>
+                    <h2 className="text-lg font-bold text-slate-900 mt-1">{tabs.find((tab) => tab.id === activeTab)?.label || 'Student Task'}</h2>
+                  </div>
+                  <button
+                    onClick={() => setActiveStudentTask('')}
+                    className="h-10 px-4 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold text-sm"
+                  >
+                    Back to Student Tasks
+                  </button>
+                </div>
+
                 <div className="flex flex-col xl:flex-row gap-5">
                   <div className="xl:w-[70%] min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-5">
                       {tabs.map(({ id, label, icon }) => (
                         <button
                           key={id}
-                          onClick={() => setActiveTab(id)}
+                          onClick={() => {
+                            setActiveTab(id);
+                            setActiveStudentTask(id);
+                          }}
                           className={`h-10 px-4 rounded-md border text-sm flex items-center gap-2 ${
                             activeTab === id
                               ? 'bg-[#33373e] text-white border-[#33373e]'
@@ -891,6 +985,8 @@ export default function StudentInformationManagement({ user, onLogout }) {
                     )}
                   </aside>
                 </div>
+                </>
+                )}
                 </>
                 ) : activePage === 'reports' ? (
                   <StudentReportView
