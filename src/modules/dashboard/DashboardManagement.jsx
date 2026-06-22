@@ -122,7 +122,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4 py-5">
         {dashboardCards.map((card) => (
           <DashboardCard key={card.label} {...card} onClick={() => onNavigate?.(card.page)} />
         ))}
