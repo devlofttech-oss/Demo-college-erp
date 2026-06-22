@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, CalendarDays, CheckCircle, Search, Users, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bell, CalendarDays, CheckCircle, Search, UserCheck, Users, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   createAttendanceNotification,
@@ -37,6 +37,9 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
   const [selectedDate, setSelectedDate] = useState(formatDisplayDate());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [activeAttendanceTask, setActiveAttendanceTask] = useState('');
+  const [activeAttendanceBranch, setActiveAttendanceBranch] = useState('');
+  const [selectedEntityId, setSelectedEntityId] = useState('');
 
   useEffect(() => {
     const loadAttendance = async () => {
@@ -56,6 +59,33 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
     };
     loadAttendance();
   }, [academicYear]);
+
+  useEffect(() => {
+    const currentState = window.history.state || {};
+    window.history.replaceState({
+      ...currentState,
+      attendanceFlow: currentState.attendanceFlow || { task: '', branch: '', mode: 'students', scope: 'daily' },
+    }, '');
+
+    const handleHistoryBack = (event) => {
+      const flow = event.state?.attendanceFlow;
+      if (!flow) {
+        setActiveAttendanceTask('');
+        setActiveAttendanceBranch('');
+        setSelectedEntityId('');
+        return;
+      }
+      setActiveAttendanceTask(flow.task || '');
+      setActiveAttendanceBranch(flow.branch || '');
+      setMode(flow.mode || 'students');
+      setReportScope(flow.scope || 'daily');
+      setSelectedEntityId('');
+      setSearch('');
+    };
+
+    window.addEventListener('popstate', handleHistoryBack);
+    return () => window.removeEventListener('popstate', handleHistoryBack);
+  }, []);
 
   const currentRoleId = currentUser?.roleId || 'admin';
   const canMarkStudents = canAccess(defaultRoles, currentRoleId, 'attendance.markStudents');
@@ -83,6 +113,94 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
     { label: 'Attendance %', value: `${summary.percentage}%`, icon: <CalendarDays size={22} /> },
     { label: 'Notifications', value: notifications.length || absentToday, icon: <Bell size={22} /> },
   ];
+  const selectedEntity = selectedEntityId ? activeEntities.find((entity) => entity.id === selectedEntityId) || null : null;
+  const selectedEntityKey = selectedEntity?.studentId || selectedEntity?.employeeId || '';
+  const selectedRecord = selectedEntityKey
+    ? activeRecords.find((record) => record.entityId === selectedEntityKey && record.dateText === selectedDate)
+    : null;
+  const canMarkActiveMode = mode === 'students' ? canMarkStudents : canMarkStaff;
+
+  const openAttendanceTask = (taskId, nextMode = mode) => {
+    setActiveAttendanceTask(taskId);
+    setActiveAttendanceBranch('');
+    setSelectedEntityId('');
+    setSearch('');
+    setMode(nextMode);
+    window.history.pushState({ ...(window.history.state || {}), attendanceFlow: { task: taskId, branch: '', mode: nextMode, scope: reportScope } }, '');
+  };
+
+  const openAttendanceBranch = ({ branchId, nextMode = mode, nextScope = reportScope }) => {
+    setActiveAttendanceBranch(branchId);
+    setSelectedEntityId('');
+    setSearch('');
+    setMode(nextMode);
+    setReportScope(nextScope);
+    window.history.pushState({ ...(window.history.state || {}), attendanceFlow: { task: activeAttendanceTask, branch: branchId, mode: nextMode, scope: nextScope } }, '');
+  };
+
+  const goBackOneAttendanceStep = () => {
+    if (window.history.state?.attendanceFlow) {
+      window.history.back();
+      return;
+    }
+    if (activeAttendanceBranch) {
+      setActiveAttendanceBranch('');
+      setSelectedEntityId('');
+      return;
+    }
+    setActiveAttendanceTask('');
+  };
+
+  const attendanceTaskOptions = [
+    {
+      id: 'students',
+      title: 'Student Attendance',
+      description: 'Mark students and follow up absentees.',
+      icon: <Users size={22} />,
+      meta: [`${students.length} students`, canMarkStudents ? 'Mark enabled' : 'View only'],
+      onOpen: () => openAttendanceTask('students', 'students'),
+    },
+    {
+      id: 'staff',
+      title: 'Staff Attendance',
+      description: 'Mark faculty and staff attendance.',
+      icon: <UserCheck size={22} />,
+      meta: [`${staff.length} staff`, canMarkStaff ? 'Mark enabled' : 'View only'],
+      onOpen: () => openAttendanceTask('staff', 'staff'),
+    },
+    {
+      id: 'reports',
+      title: 'Reports',
+      description: 'Review daily, monthly, and yearly summaries.',
+      icon: <CalendarDays size={22} />,
+      meta: [`${summary.percentage}%`, canViewReports ? 'Reports enabled' : 'View only'],
+      onOpen: () => openAttendanceTask('reports', mode),
+    },
+  ];
+
+  const attendanceBranchOptions = {
+    students: [
+      { id: 'mark-students', title: 'Mark Student Attendance', description: 'Select a student, then mark present or absent.', icon: <CheckCircle size={20} />, nextMode: 'students' },
+      { id: 'absent-followup', title: 'Absent Follow-up', description: 'Select an absent student, then notify parent.', icon: <Bell size={20} />, nextMode: 'students' },
+    ],
+    staff: [
+      { id: 'mark-staff', title: 'Mark Staff Attendance', description: 'Select a staff member, then mark attendance.', icon: <UserCheck size={20} />, nextMode: 'staff' },
+    ],
+    reports: [
+      { id: 'daily-report', title: 'Daily Report', description: 'View daily attendance summary.', icon: <CalendarDays size={20} />, nextScope: 'daily' },
+      { id: 'monthly-report', title: 'Monthly Report', description: 'View monthly attendance summary.', icon: <CalendarDays size={20} />, nextScope: 'monthly' },
+      { id: 'yearly-report', title: 'Yearly Report', description: 'View yearly attendance summary.', icon: <CalendarDays size={20} />, nextScope: 'yearly' },
+    ],
+  };
+
+  const activeTask = attendanceTaskOptions.find((task) => task.id === activeAttendanceTask);
+  const activeBranches = attendanceBranchOptions[activeAttendanceTask] || [];
+  const activeBranch = activeBranches.find((branch) => branch.id === activeAttendanceBranch);
+  const branchAccentText = activeAttendanceTask === 'reports'
+    ? `${reportScope} report`
+    : mode === 'students'
+      ? 'Student roster'
+      : 'Staff roster';
 
   const markAttendance = async (entity, status) => {
     const entityId = entity.studentId || entity.employeeId;
@@ -178,6 +296,8 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
         </div>
       </div>
 
+      {!activeAttendanceTask ? (
+      <>
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
         {stats.map(({ label, value, icon }) => (
           <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
@@ -190,6 +310,78 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
         ))}
       </div>
 
+      <div className="grid md:grid-cols-3 gap-4">
+        {attendanceTaskOptions.map((task) => (
+          <button key={task.id} onClick={task.onOpen} className="group min-h-40 text-left rounded-lg border border-slate-100 bg-white p-5 shadow-sm hover:-translate-y-1 transition-all">
+            <div className="flex items-start justify-between gap-4">
+              <div className="h-12 w-12 rounded-lg bg-[#f5f5f6] text-[#34363d] flex items-center justify-center">{task.icon}</div>
+              <ArrowRight size={18} className="text-slate-400 group-hover:text-[#fb8d49]" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 mt-5">{task.title}</h2>
+            <p className="text-sm text-slate-500 mt-2">{task.description}</p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              {task.meta.map((item) => (
+                <span key={item} className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-semibold text-slate-600">{item}</span>
+              ))}
+            </div>
+          </button>
+        ))}
+      </div>
+      </>
+      ) : !activeAttendanceBranch ? (
+      <>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 my-5 rounded-lg bg-[#f5f5f6] p-4">
+        <div>
+          <div className="text-xs font-bold text-slate-500">Attendance / <span className="text-[#fb8d49]">{activeTask?.title}</span></div>
+          <h2 className="text-lg font-bold text-slate-900 mt-1">Choose next step</h2>
+        </div>
+        <button onClick={goBackOneAttendanceStep} className="h-10 px-4 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold text-sm flex items-center gap-2">
+          <ArrowLeft size={15} /> Back
+        </button>
+      </div>
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {activeBranches.map((branch) => (
+          <button
+            key={branch.id}
+            onClick={() => openAttendanceBranch({ branchId: branch.id, nextMode: branch.nextMode || mode, nextScope: branch.nextScope || reportScope })}
+            className="group min-h-36 text-left rounded-lg border border-slate-100 bg-white p-5 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="h-11 w-11 rounded-lg bg-[#f5f5f6] text-[#34363d] flex items-center justify-center">{branch.icon}</div>
+              <ArrowRight size={17} className="text-slate-400 group-hover:text-[#fb8d49]" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mt-4">{branch.title}</h3>
+            <p className="text-sm text-slate-500 mt-2">{branch.description}</p>
+          </button>
+        ))}
+      </div>
+      </>
+      ) : (
+      <>
+      <div className="erp-branch-focus flex flex-col lg:flex-row lg:items-center justify-between gap-4 my-5 rounded-lg bg-[#f5f5f6] p-5 border border-slate-100">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="erp-branch-icon h-16 w-16 rounded-lg bg-white text-[#fb8d49] flex items-center justify-center shrink-0">{activeBranch?.icon}</div>
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-slate-500">Attendance / {activeTask?.title}</div>
+            <h2 className="text-2xl font-extrabold text-slate-900 mt-1">{activeBranch?.title}</h2>
+            <p className="text-sm text-slate-500 mt-1">{activeBranch?.description}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="h-10 px-4 rounded-full bg-white border border-slate-200 text-slate-700 font-bold text-xs flex items-center">{branchAccentText}</span>
+          <button onClick={goBackOneAttendanceStep} className="h-10 px-4 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold text-sm flex items-center gap-2">
+            <ArrowLeft size={15} /> Back
+          </button>
+        </div>
+      </div>
+
+      {activeAttendanceTask === 'reports' ? (
+        canViewReports ? (
+          <AttendanceReports records={activeRecords} scope={reportScope} />
+        ) : (
+          <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm text-sm text-slate-500">You do not have permission to view attendance reports.</div>
+        )
+      ) : (
       <div className="flex flex-col xl:flex-row gap-5">
         <div className="xl:w-[68%] min-w-0">
           {!canMarkStudents && mode === 'students' && (
@@ -202,29 +394,6 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
               You can view staff attendance but cannot mark it.
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2 mb-5">
-            {[
-              ['students', 'Students'],
-              ['staff', 'Faculty / Staff'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setMode(value)}
-                className={`h-10 px-4 rounded-md border text-sm flex items-center gap-2 ${mode === value ? 'bg-[#33373e] text-white border-[#33373e]' : 'bg-white text-slate-600 border-slate-200'}`}
-              >
-                <Users size={15} /> {label}
-              </button>
-            ))}
-            {['daily', 'monthly', 'yearly'].map((scope) => (
-              <button
-                key={scope}
-                onClick={() => setReportScope(scope)}
-                className={`h-10 px-4 rounded-md border text-sm capitalize ${reportScope === scope ? 'bg-[#fb9a5b] text-white border-[#fb9a5b]' : 'bg-white text-slate-600 border-slate-200'}`}
-              >
-                {scope}
-              </button>
-            ))}
-          </div>
 
           <div className="relative mb-4">
             <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -245,19 +414,59 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
             selectedDate={selectedDate}
             onMark={markAttendance}
             onNotify={notifyParent}
+            onSelect={setSelectedEntityId}
+            selectedId={selectedEntityId}
+            showActions={false}
           />
         </div>
 
-        {canViewReports ? (
-          <AttendanceReports records={activeRecords} scope={reportScope} />
-        ) : (
-          <aside className="xl:w-[32%]">
-            <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm text-sm text-slate-500">
-              You do not have permission to view attendance reports.
+        <aside className="xl:w-[32%]">
+          {selectedEntity ? (
+            <div className="erp-selected-detail bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
+              <h3 className="font-bold text-slate-900">{selectedEntity.name}</h3>
+              <p className="text-xs text-slate-500 mt-1">{selectedEntityKey} | {mode === 'students' ? `${selectedEntity.className} - ${selectedEntity.section}` : selectedEntity.department}</p>
+              <div className="rounded-lg bg-[#f5f5f6] p-3 mt-5 text-sm flex items-center justify-between">
+                <span>Selected Date</span>
+                <b>{selectedDate}</b>
+              </div>
+              <div className="rounded-lg bg-[#f5f5f6] p-3 mt-3 text-sm flex items-center justify-between">
+                <span>Status</span>
+                <span className="font-bold">{selectedRecord?.status || 'Not Marked'}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-5">
+                {['Present', 'Absent'].map((status) => (
+                  <button
+                    key={status}
+                    disabled={!canMarkActiveMode || Boolean(selectedRecord)}
+                    onClick={() => markAttendance(selectedEntity, status)}
+                    className="h-10 rounded-lg bg-[#33373e] text-white text-sm font-semibold disabled:bg-slate-300"
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+              {mode === 'students' && selectedRecord?.status === 'Absent' && (
+                <button
+                  disabled={!canNotifyParents || selectedRecord.parentNotified}
+                  onClick={() => notifyParent(selectedEntity, selectedRecord)}
+                  className="mt-3 w-full h-10 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm disabled:bg-slate-300"
+                >
+                  Notify Parent
+                </button>
+              )}
             </div>
-          </aside>
-        )}
+          ) : (
+            <div className="bg-white border border-slate-100 rounded-lg p-6 shadow-sm text-sm text-slate-600 min-h-72 flex flex-col items-center justify-center text-center">
+              <div className="h-14 w-14 rounded-lg bg-[#f5f5f6] text-[#fb8d49] flex items-center justify-center mb-4">{activeBranch?.icon}</div>
+              <h3 className="font-bold text-slate-900 mb-2">Attendance Details</h3>
+              <p>{activeEntities.length ? 'Click a row to view attendance actions for the selected person.' : 'No matching roster records found.'}</p>
+            </div>
+          )}
+        </aside>
       </div>
+      )}
+      </>
+      )}
     </div>
   );
 }
