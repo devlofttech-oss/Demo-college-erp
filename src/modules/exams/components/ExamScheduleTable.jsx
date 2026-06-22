@@ -1,7 +1,7 @@
 import { Edit3 } from 'lucide-react';
 import StatusBadge from '../../students/components/StatusBadge';
 
-export default function ExamScheduleTable({ schedules, canEdit, onEdit }) {
+export default function ExamScheduleTable({ schedules, canEdit, onEdit, onSelect, selectedId, showActions = true }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm border-separate border-spacing-y-2">
@@ -11,12 +11,16 @@ export default function ExamScheduleTable({ schedules, canEdit, onEdit }) {
             <th className="px-5 py-3">Class / Subject</th>
             <th className="px-5 py-3">Date / Marks</th>
             <th className="px-5 py-3">Status</th>
-            <th className="px-5 py-3 rounded-r-lg text-right">Action</th>
+            {showActions && <th className="px-5 py-3 rounded-r-lg text-right">Action</th>}
           </tr>
         </thead>
         <tbody>
           {schedules.map((schedule) => (
-            <tr key={schedule.id} className="bg-white shadow-[0_0_0_1px_rgba(226,232,240,0.9)] rounded-lg">
+            <tr
+              key={schedule.id}
+              onClick={() => onSelect?.(schedule.id)}
+              className={`bg-white shadow-[0_0_0_1px_rgba(226,232,240,0.9)] rounded-lg cursor-pointer ${selectedId === schedule.id ? 'erp-row-selected' : ''}`}
+            >
               <td className="px-5 py-4 rounded-l-lg">
                 <div className="font-bold text-slate-900">{schedule.examName}</div>
                 <div className="text-xs text-slate-500">{schedule.facultyName}</div>
@@ -29,16 +33,18 @@ export default function ExamScheduleTable({ schedules, canEdit, onEdit }) {
                 <div>{schedule.examDate}</div>
                 <div className="text-xs text-slate-500">Max: {schedule.maxMarks}</div>
               </td>
-              <td className="px-5 py-4"><StatusBadge value={schedule.status} /></td>
+              <td className={`px-5 py-4 ${showActions ? '' : 'rounded-r-lg'}`}><StatusBadge value={schedule.status} /></td>
+              {showActions && (
               <td className="px-5 py-4 rounded-r-lg text-right">
-                <button disabled={!canEdit} onClick={() => onEdit(schedule)} className="h-9 w-9 rounded-full border border-slate-200 inline-flex items-center justify-center disabled:opacity-40">
+                <button disabled={!canEdit} onClick={(event) => { event.stopPropagation(); onEdit(schedule); }} className="h-9 w-9 rounded-full border border-slate-200 inline-flex items-center justify-center disabled:opacity-40">
                   <Edit3 size={15} />
                 </button>
               </td>
+              )}
             </tr>
           ))}
           {!schedules.length && (
-            <tr><td colSpan="5" className="bg-white text-center text-sm text-slate-500 px-5 py-10 shadow-[0_0_0_1px_rgba(226,232,240,0.9)] rounded-lg">No exam schedules found.</td></tr>
+            <tr><td colSpan={showActions ? 5 : 4} className="bg-white text-center text-sm text-slate-500 px-5 py-10 shadow-[0_0_0_1px_rgba(226,232,240,0.9)] rounded-lg">No exam schedules found.</td></tr>
           )}
         </tbody>
       </table>
