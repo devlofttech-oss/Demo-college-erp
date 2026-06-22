@@ -17,7 +17,7 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
         label: module.label,
         group: module.group,
         status: module.status,
-        icon: <Icon size={18} />,
+        icon: <Icon className="erp-sidebar-icon" size={18} />,
       };
     });
   const footerItems = getEnabledModules()
@@ -28,7 +28,7 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
       return {
         id: module.id,
         label: module.label,
-        icon: <Icon size={18} />,
+        icon: <Icon className="erp-sidebar-icon" size={18} />,
       };
     });
 
@@ -37,7 +37,7 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
       <div className={collapsed ? 'px-5 pt-5 pb-4' : 'px-9 pt-5 pb-4'}>
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
           <div className="h-12 w-12 rounded-full border-2 border-emerald-700 flex items-center justify-center text-emerald-700 shrink-0">
-            <GraduationCap size={26} />
+            <GraduationCap className="erp-sidebar-logo-icon" size={26} />
           </div>
           {!collapsed && (
             <div className="leading-tight">
@@ -55,7 +55,7 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
             <button
               key={id}
               onClick={() => onNavigate(id)}
-              className={`h-16 border-b border-slate-100 flex items-center text-[15px] ${
+              className={`h-16 flex items-center text-[15px] ${
                 collapsed ? 'justify-center' : 'justify-between'
               } ${active ? 'text-slate-800' : 'text-slate-600'}`}
               title={collapsed ? label : undefined}
@@ -75,11 +75,11 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
         <nav className={`${collapsed ? 'px-4' : 'px-9'} pb-5 flex flex-col mt-auto`}>
           <button
             onClick={onThemeToggle}
-            className={`h-14 border-t border-slate-100 flex items-center text-[15px] text-slate-600 ${collapsed ? 'justify-center' : 'justify-between'}`}
+            className={`h-14 flex items-center text-[15px] text-slate-600 ${collapsed ? 'justify-center' : 'justify-between'}`}
             title={collapsed ? 'Theme mode' : undefined}
           >
             <span className={`flex items-center ${collapsed ? 'justify-center h-11 w-11' : 'gap-3'}`}>
-              {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              {themeMode === 'dark' ? <Sun className="erp-sidebar-icon" size={18} /> : <Moon className="erp-sidebar-icon" size={18} />}
               {!collapsed && (
                 <>
                   <span>{themeMode === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
@@ -96,7 +96,7 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
               <button
                 key={id}
                 onClick={() => onNavigate(id)}
-                className={`h-14 border-t border-slate-100 flex items-center text-[15px] ${
+                className={`h-14 flex items-center text-[15px] ${
                   collapsed ? 'justify-center' : 'justify-between'
                 } ${active ? 'text-slate-800' : 'text-slate-600'}`}
                 title={collapsed ? label : undefined}

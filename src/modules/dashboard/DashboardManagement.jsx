@@ -7,13 +7,14 @@ import { demoExamSchedules } from '../exams/demoExams';
 import { formatCurrency } from '../fees/feeUtils';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 
-function DashboardCard({ icon, label, value, helper, onClick }) {
+function DashboardCard({ color = '#38bdf8', icon, label, value, helper, onClick }) {
   return (
     <button
       onClick={onClick}
       className="erp-dashboard-card min-h-28 rounded-lg border border-slate-100 bg-white p-4 text-left flex items-center gap-4 shadow-sm"
+      style={{ '--card-color': color }}
     >
-      <span className="h-13 w-13 rounded-lg bg-[#f5f5f6] text-[#fb8d49] flex items-center justify-center shrink-0">
+      <span className="h-13 w-13 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}22`, color }}>
         {icon}
       </span>
       <span className="min-w-0">
@@ -45,13 +46,32 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
   const upcomingExams = demoExamSchedules.filter((item) => item.status !== 'Archived');
   const collectionMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
   const collectionValues = [18, 24, 16, 28, 22, 40];
+  const admissionStages = [
+    { label: 'Enquiries', value: 1324, color: '#2563eb' },
+    { label: 'Applications', value: 842, color: '#22c55e' },
+    { label: 'Shortlisted', value: 428, color: '#f59e0b' },
+    { label: 'Admitted', value: 238, color: '#8b5cf6' },
+  ];
+  const paymentSplit = [
+    { label: 'Collected', value: collectedAmount, color: '#22c55e' },
+    { label: 'Pending', value: demoFeeAssignments.reduce((sum, item) => sum + Number(item.dueAmount || 0), 0), color: '#f59e0b' },
+    { label: 'Adjusted', value: demoFeeAssignments.reduce((sum, item) => sum + Number(item.adjustmentAmount || 0), 0), color: '#ef4444' },
+  ];
+  const splitTotal = Math.max(paymentSplit.reduce((sum, item) => sum + item.value, 0), 1);
+  let pieCursor = 0;
+  const pieGradient = paymentSplit.map((item) => {
+    const start = pieCursor;
+    const end = pieCursor + (item.value / splitTotal) * 100;
+    pieCursor = end;
+    return `${item.color} ${start}% ${end}%`;
+  }).join(', ');
 
   const dashboardCards = [
-    canViewStudents && { icon: <Users size={22} />, label: 'Students', value: activeStudents.length, helper: 'Active records', page: 'students' },
-    canViewStaff && { icon: <GraduationCap size={22} />, label: 'Faculty', value: facultyCount, helper: 'Teaching staff', page: 'faculty-staff' },
-    canViewFees && { icon: <Wallet size={22} />, label: 'Collection', value: formatCurrency(collectedAmount), helper: `${dueCount} due students`, page: 'fees' },
-    canViewDocuments && { icon: <FileText size={22} />, label: 'Documents', value: pendingDocuments.length, helper: 'Pending review', page: 'document-management' },
-    canViewExams && { icon: <TrendingUp size={22} />, label: 'Exams', value: upcomingExams.length, helper: 'Upcoming exams', page: 'examination-results' },
+    canViewStudents && { color: '#2563eb', icon: <Users size={22} />, label: 'Students', value: activeStudents.length, helper: 'Active records', page: 'students' },
+    canViewStaff && { color: '#22c55e', icon: <GraduationCap size={22} />, label: 'Faculty', value: facultyCount, helper: 'Teaching staff', page: 'faculty-staff' },
+    canViewFees && { color: '#f59e0b', icon: <Wallet size={22} />, label: 'Collection', value: formatCurrency(collectedAmount), helper: `${dueCount} due students`, page: 'fees' },
+    canViewDocuments && { color: '#8b5cf6', icon: <FileText size={22} />, label: 'Documents', value: pendingDocuments.length, helper: 'Pending review', page: 'document-management' },
+    canViewExams && { color: '#ef4444', icon: <TrendingUp size={22} />, label: 'Exams', value: upcomingExams.length, helper: 'Upcoming exams', page: 'examination-results' },
   ].filter(Boolean);
 
   const quickActions = [
@@ -113,8 +133,8 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
           <div className="h-64 flex items-end gap-4">
             {collectionMonths.map((month, index) => (
               <div key={month} className="flex-1 h-full flex flex-col justify-end gap-2">
-                <div className="rounded-t-lg bg-[#34363d] min-h-6" style={{ height: `${collectionValues[index] * 2.2}%` }} />
-                <div className="rounded-t-lg bg-[#fb9a5b] min-h-6" style={{ height: `${Math.max(collectionValues[index] - 8, 8) * 1.7}%` }} />
+                <div className="rounded-t-lg min-h-6" style={{ height: `${collectionValues[index] * 2.2}%`, background: 'linear-gradient(180deg,#2563eb,#38bdf8)' }} />
+                <div className="rounded-t-lg min-h-6" style={{ height: `${Math.max(collectionValues[index] - 8, 8) * 1.7}%`, background: 'linear-gradient(180deg,#f59e0b,#fb7185)' }} />
                 <span className="text-[11px] text-center text-slate-500">{month}</span>
               </div>
             ))}
@@ -141,6 +161,71 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
             )}
           </div>
         </section>
+      </div>
+
+      <div className="grid xl:grid-cols-[1fr_1fr] gap-5 mt-5">
+        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="font-bold text-slate-900">Admissions Pipeline</h2>
+              <p className="text-xs text-slate-500 mt-1">Colorful stage view for quick scanning.</p>
+            </div>
+            <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-emerald-500">28.3%</span>
+          </div>
+          <div className="grid md:grid-cols-[1fr_.85fr] gap-5 items-center">
+            <div className="space-y-1">
+              {admissionStages.map((stage, index) => (
+                <div
+                  key={stage.label}
+                  className="mx-auto h-10"
+                  style={{
+                    width: `${100 - index * 14}%`,
+                    background: stage.color,
+                    clipPath: 'polygon(0 0, 100% 0, 88% 100%, 12% 100%)',
+                  }}
+                />
+              ))}
+            </div>
+            <div className="space-y-3">
+              {admissionStages.map((stage) => (
+                <div key={stage.label} className="flex items-center gap-3 text-sm">
+                  <span className="h-3 w-3 rounded-sm" style={{ background: stage.color }} />
+                  <span className="text-slate-600">{stage.label}</span>
+                  <b className="ml-auto text-slate-900">{stage.value}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {canViewFees && (
+        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="font-bold text-slate-900">Fee Collection</h2>
+              <p className="text-xs text-slate-500 mt-1">Collected, pending, and adjusted split.</p>
+            </div>
+            <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-semibold text-slate-600">This month</span>
+          </div>
+          <div className="grid md:grid-cols-[180px_1fr] gap-6 items-center">
+            <div className="relative h-44 w-44 mx-auto rounded-full" style={{ background: `conic-gradient(${pieGradient})` }}>
+              <div className="absolute inset-8 rounded-full bg-white flex flex-col items-center justify-center">
+                <span className="text-3xl font-extrabold text-slate-900">78%</span>
+                <span className="text-xs text-slate-500">Collected</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {paymentSplit.map((item) => (
+                <div key={item.label} className="flex items-center gap-3 text-sm">
+                  <span className="h-3 w-3 rounded-sm" style={{ background: item.color }} />
+                  <span className="text-slate-600">{item.label}</span>
+                  <b className="ml-auto text-slate-900">{formatCurrency(item.value)}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+        )}
       </div>
 
       {!!quickActions.length && (
