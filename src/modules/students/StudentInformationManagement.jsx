@@ -536,7 +536,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
                 </div>
 
                 <div className="flex flex-col xl:flex-row gap-5">
-                  <div className={`${selectedStudent ? 'xl:w-[70%]' : 'xl:w-full'} min-w-0 transition-all duration-300`}>
+                  <div className={`${selectedStudent ? 'xl:w-[34%]' : 'xl:w-full'} min-w-0 transition-all duration-300`}>
                     <div className="relative mb-4">
                       <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
@@ -581,18 +581,18 @@ export default function StudentInformationManagement({ user, onLogout }) {
                   </div>
 
                   {selectedStudent && (
-                  <aside className="xl:w-[30%]">
+                  <aside className="xl:w-[66%]">
                       <div key={selectedStudent.id} className="erp-selected-detail">
                     <StudentProfileCard canEdit={canEditStudents} student={selectedStudent} onEdit={setEditingStudent} />
 
                     <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
-                      <h3 className="font-bold mb-4">Student Information</h3>
-                      <div className="space-y-3 text-sm text-slate-600">
+                      <h3 className="font-bold mb-4">Student Timeline</h3>
+                      <div className="grid sm:grid-cols-3 gap-3 text-sm text-slate-600">
                         <div className="rounded-lg bg-[#f5f5f6] p-3">
                           Admission status: {latestAdmission?.status || selectedStudent.status}. Created on {selectedStudent.createdAtText || latestAdmission?.submittedAtText || 'today'}.
                         </div>
-                        <div className="rounded-lg bg-[#f5f5f6] p-3">Guardian: {selectedStudent.guardianName || '-'}</div>
-                        <div className="rounded-lg bg-[#f5f5f6] p-3">Class: {selectedStudent.className} - {selectedStudent.section}</div>
+                        <div className="rounded-lg bg-[#f5f5f6] p-3">Documents available: {selectedStudent.documents?.length || 0}</div>
+                        <div className="rounded-lg bg-[#f5f5f6] p-3">Payment and attendance summaries stay linked to their own modules.</div>
                       </div>
                     </div>
                       </div>
