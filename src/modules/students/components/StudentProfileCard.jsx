@@ -1,5 +1,30 @@
 import { Bell, BookOpen, Edit3, FileText, Phone, UserRound, Wallet } from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import {
+  certificateAdmissionFields,
+  commonAdmissionFields,
+  examAdmissionFields,
+  lateralAdmissionFields,
+} from '../admissionFieldConfig';
+
+function DetailGrid({ fields, student, title }) {
+  const visibleFields = fields.filter(([key]) => student[key]);
+  if (!visibleFields.length) return null;
+
+  return (
+    <div className="mt-5">
+      <h4 className="text-sm font-bold text-slate-900 mb-3">{title}</h4>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
+        {visibleFields.map(([key, label]) => (
+          <div key={key} className="rounded-lg bg-[#f5f5f6] p-3 min-w-0">
+            <div className="text-xs text-slate-500">{label}</div>
+            <div className="font-semibold mt-1 break-words">{student[key]}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function StudentProfileCard({ canEdit = true, student, onEdit }) {
   const summaryTabs = [
@@ -84,6 +109,18 @@ export default function StudentProfileCard({ canEdit = true, student, onEdit }) 
             <div className="font-semibold mt-1 break-all">{student.email || '-'}</div>
           </div>
         </div>
+
+        <DetailGrid title="RGUHS Admission Details" fields={commonAdmissionFields} student={student} />
+        <DetailGrid title="Entrance & Qualifying Exam" fields={examAdmissionFields} student={student} />
+        <DetailGrid title="Lateral Entry Diploma Details" fields={lateralAdmissionFields} student={student} />
+        <DetailGrid title="Caste & Income Certificate Details" fields={certificateAdmissionFields} student={student} />
+        {(student.sourcePdf || student.sourceSlNo) && (
+          <div className="mt-5 rounded-lg bg-orange-50 border border-orange-100 p-3 text-xs text-orange-900">
+            Source: {student.sourcePdf || 'PDF admission statement'}
+            {student.sourceSlNo ? `, row ${student.sourceSlNo}` : ''}
+            {student.sourcePage ? `, page ${student.sourcePage}` : ''}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { admissionCourses, admissionStudents } from '../src/modules/students/admissionSeedData.js';
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -24,8 +25,9 @@ const confirmed = process.argv.includes('--yes-i-understand-this-deletes-data');
 
 const schemas = {
   colleges: ['id', 'name', 'code', 'location', 'status'],
-  students: ['admissionNo', 'studentId', 'name', 'className', 'section', 'program', 'guardianName', 'idHolder', 'guardianEmail', 'phone', 'email', 'academicYear', 'status', 'createdAtText'],
-  studentAdmissions: ['studentRecordId', 'studentId', 'admissionNo', 'academicYear', 'idHolder', 'status', 'submittedAtText'],
+  admissionBatches: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
+  students: ['admissionNo', 'studentId', 'name', 'nameAsInAadhaar', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'mobileNo', 'alternatePhoneNo', 'phone', 'email', 'address', 'nationality', 'state', 'ruralUrban', 'religion', 'className', 'section', 'program', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'guardianName', 'idHolder', 'academicYear', 'seatType', 'govtSeatType', 'actualCategory', 'seatSelectCategory', 'admissionDate', 'keaCetNumber', 'sspId', 'neetRegNo', 'neetRank', 'cetRegNo', 'cetRank', 'qualifyingExamName', 'qualifyingExamRegNo', 'qualifyingMaxMarks', 'qualifyingSecuredMarks', 'qualifyingPassDate', 'qualifyingBoard', 'optionalSubject', 'optionalMaxMarks', 'optionalSecuredMarks', 'diplomaCourse', 'diplomaCourseDuration', 'diplomaPassedDate', 'diplomaBoard', 'diplomaMaxMarks', 'diplomaSecuredMarks', 'casteRdNumber', 'casteCategory', 'casteName', 'casteCertificateStudentName', 'casteCertificateFatherName', 'incomeRdNumber', 'incomeCategory', 'incomeCasteName', 'annualIncome', 'incomeCertificateStudentName', 'incomeCertificateFatherName', 'sourcePdf', 'sourcePage', 'sourceSlNo', 'sourceColumns', 'status', 'createdAtText'],
+  studentAdmissions: ['studentRecordId', 'studentId', 'admissionNo', 'academicYear', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'idHolder', 'admissionDate', 'seatType', 'actualCategory', 'status', 'submittedAtText', 'sourcePdf', 'sourcePage', 'sourceSlNo'],
   studentDocuments: ['studentRecordId', 'studentId', 'documentType', 'academicYear', 'uploadedBy', 'fileName', 'verificationStatus', 'uploadedAtText'],
   studentPromotions: ['studentRecordId', 'studentId', 'fromClass', 'toClass', 'academicYear', 'status', 'approvedBy', 'approvedAtText'],
   studentTransfers: ['studentRecordId', 'studentId', 'transferType', 'reason', 'academicYear', 'status', 'requestedAtText'],
@@ -99,6 +101,67 @@ const parentPermissions = [
   'timetable.view',
   'parentPortal.view',
 ];
+
+function buildPdfAdmissionSeed() {
+  const admissionBatches = Object.fromEntries(admissionCourses.map((course) => [
+    course.id,
+    {
+      academicYear: course.academicYearNormalized,
+      collegeName: course.collegeName,
+      collegeCode: course.collegeCode,
+      courseName: course.courseName,
+      courseCode: course.courseCode,
+      courseYear: course.courseYear,
+      admissionType: course.admissionType,
+      sourcePdf: course.file,
+      studentCount: course.studentCount,
+      status: 'Active',
+    },
+  ]));
+
+  const students = Object.fromEntries(admissionStudents.map((student) => [student.id, student]));
+
+  const studentAdmissions = Object.fromEntries(admissionStudents.map((student) => [
+    `seed-admission-${student.courseCode.toLowerCase()}-${String(student.studentId).split('-').pop()}`,
+    {
+      studentRecordId: student.id,
+      studentId: student.studentId,
+      admissionNo: student.admissionNo,
+      academicYear: student.academicYear,
+      courseCode: student.courseCode,
+      courseName: student.courseName,
+      courseYear: student.courseYear,
+      admissionType: student.admissionType,
+      collegeName: student.collegeName,
+      collegeCode: student.collegeCode,
+      idHolder: student.idHolder,
+      admissionDate: student.admissionDate,
+      seatType: student.seatType,
+      actualCategory: student.actualCategory,
+      status: 'Approved',
+      submittedAtText: student.admissionDate || student.createdAtText,
+      sourcePdf: student.sourcePdf,
+      sourcePage: student.sourcePage,
+      sourceSlNo: student.sourceSlNo,
+    },
+  ]));
+
+  const studentDocuments = Object.fromEntries(admissionStudents.map((student) => [
+    `seed-student-doc-${student.courseCode.toLowerCase()}-${String(student.studentId).split('-').pop()}`,
+    {
+      studentRecordId: student.id,
+      studentId: student.studentId,
+      documentType: 'RGUHS Admission Statement',
+      academicYear: student.academicYear,
+      uploadedBy: 'PDF Import',
+      fileName: student.sourcePdf,
+      verificationStatus: 'Source PDF',
+      uploadedAtText: student.createdAtText,
+    },
+  ]));
+
+  return { admissionBatches, students, studentAdmissions, studentDocuments };
+}
 
 const seed = {
   colleges: {
@@ -217,6 +280,66 @@ const seed = {
     moduleDefaults: { id: 'moduleDefaults', studentAdmissions: true, staffLeave: true, timetablePublishing: true, parentPortal: true, onlinePayments: false, receiptGeneration: false, communicationModule: false, updatedAtText: '19 Jun 2026' },
   },
 };
+
+const pdfAdmissionSeed = buildPdfAdmissionSeed();
+const clientReadySeed = Object.fromEntries(Object.keys(schemas).map((collectionName) => [collectionName, {}]));
+
+Object.assign(clientReadySeed, {
+  colleges: {
+    'main-campus': {
+      id: 'main-campus',
+      name: 'Maurya Group of Institutions',
+      code: 'MAURYA',
+      location: 'Mysuru',
+      status: 'Active',
+      createdAtText: '09 Jan 2026',
+    },
+  },
+  admissionBatches: pdfAdmissionSeed.admissionBatches,
+  students: pdfAdmissionSeed.students,
+  studentAdmissions: pdfAdmissionSeed.studentAdmissions,
+  studentDocuments: pdfAdmissionSeed.studentDocuments,
+  roles: seed.roles,
+  users: {
+    'seed-super-admin-user': seed.users['seed-super-admin-user'],
+    'seed-admin-user': {
+      ...seed.users['seed-admin-user'],
+      roleId: 'super-admin',
+      linkedStudentRecordIds: [],
+      linkedStudentIds: [],
+    },
+  },
+  departments: {},
+  staffMembers: {},
+  systemSettings: {
+    institute: {
+      id: 'institute',
+      name: 'Maurya Group of Institutions',
+      instituteId: 'MAURYA',
+      code: 'MAURYA',
+      email: 'admin@maurya.edu',
+      phone: '',
+      address: 'Mysuru',
+      city: 'Mysuru',
+      status: 'Active',
+      updatedAtText: '09 Jan 2026',
+    },
+    academicYear: {
+      id: 'academicYear',
+      name: '2025-2026',
+      startsOn: '2025-06-01',
+      endsOn: '2026-05-31',
+      status: 'Active',
+      updatedAtText: '09 Jan 2026',
+    },
+    idFormats: seed.systemSettings.idFormats,
+    moduleDefaults: seed.systemSettings.moduleDefaults,
+  },
+});
+
+for (const collectionName of Object.keys(schemas)) {
+  seed[collectionName] = clientReadySeed[collectionName] || {};
+}
 
 const collectionNames = Object.keys(schemas);
 

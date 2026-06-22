@@ -13,7 +13,7 @@ import {
 import { db } from './config';
 
 const SCHEMA_DOC_ID = '__schema';
-export const DEFAULT_ACADEMIC_YEAR = '2026-2027';
+export const DEFAULT_ACADEMIC_YEAR = '2025-2026';
 
 function requireDb() {
   if (!db) {
@@ -109,12 +109,14 @@ export async function getStudentInformationData(academicYear = '') {
     documents,
     promotions,
     transfers,
+    admissionBatches,
   ] = await Promise.all([
     listCollection('students', yearConstraints),
     listCollection('studentAdmissions', yearConstraints),
     listCollection('studentDocuments', yearConstraints),
     listCollection('studentPromotions', yearConstraints),
     listCollection('studentTransfers', yearConstraints),
+    listCollection('admissionBatches', yearConstraints),
   ]);
 
   return {
@@ -123,6 +125,7 @@ export async function getStudentInformationData(academicYear = '') {
     documents,
     promotions,
     transfers,
+    admissionBatches,
   };
 }
 

@@ -1,11 +1,17 @@
 import { useState } from 'react';
+import { admissionCourses } from '../admissionSeedData';
+import { getAdmissionFieldsForCourse } from '../admissionFieldConfig';
 
 const defaultForm = {
   name: '',
-  className: 'Class XI',
-  section: 'A',
-  program: 'PU Science',
-  academicYear: '2026-2027',
+  className: '1 St Year',
+  section: 'Regular',
+  program: 'BSC Nursing',
+  courseCode: 'BSCN',
+  courseName: 'BSC Nursing',
+  courseYear: '1 St Year',
+  admissionType: 'Regular',
+  academicYear: '2025-2026',
   guardianName: '',
   idHolder: '',
   phone: '',
@@ -13,26 +19,67 @@ const defaultForm = {
   status: 'Admission Review',
 };
 
-export default function StudentModal({ academicYearOptions = ['2026-2027'], initialAcademicYear = '2026-2027', initialStudent = null, mode = 'create', onClose, onSave }) {
+export default function StudentModal({
+  academicYearOptions = ['2025-2026'],
+  courses = admissionCourses,
+  initialAcademicYear = '2025-2026',
+  initialCourseCode = 'BSCN',
+  initialStudent = null,
+  mode = 'create',
+  onClose,
+  onSave,
+}) {
+  const initialCourse = courses.find((course) => course.courseCode === (initialStudent?.courseCode || initialCourseCode)) || courses[0];
   const [form, setForm] = useState({
     ...defaultForm,
     academicYear: initialStudent?.academicYear || initialAcademicYear,
+    className: initialCourse?.courseYear || defaultForm.className,
+    section: initialCourse?.admissionType || defaultForm.section,
+    program: initialCourse?.courseName || defaultForm.program,
+    courseCode: initialCourse?.courseCode || defaultForm.courseCode,
+    courseName: initialCourse?.courseName || defaultForm.courseName,
+    courseYear: initialCourse?.courseYear || defaultForm.courseYear,
+    admissionType: initialCourse?.admissionType || defaultForm.admissionType,
+    collegeName: initialCourse?.collegeName || '',
+    collegeCode: initialCourse?.collegeCode || '',
     ...initialStudent,
   });
   const isEdit = mode === 'edit';
+  const selectedCourse = courses.find((course) => course.courseCode === form.courseCode) || initialCourse || {};
+  const admissionFields = getAdmissionFieldsForCourse(selectedCourse);
+
+  const updateCourse = (courseCode) => {
+    const course = courses.find((item) => item.courseCode === courseCode);
+    setForm((prev) => ({
+      ...prev,
+      courseCode,
+      courseName: course?.courseName || prev.courseName,
+      program: course?.courseName || prev.program,
+      courseYear: course?.courseYear || prev.courseYear,
+      className: course?.courseYear || prev.className,
+      admissionType: course?.admissionType || prev.admissionType,
+      section: course?.admissionType || prev.section,
+      collegeName: course?.collegeName || prev.collegeName,
+      collegeCode: course?.collegeCode || prev.collegeCode,
+    }));
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
     onSave({
+      ...form,
       name: form.name.trim(),
-      className: form.className.trim(),
-      section: form.section.trim(),
-      program: form.program.trim(),
+      nameAsInAadhaar: (form.nameAsInAadhaar || '').trim(),
+      fatherName: (form.fatherName || '').trim(),
+      motherName: (form.motherName || '').trim(),
+      guardianName: (form.fatherName || form.guardianName || '').trim(),
+      idHolder: (form.nameAsInAadhaar || form.idHolder || form.name || '').trim(),
+      className: (form.courseYear || form.className || '').trim(),
+      section: (form.admissionType || form.section || '').trim(),
+      program: (form.courseName || form.program || '').trim(),
       academicYear: form.academicYear,
-      guardianName: form.guardianName.trim(),
-      idHolder: form.idHolder.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
+      phone: (form.mobileNo || form.phone || '').trim(),
+      email: (form.email || '').trim(),
       status: form.status,
     });
   };
@@ -49,7 +96,22 @@ export default function StudentModal({ academicYearOptions = ['2026-2027'], init
           </div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full hover:bg-slate-100 text-slate-500">x</button>
         </div>
-        <div className="p-6 grid sm:grid-cols-2 gap-4">
+        <div className="p-6 max-h-[70vh] overflow-y-auto grid sm:grid-cols-2 gap-4">
+          <label className="sm:col-span-2">
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Course</span>
+            <select
+              required
+              value={form.courseCode}
+              onChange={(event) => updateCourse(event.target.value)}
+              className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
+            >
+              {courses.map((course) => (
+                <option key={course.courseCode} value={course.courseCode}>
+                  {course.courseName} - {course.admissionType || course.courseYear}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Academic Year</span>
             <select
@@ -63,21 +125,12 @@ export default function StudentModal({ academicYearOptions = ['2026-2027'], init
               ))}
             </select>
           </label>
-          {[
-            ['name', 'Student Name'],
-            ['guardianName', 'Guardian Name'],
-            ['idHolder', 'ID Holder'],
-            ['phone', 'Phone'],
-            ['email', 'Email'],
-            ['className', 'Class'],
-            ['section', 'Section'],
-            ['program', 'Program'],
-          ].map(([key, label]) => (
-            <label key={key} className={key === 'program' ? 'sm:col-span-2' : ''}>
+          {admissionFields.map(([key, label]) => (
+            <label key={key} className={key === 'address' ? 'sm:col-span-2' : ''}>
               <span className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</span>
               <input
-                required={['name', 'guardianName', 'phone'].includes(key)}
-                value={form[key]}
+                required={['name', 'fatherName', 'mobileNo'].includes(key)}
+                value={form[key] || ''}
                 onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
                 className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
               />

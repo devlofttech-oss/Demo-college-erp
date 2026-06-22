@@ -153,6 +153,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /admissionBatches/{documentId} {
+      allow read: if staffCan('students.view');
+      allow create: if staffCan('students.create');
+      allow update: if staffCan('students.edit');
+      allow delete: if false;
+    }
+
     match /studentDocuments/{documentId} {
       allow get, list: if staffCan('students.view') || canReadStudentRecord(resource.data);
       allow create: if staffCan('students.documents');

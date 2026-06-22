@@ -64,6 +64,10 @@ const collections = {
       'restoredAtText',
     ],
   },
+  admissionBatches: {
+    purpose: 'Course-wise RGUHS admission statement metadata',
+    fields: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
+  },
   studentAdmissions: {
     purpose: 'Admission form, admission workflow, and status history',
     fields: ['studentId', 'admissionNo', 'academicYear', 'idHolder', 'status', 'submittedAt', 'approvedAt'],

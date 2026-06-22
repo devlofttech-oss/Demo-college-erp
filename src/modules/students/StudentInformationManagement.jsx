@@ -17,7 +17,7 @@ import {
 } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { getEnabledModules, getModuleById } from '../moduleRegistry';
-import { demoStudents } from './demoStudents';
+import { admissionCourses, admissionStudents } from './admissionSeedData';
 import DashboardManagement from '../dashboard/DashboardManagement';
 import DemoModulePage from './components/DemoModulePage';
 import Sidebar from './components/Sidebar';
@@ -170,7 +170,9 @@ function StudentReportView({ academicYear, admissions, documents, promotions, st
 
 export default function StudentInformationManagement({ user, onLogout }) {
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem('erpThemeMode') || 'dark');
-  const [students, setStudents] = useState(demoStudents);
+  const [students, setStudents] = useState(admissionStudents);
+  const [courses, setCourses] = useState(admissionCourses);
+  const [selectedCourseCode, setSelectedCourseCode] = useState('all');
   const [activePage, setActivePage] = useState('dashboard');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -182,7 +184,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [statusFilter, setStatusFilter] = useState('active');
-  const [academicYear, setAcademicYear] = useState('2026-2027');
+  const [academicYear, setAcademicYear] = useState('2025-2026');
   const [institute, setInstitute] = useState(demoInstituteSettings);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const currentRoleId = user?.roleId || 'admin';
@@ -258,6 +260,9 @@ export default function StudentInformationManagement({ user, onLogout }) {
         setStudentDocuments(data.documents);
         setPromotions(data.promotions);
         setTransfers(data.transfers);
+        if (data.admissionBatches?.length) {
+          setCourses(data.admissionBatches);
+        }
       } catch (error) {
         console.warn('Using demo students because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore records. Showing demo/local records.');
@@ -267,7 +272,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
   }, [academicYear]);
 
   const academicYearOptions = useMemo(() => {
-    const years = new Set(['2026-2027', '2025-2026', '2024-2025']);
+    const years = new Set(['2025-2026', '2026-2027', '2024-2025']);
     [...students, ...admissions, ...studentDocuments, ...promotions, ...transfers].forEach((record) => {
       if (record?.academicYear) years.add(record.academicYear);
     });
@@ -276,23 +281,28 @@ export default function StudentInformationManagement({ user, onLogout }) {
 
   const recordBelongsToYear = (record) => record.academicYear === academicYear;
   const yearStudents = useMemo(() => students.filter((student) => student.academicYear === academicYear), [academicYear, students]);
+  const courseStudents = useMemo(() => (
+    selectedCourseCode === 'all'
+      ? yearStudents
+      : yearStudents.filter((student) => student.courseCode === selectedCourseCode || student.program === selectedCourseCode)
+  ), [selectedCourseCode, yearStudents]);
 
-  const selectedStudent = selectedId ? yearStudents.find((student) => student.id === selectedId) || null : null;
+  const selectedStudent = selectedId ? courseStudents.find((student) => student.id === selectedId) || null : null;
   const selectedAdmissions = admissions.filter((record) => relationMatches(record, selectedStudent) && recordBelongsToYear(record));
   const latestAdmission = latestRecord(selectedAdmissions);
 
   const filteredStudents = useMemo(() => {
     const term = search.trim().toLowerCase();
     const visibleStudents = statusFilter === 'archived'
-      ? yearStudents.filter((student) => student.status === 'Archived')
-      : yearStudents.filter((student) => student.status !== 'Archived');
+      ? courseStudents.filter((student) => student.status === 'Archived')
+      : courseStudents.filter((student) => student.status !== 'Archived');
     if (!term) return visibleStudents;
     return visibleStudents.filter((student) =>
-      [student.name, student.studentId, student.admissionNo, student.className, student.program]
+      [student.name, student.studentId, student.admissionNo, student.className, student.program, student.courseName, student.sourcePdf]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(term))
     );
-  }, [search, statusFilter, yearStudents]);
+  }, [courseStudents, search, statusFilter]);
 
   const saveStudent = async (form) => {
     if (!canCreateAdmission) {
@@ -328,6 +338,15 @@ export default function StudentInformationManagement({ user, onLogout }) {
         admissionNo: created.admissionNo,
         academicYear: selectedAcademicYear,
         idHolder: created.idHolder,
+        courseCode: created.courseCode,
+        courseName: created.courseName,
+        courseYear: created.courseYear,
+        admissionType: created.admissionType,
+        collegeName: created.collegeName,
+        collegeCode: created.collegeCode,
+        admissionDate: created.admissionDate,
+        seatType: created.seatType,
+        actualCategory: created.actualCategory,
         status: 'Admission Review',
         submittedAtText: createdAtText,
       };
@@ -366,6 +385,15 @@ export default function StudentInformationManagement({ user, onLogout }) {
         admissionNo: local.admissionNo,
         academicYear: selectedAcademicYear,
         idHolder: local.idHolder,
+        courseCode: local.courseCode,
+        courseName: local.courseName,
+        courseYear: local.courseYear,
+        admissionType: local.admissionType,
+        collegeName: local.collegeName,
+        collegeCode: local.collegeCode,
+        admissionDate: local.admissionDate,
+        seatType: local.seatType,
+        actualCategory: local.actualCategory,
         status: 'Admission Review',
         submittedAtText: createdAtText,
       };
@@ -494,8 +522,14 @@ export default function StudentInformationManagement({ user, onLogout }) {
             <TopHeader
               academicYear={academicYear}
               academicYears={academicYearOptions}
+              courseCode={selectedCourseCode}
+              courses={courses}
               institute={institute}
               onAcademicYearChange={setAcademicYear}
+              onCourseChange={(courseCode) => {
+                setSelectedCourseCode(courseCode);
+                setSelectedId('');
+              }}
               onMenuToggle={() => setSidebarCollapsed((prev) => !prev)}
               onNavigate={setActivePage}
               user={{ ...user, selectedCollege: { ...user?.selectedCollege, name: institute.name, code: institute.instituteId || institute.code } }}
@@ -530,8 +564,10 @@ export default function StudentInformationManagement({ user, onLogout }) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-500">Students</div>
-                      <h2 className="text-2xl font-extrabold text-slate-900 mt-1">All Students</h2>
-                      <p className="text-sm text-slate-500 mt-1">Click any student name to display full information.</p>
+                      <h2 className="text-2xl font-extrabold text-slate-900 mt-1">
+                        {selectedCourseCode === 'all' ? 'All Students' : courses.find((course) => course.courseCode === selectedCourseCode)?.courseName || 'Selected Course'}
+                      </h2>
+                      <p className="text-sm text-slate-500 mt-1">Click any student name to display full admission information.</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -610,7 +646,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
                 ) : activePage === 'reports' ? (
                   <StudentReportView
                     academicYear={academicYear}
-                    students={yearStudents}
+                    students={courseStudents}
                     admissions={admissions.filter((item) => item.academicYear === academicYear)}
                     documents={studentDocuments.filter((item) => item.academicYear === academicYear)}
                     promotions={promotions.filter((item) => item.academicYear === academicYear)}
@@ -663,11 +699,21 @@ export default function StudentInformationManagement({ user, onLogout }) {
             </footer>
           </main>
         </div>
-      {showModal && <StudentModal academicYearOptions={academicYearOptions} initialAcademicYear={academicYear} onClose={() => setShowModal(false)} onSave={saveStudent} />}
+      {showModal && (
+        <StudentModal
+          academicYearOptions={academicYearOptions}
+          courses={courses}
+          initialAcademicYear={academicYear}
+          initialCourseCode={selectedCourseCode === 'all' ? courses[0]?.courseCode : selectedCourseCode}
+          onClose={() => setShowModal(false)}
+          onSave={saveStudent}
+        />
+      )}
       {editingStudent && (
         <StudentModal
           mode="edit"
           academicYearOptions={academicYearOptions}
+          courses={courses}
           initialAcademicYear={academicYear}
           initialStudent={editingStudent}
           onClose={() => setEditingStudent(null)}
