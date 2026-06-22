@@ -70,6 +70,35 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
     loadFees();
   }, [academicYear]);
 
+  useEffect(() => {
+    const currentState = window.history.state || {};
+    window.history.replaceState({
+      ...currentState,
+      feeFlow: currentState.feeFlow || { task: '', branch: '' },
+    }, '');
+
+    const handleHistoryBack = (event) => {
+      const flow = event.state?.feeFlow;
+      setShowStructureModal(false);
+      setEditingStructure(null);
+      setShowCollectionModal(false);
+      setShowAdjustmentModal(false);
+      if (!flow) {
+        setActiveFeeTask('');
+        setActiveFeeBranch('');
+        setSelectedAssignmentId('');
+        return;
+      }
+      setActiveFeeTask(flow.task || '');
+      setActiveFeeBranch(flow.branch || '');
+      setSelectedAssignmentId('');
+      setSearch('');
+    };
+
+    window.addEventListener('popstate', handleHistoryBack);
+    return () => window.removeEventListener('popstate', handleHistoryBack);
+  }, []);
+
   const currentRoleId = currentUser?.roleId || 'admin';
   const canSetup = canAccess(defaultRoles, currentRoleId, 'fees.setup');
   const canAssign = canAccess(defaultRoles, currentRoleId, 'fees.assign');
@@ -106,16 +135,22 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
     setActiveFeeBranch('');
     setSelectedAssignmentId('');
     setSearch('');
+    window.history.pushState({ ...(window.history.state || {}), feeFlow: { task: taskId, branch: '' } }, '');
   };
 
   const openFeeBranch = (branch) => {
     setActiveFeeBranch(branch.id);
     setSelectedAssignmentId('');
     setSearch('');
+    window.history.pushState({ ...(window.history.state || {}), feeFlow: { task: activeFeeTask, branch: branch.id } }, '');
     if (branch.openStructure) setShowStructureModal(true);
   };
 
   const goBackOneFeeStep = () => {
+    if (window.history.state?.feeFlow) {
+      window.history.back();
+      return;
+    }
     if (activeFeeBranch) {
       setActiveFeeBranch('');
       setSelectedAssignmentId('');
@@ -526,7 +561,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
       {showStructureModal && <FeeStructureModal classOptions={classOptions} onClose={() => setShowStructureModal(false)} onSave={saveStructure} />}
       {editingStructure && <FeeStructureModal mode="edit" initialStructure={editingStructure} classOptions={classOptions} onClose={() => setEditingStructure(null)} onSave={saveStructure} />}
       {showCollectionModal && <FeeCollectionModal assignments={payableAssignments} initialAssignmentId={collectionAssignmentId} onClose={() => setShowCollectionModal(false)} onSave={saveCollection} />}
-      {showAdjustmentModal && <FeeAdjustmentModal assignments={payableAssignments} onClose={() => setShowAdjustmentModal(false)} onSave={saveAdjustment} />}
+      {showAdjustmentModal && <FeeAdjustmentModal assignments={payableAssignments} initialAssignmentId={collectionAssignmentId} onClose={() => setShowAdjustmentModal(false)} onSave={saveAdjustment} />}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { formatCurrency } from '../feeUtils';
 
-export default function FeeAdjustmentModal({ assignments, onClose, onSave }) {
+export default function FeeAdjustmentModal({ assignments, initialAssignmentId = '', onClose, onSave }) {
   const [form, setForm] = useState({
-    assignmentId: assignments[0]?.id || '',
+    assignmentId: initialAssignmentId || assignments[0]?.id || '',
     amount: '',
     reason: '',
   });
