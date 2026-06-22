@@ -163,13 +163,13 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
     {
       id: 'collections',
       title: 'Collections',
-      description: 'Collect fees and review due students.',
+      description: 'Collect payments and review due students.',
       icon: <Banknote size={22} />,
       meta: [`${payableAssignments.length} due`, formatCurrency(summary.totalOutstanding)],
     },
     {
       id: 'structures',
-      title: 'Fee Structures',
+      title: 'Payment Setup',
       description: 'Create, edit, and assign fee structures.',
       icon: <Settings size={22} />,
       meta: [`${structures.length} active`, canSetup ? 'Setup enabled' : 'View only'],
@@ -192,7 +192,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
 
   const feeBranchOptions = {
     collections: [
-      { id: 'collect-fee', title: 'Collect Fee', description: 'Select a student fee, then record payment.', icon: <Banknote size={20} />, disabled: !canCollect || !payableAssignments.length },
+      { id: 'collect-fee', title: 'Collect Payment', description: 'Select a student fee, then record payment.', icon: <Banknote size={20} />, disabled: !canCollect || !payableAssignments.length },
       { id: 'due-list', title: 'Due List', description: 'View students with pending dues.', icon: <TrendingUp size={20} /> },
     ],
     structures: [
@@ -416,9 +416,9 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
     <div>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-slate-100">
         <div>
-          <div className="text-sm font-bold text-slate-500 mb-2">Finance / <span className="text-[#f39a5f]">Fees Management</span></div>
-          <h1 className="text-2xl font-bold text-slate-900">Fees Management</h1>
-          <p className="text-sm text-slate-500 mt-1">Fee structure setup, manual collection, due tracking, waivers, and fee analytics.</p>
+          <div className="text-sm font-bold text-slate-500 mb-2">Finance / <span className="text-[#f39a5f]">Payment</span></div>
+          <h1 className="text-2xl font-bold text-slate-900">Payment</h1>
+          <p className="text-sm text-slate-500 mt-1">Student payment collection, due tracking, fee setup, waivers, and receipts.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist fee records.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
@@ -460,7 +460,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
       <>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 my-5 rounded-lg bg-[#f5f5f6] p-4">
         <div>
-          <div className="text-xs font-bold text-slate-500">Fees / <span className="text-[#fb8d49]">{activeTask?.title}</span></div>
+          <div className="text-xs font-bold text-slate-500">Payment / <span className="text-[#fb8d49]">{activeTask?.title}</span></div>
           <h2 className="text-lg font-bold text-slate-900 mt-1">Choose next step</h2>
         </div>
         <button onClick={goBackOneFeeStep} className="h-10 px-4 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold text-sm flex items-center gap-2">
@@ -491,7 +491,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
         <div className="flex items-center gap-4 min-w-0">
           <div className="erp-branch-icon h-16 w-16 rounded-lg bg-white text-[#fb8d49] flex items-center justify-center shrink-0">{activeBranch?.icon}</div>
           <div className="min-w-0">
-            <div className="text-xs font-bold text-slate-500">Fees / {activeTask?.title}</div>
+            <div className="text-xs font-bold text-slate-500">Payment / {activeTask?.title}</div>
             <h2 className="text-2xl font-extrabold text-slate-900 mt-1">{activeBranch?.title}</h2>
             <p className="text-sm text-slate-500 mt-1">{activeBranch?.description}</p>
           </div>
@@ -539,7 +539,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
                 <div className="rounded-lg bg-[#f5f5f6] p-3"><div className="text-xs text-slate-500">Due Date</div><b>{selectedAssignment.dueDate || '-'}</b></div>
               </div>
               {activeFeeBranch === 'collect-fee' && (
-                <button onClick={() => collectForAssignment(selectedAssignment.id)} disabled={!canCollect || selectedAssignment.dueAmount <= 0} className="mt-5 w-full h-10 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm disabled:bg-slate-300">Collect Fee</button>
+                <button onClick={() => collectForAssignment(selectedAssignment.id)} disabled={!canCollect || selectedAssignment.dueAmount <= 0} className="mt-5 w-full h-10 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm disabled:bg-slate-300">Collect Payment</button>
               )}
               {activeFeeBranch === 'approve-adjustment' && (
                 <button onClick={() => { setCollectionAssignmentId(selectedAssignment.id); setShowAdjustmentModal(true); }} disabled={!canAdjust || selectedAssignment.dueAmount <= 0} className="mt-5 w-full h-10 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm disabled:bg-slate-300">Approve Adjustment</button>
@@ -548,7 +548,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
           ) : (
             <div className="bg-white border border-slate-100 rounded-lg p-6 shadow-sm text-sm text-slate-600 min-h-72 flex flex-col items-center justify-center text-center">
               <div className="h-14 w-14 rounded-lg bg-[#f5f5f6] text-[#fb8d49] flex items-center justify-center mb-4">{activeBranch?.icon}</div>
-              <h3 className="font-bold text-slate-900 mb-2">Fee Details</h3>
+              <h3 className="font-bold text-slate-900 mb-2">Payment Details</h3>
               <p>{visibleAssignments.length ? 'Click a student fee row to view details and available actions.' : 'No matching fee records found.'}</p>
             </div>
           )}
