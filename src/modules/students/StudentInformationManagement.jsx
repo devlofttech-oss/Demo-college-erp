@@ -481,7 +481,15 @@ export default function StudentInformationManagement({ user, onLogout }) {
   return (
     <div className={`erp-shell ${themeMode === 'light' ? 'light-mode' : ''} min-h-screen bg-white text-slate-900`}>
         <div className="flex min-h-screen">
-          <Sidebar activePage={activePage} collapsed={sidebarCollapsed} currentUser={user} institute={institute} onNavigate={setActivePage} />
+          <Sidebar
+            activePage={activePage}
+            collapsed={sidebarCollapsed}
+            currentUser={user}
+            institute={institute}
+            onNavigate={setActivePage}
+            onThemeToggle={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+            themeMode={themeMode}
+          />
           <main className="flex-1 min-w-0 bg-[#f0f1f3] flex flex-col">
             <TopHeader
               academicYear={academicYear}
@@ -490,8 +498,6 @@ export default function StudentInformationManagement({ user, onLogout }) {
               onAcademicYearChange={setAcademicYear}
               onMenuToggle={() => setSidebarCollapsed((prev) => !prev)}
               onNavigate={setActivePage}
-              onThemeToggle={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-              themeMode={themeMode}
               user={{ ...user, selectedCollege: { ...user?.selectedCollege, name: institute.name, code: institute.instituteId || institute.code } }}
               onLogout={onLogout}
             />

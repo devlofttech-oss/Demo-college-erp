@@ -1,8 +1,8 @@
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { getEnabledModules } from '../../moduleRegistry';
 import { canAccess, defaultRoles } from '../../userRoles/rolePermissions';
 
-export default function Sidebar({ activePage, collapsed = false, currentUser, institute, onNavigate }) {
+export default function Sidebar({ activePage, collapsed = false, currentUser, institute, onNavigate, onThemeToggle, themeMode = 'dark' }) {
   const currentRoleId = currentUser?.roleId || 'admin';
   const collegeName = institute?.name || currentUser?.selectedCollege?.name || 'College';
   const navItems = getEnabledModules()
@@ -71,6 +71,23 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
 
       {!!footerItems.length && (
         <nav className={`${collapsed ? 'px-4' : 'px-9'} pb-5 flex flex-col mt-auto`}>
+          <button
+            onClick={onThemeToggle}
+            className={`h-14 border-t border-slate-100 flex items-center text-[15px] text-slate-600 ${collapsed ? 'justify-center' : 'justify-between'}`}
+            title={collapsed ? 'Theme mode' : undefined}
+          >
+            <span className={`flex items-center ${collapsed ? 'justify-center h-11 w-11' : 'gap-3'}`}>
+              {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              {!collapsed && (
+                <>
+                  <span>{themeMode === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                  <span className="ml-auto h-6 w-11 rounded-full bg-[#e7e7ea] border border-slate-200 p-0.5 flex items-center">
+                    <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${themeMode === 'dark' ? 'translate-x-0' : 'translate-x-5'}`} />
+                  </span>
+                </>
+              )}
+            </span>
+          </button>
           {footerItems.map(({ id, label, icon }) => {
             const active = activePage === id;
             return (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, CheckCircle, FileText, Plus, Search, Upload } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   archiveManagedDocument,
@@ -11,8 +11,7 @@ import { isFirebaseConfigured } from '../../firebase/config';
 import { uploadManagedDocumentFile } from '../../firebase/storage';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { demoDocumentStaff, demoDocumentStudents, demoManagedDocuments } from './demoDocuments';
-import { documentCategories, documentOwnerTypes, documentStatuses, filterDocuments, formatDisplayDate, resolveOwnerName, summarizeDocuments, validateDocumentForm } from './documentUtils';
-import DocumentArchivePanel from './components/DocumentArchivePanel';
+import { documentCategories, documentOwnerTypes, documentStatuses, filterDocuments, formatDisplayDate, resolveOwnerName, validateDocumentForm } from './documentUtils';
 import DocumentPreviewPanel from './components/DocumentPreviewPanel';
 import DocumentTable from './components/DocumentTable';
 import DocumentUploadModal from './components/DocumentUploadModal';
@@ -21,9 +20,8 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
   const [students, setStudents] = useState(demoDocumentStudents);
   const [staff, setStaff] = useState(demoDocumentStaff);
   const [documents, setDocuments] = useState(demoManagedDocuments);
-  const [selectedId, setSelectedId] = useState(demoManagedDocuments[0]?.id || '');
+  const [selectedId, setSelectedId] = useState('');
   const [filters, setFilters] = useState({ search: '', ownerType: '', category: '', status: '' });
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -35,12 +33,10 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
         if (data.students.length) setStudents(data.students.filter((student) => student.status !== 'Archived'));
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         setDocuments(data.managedDocuments);
-        setSelectedId(data.managedDocuments[0]?.id || '');
+        setSelectedId('');
       } catch (error) {
         console.warn('Using demo documents because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore document records. Showing demo/local records.');
-      } finally {
-        setLoading(false);
       }
     };
     loadDocuments();
@@ -51,15 +47,11 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
   const canVerify = canAccess(defaultRoles, currentRoleId, 'documents.verify');
   const canArchive = canAccess(defaultRoles, currentRoleId, 'documents.archive');
   const visibleDocuments = useMemo(() => filterDocuments(documents, filters), [documents, filters]);
-  const selectedDocument = documents.find((item) => item.id === selectedId) || visibleDocuments[0] || documents[0];
-  const summary = summarizeDocuments(documents);
-
-  const stats = [
-    { label: 'Documents', value: summary.total, icon: <FileText size={22} /> },
-    { label: 'Verified', value: summary.verified, icon: <CheckCircle size={22} /> },
-    { label: 'Pending Review', value: summary.pending, icon: <Upload size={22} /> },
-    { label: 'Archived', value: summary.archived, icon: <Archive size={22} /> },
-  ];
+  const normalizedDocuments = visibleDocuments.map((item) => ({
+    ...item,
+    ownerName: resolveOwnerName(item, students, staff),
+  }));
+  const selectedDocument = selectedId ? normalizedDocuments.find((item) => item.id === selectedId) || null : null;
 
   const buildDocumentPayload = (form, fileData = {}) => {
     const ownerList = form.ownerType === 'Student' ? students : staff;
@@ -163,10 +155,6 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
   };
 
   const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
-  const normalizedDocuments = visibleDocuments.map((item) => ({
-    ...item,
-    ownerName: resolveOwnerName(item, students, staff),
-  }));
 
   return (
     <div>
@@ -174,7 +162,7 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Administration / <span className="text-[#f39a5f]">Document Management</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Document Management</h1>
-          <p className="text-sm text-slate-500 mt-1">Student documents, staff documents, academic records archive, verification, and metadata tracking.</p>
+          <p className="text-sm text-slate-500 mt-1">Search documents first. Click one document to view metadata and verification actions.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist documents and upload files.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
@@ -183,20 +171,8 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
         </button>
       </div>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
-        {stats.map(({ label, value, icon }) => (
-          <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
-            <div className="h-12 w-12 bg-white rounded-lg flex items-center justify-center text-[#34363d] shadow-sm">{icon}</div>
-            <div>
-              <div className="text-xs text-slate-500">{label}</div>
-              <div className="text-xl font-bold text-slate-900">{loading ? '...' : value}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
       <div className="flex flex-col xl:flex-row gap-5">
-        <div className="xl:w-[68%] min-w-0">
+        <div className={`${selectedDocument ? 'xl:w-[68%]' : 'xl:w-full'} min-w-0 transition-all duration-300`}>
           <div className="grid md:grid-cols-4 gap-3 mb-4">
             <div className="relative">
               <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -222,10 +198,20 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
             onArchive={archiveDocument}
             onPreview={(document) => setSelectedId(document.id)}
             onVerify={updateVerification}
+            onSelect={setSelectedId}
+            selectedId={selectedId}
+            showActions={false}
           />
-          <DocumentArchivePanel documents={documents} />
         </div>
-        <DocumentPreviewPanel document={selectedDocument} />
+        {selectedDocument && (
+          <DocumentPreviewPanel
+            canArchive={canArchive}
+            canVerify={canVerify}
+            document={selectedDocument}
+            onArchive={archiveDocument}
+            onVerify={updateVerification}
+          />
+        )}
       </div>
 
       {showUploadModal && <DocumentUploadModal students={students} staff={staff} onClose={() => setShowUploadModal(false)} onSave={saveDocument} />}

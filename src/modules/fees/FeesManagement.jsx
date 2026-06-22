@@ -31,7 +31,6 @@ import FeeCollectionModal from './components/FeeCollectionModal';
 import FeeReportsPanel from './components/FeeReportsPanel';
 import FeeStructureModal from './components/FeeStructureModal';
 import FeeStructurePanel from './components/FeeStructurePanel';
-import FeeVisualGraph from './components/FeeVisualGraph';
 
 export default function FeesManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(demoFeeStudents);
@@ -508,10 +507,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
       </div>
 
       {activeFeeBranch === 'overview-report' ? (
-        <>
-          <FeeVisualGraph assignments={assignments} collections={collections} summary={summary} />
-          {canReports && <FeeReportsPanel collections={collections} adjustments={adjustments} />}
-        </>
+        canReports ? <FeeReportsPanel collections={collections} adjustments={adjustments} /> : null
       ) : ['create-structure', 'manage-structures'].includes(activeFeeBranch) ? (
         <div className="max-w-3xl">
           <FeeStructurePanel structures={structures} canEdit={canSetup || canAssign} onEdit={setEditingStructure} onAssign={assignStructureToStudents} />

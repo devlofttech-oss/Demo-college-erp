@@ -1,7 +1,7 @@
 import StatusBadge from '../../students/components/StatusBadge';
 import { formatFileSize } from '../documentUtils';
 
-export default function DocumentPreviewPanel({ document }) {
+export default function DocumentPreviewPanel({ canArchive = false, canVerify = false, document, onArchive, onVerify }) {
   return (
     <aside className="xl:w-[32%]">
       <div className="bg-white border border-slate-100 rounded-lg p-5 sticky top-4">
@@ -33,6 +33,17 @@ export default function DocumentPreviewPanel({ document }) {
                 Open Document
               </a>
             )}
+            <div className="grid sm:grid-cols-3 gap-2">
+              <button onClick={() => onVerify?.(document, 'Verified')} disabled={!canVerify} className="h-10 rounded-lg bg-[#33373e] text-white text-sm font-semibold disabled:bg-slate-300">
+                Verify
+              </button>
+              <button onClick={() => onVerify?.(document, 'Rejected')} disabled={!canVerify} className="h-10 rounded-lg bg-[#33373e] text-white text-sm font-semibold disabled:bg-slate-300">
+                Reject
+              </button>
+              <button onClick={() => onArchive?.(document)} disabled={!canArchive || document.verificationStatus === 'Archived'} className="h-10 rounded-lg bg-[#33373e] text-white text-sm font-semibold disabled:bg-slate-300">
+                Archive
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-lg bg-[#f5f5f6] p-4 text-sm text-slate-500">Choose a document to inspect metadata and verification details.</div>

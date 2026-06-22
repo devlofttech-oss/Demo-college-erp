@@ -25,6 +25,7 @@ import AnalyticsPanel from './components/AnalyticsPanel';
 import CollectionReportTable from './components/CollectionReportTable';
 import OutstandingReportTable from './components/OutstandingReportTable';
 import ReportFilters from './components/ReportFilters';
+import FeeVisualGraph from '../fees/components/FeeVisualGraph';
 
 export default function FinancialReports({ currentUser, academicYear = '2026-2027' }) {
   const [structures, setStructures] = useState(demoFinancialStructures);
@@ -156,6 +157,8 @@ export default function FinancialReports({ currentUser, academicYear = '2026-202
           </div>
         ))}
       </div>
+
+      <FeeVisualGraph assignments={assignments} collections={collections} summary={summary} />
 
       <div className="flex flex-col xl:flex-row gap-5">
         <div className="xl:w-[68%] min-w-0">
