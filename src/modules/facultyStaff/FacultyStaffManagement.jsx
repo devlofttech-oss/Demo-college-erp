@@ -3,7 +3,6 @@ import { ArrowLeft, ArrowRight, Building2, CalendarCheck, Plus, Search, UserRoun
 import toast from 'react-hot-toast';
 import {
   archiveStaffMember,
-  createDepartment,
   createStaffAttendanceRecord,
   createStaffLeaveRecord,
   createStaffMember,
@@ -126,7 +125,6 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
     if (branch.statusFilter) setStatusFilter(branch.statusFilter);
     window.history.pushState({ ...(window.history.state || {}), staffFlow: { task: activeStaffTask, branch: branch.id } }, '');
     if (branch.openStaff) setShowStaffModal(true);
-    if (branch.syncDepartments) seedDepartments();
   };
 
   const goBackOneStaffStep = () => {
@@ -146,7 +144,6 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
     { id: 'records', title: 'Staff Records', description: 'Create, edit, archive, and restore records.', icon: <Users size={22} />, meta: [`${staffMembers.length} records`, canCreateStaff ? 'Create enabled' : 'View only'] },
     { id: 'leave', title: 'Leave', description: 'Request, approve, or reject staff leave.', icon: <CalendarCheck size={22} />, meta: [`${leaveRecords.length} records`, canManageLeave ? 'Manage enabled' : 'View only'] },
     { id: 'attendance', title: 'Attendance', description: 'Mark staff attendance.', icon: <UserRound size={22} />, meta: [`${attendanceRecords.length} records`, canMarkAttendance ? 'Mark enabled' : 'View only'] },
-    { id: 'departments', title: 'Departments', description: 'Review and sync department data.', icon: <Building2 size={22} />, meta: [`${departments.length} departments`, 'Setup'] },
   ];
 
   const staffBranchOptions = {
@@ -162,16 +159,12 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
     attendance: [
       { id: 'mark-attendance', title: 'Mark Attendance', description: 'Select staff member, then mark attendance.', icon: <UserRound size={20} />, statusFilter: 'active' },
     ],
-    departments: [
-      { id: 'department-list', title: 'Department List', description: 'Review departments.', icon: <Building2 size={20} /> },
-      { id: 'sync-departments', title: 'Sync Departments', description: 'Sync default departments.', icon: <Building2 size={20} />, syncDepartments: true },
-    ],
   };
 
   const activeTask = staffTaskOptions.find((task) => task.id === activeStaffTask);
   const activeBranches = staffBranchOptions[activeStaffTask] || [];
   const activeBranch = activeBranches.find((branch) => branch.id === activeStaffBranch);
-  const branchAccentText = activeStaffTask === 'leave' ? 'Leave work' : activeStaffTask === 'attendance' ? 'Attendance work' : activeStaffTask === 'departments' ? 'Department setup' : 'Record work';
+  const branchAccentText = activeStaffTask === 'leave' ? 'Leave work' : activeStaffTask === 'attendance' ? 'Attendance work' : 'Record work';
 
   const saveStaff = async (form) => {
     if (!canCreateStaff) {
@@ -364,24 +357,13 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
     }
   };
 
-  const seedDepartments = async () => {
-    try {
-      const missing = demoDepartments.filter((department) => !departments.some((item) => item.name === department.name));
-      await Promise.all(missing.map((department) => createDepartment(department)));
-      setDepartments((prev) => [...prev, ...missing]);
-      toast.success(missing.length ? 'Departments synced' : 'Departments already available');
-    } catch {
-      toast.success('Departments available locally. Check Firebase setup to persist them.');
-    }
-  };
-
   return (
     <div>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-slate-100">
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Academics / <span className="text-[#f39a5f]">Faculty & Staff Management</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Faculty & Staff Management</h1>
-          <p className="text-sm text-slate-500 mt-1">Faculty records, staff records, department allocation, leave, and attendance management.</p>
+          <p className="text-sm text-slate-500 mt-1">Faculty and staff records, leave, and attendance. Department setup lives in Settings.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist records.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
@@ -463,16 +445,6 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
         </div>
       </div>
 
-      {activeStaffTask === 'departments' ? (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {departments.map((department) => (
-            <div key={department.id || department.name} className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
-              <h3 className="font-bold text-slate-900">{department.name}</h3>
-              <p className="text-sm text-slate-500 mt-2">Head: {department.headName || 'Not assigned'}</p>
-            </div>
-          ))}
-        </div>
-      ) : (
       <div className="flex flex-col xl:flex-row gap-5">
         <div className="xl:w-[68%] min-w-0">
           {activeStaffTask === 'records' && (
@@ -555,7 +527,6 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
           </aside>
         )}
       </div>
-      )}
       </>
       )}
 
