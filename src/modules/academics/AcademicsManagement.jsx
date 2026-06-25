@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { createAcademicBatch, createAcademicCalendarEvent, createAcademicProgram, createAcademicSubject, getAcademicsData } from '../../firebase/db';
+import { createAcademicBatch, createAcademicProgram, createAcademicSubject, getAcademicsData } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import StatusBadge from '../students/components/StatusBadge';
-import { demoAcademicBatches, demoAcademicCalendarEvents, demoAcademicPrograms, demoAcademicSubjects } from './demoAcademics';
-import { filterAcademicItems, formatDisplayDate, validateBatch, validateCalendarEvent, validateProgram, validateSubject } from './academicUtils';
+import { demoAcademicBatches, demoAcademicPrograms, demoAcademicSubjects } from './demoAcademics';
+import { filterAcademicItems, formatDisplayDate, validateBatch, validateProgram, validateSubject } from './academicUtils';
 
 const tabs = [
   ['programs', 'Programs'],
   ['subjects', 'Subjects'],
   ['batches', 'Batches'],
-  ['calendar', 'Calendar'],
 ];
 
 export default function AcademicsManagement({ currentUser, academicYear = '2026-2027' }) {
   const [programs, setPrograms] = useState(isFirebaseConfigured ? [] : demoAcademicPrograms);
   const [subjects, setSubjects] = useState(isFirebaseConfigured ? [] : demoAcademicSubjects);
   const [batches, setBatches] = useState(isFirebaseConfigured ? [] : demoAcademicBatches);
-  const [events, setEvents] = useState(isFirebaseConfigured ? [] : demoAcademicCalendarEvents);
   const [activeTab, setActiveTab] = useState('programs');
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -32,7 +30,6 @@ export default function AcademicsManagement({ currentUser, academicYear = '2026-
         setPrograms(data.academicPrograms);
         setSubjects(data.academicSubjects);
         setBatches(data.academicBatches);
-        setEvents(data.academicCalendarEvents);
       } catch (error) {
         console.warn('Using demo academic data because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore academic records. Showing demo/local records.');
@@ -44,9 +41,9 @@ export default function AcademicsManagement({ currentUser, academicYear = '2026-
   const currentRoleId = currentUser?.roleId || 'admin';
   const canManage = canAccess(defaultRoles, currentRoleId, 'academics.manage');
   const activeRows = useMemo(() => {
-    const map = { programs, subjects, batches, calendar: events };
+    const map = { programs, subjects, batches };
     return filterAcademicItems(map[activeTab] || [], search);
-  }, [activeTab, batches, events, programs, search, subjects]);
+  }, [activeTab, batches, programs, search, subjects]);
 
   const createQuickRecord = async () => {
     if (!canManage) {
@@ -73,12 +70,6 @@ export default function AcademicsManagement({ currentUser, academicYear = '2026-
         if (message) return toast.error(message);
         const id = await createAcademicBatch(payload);
         setBatches((prev) => [{ id: id || `local-batch-${Date.now()}`, ...payload }, ...prev]);
-      } else {
-        const payload = { title: `Academic Event ${events.length + 1}`, eventType: 'Academic', eventDate: new Date().toISOString().slice(0, 10), audience: 'All', academicYear, status: 'Published', createdAtText };
-        const message = validateCalendarEvent(payload);
-        if (message) return toast.error(message);
-        const id = await createAcademicCalendarEvent(payload);
-        setEvents((prev) => [{ id: id || `local-event-${Date.now()}`, ...payload }, ...prev]);
       }
       toast.success('Academic record created');
     } catch {
@@ -89,8 +80,7 @@ export default function AcademicsManagement({ currentUser, academicYear = '2026-
   const renderRow = (item) => {
     if (activeTab === 'programs') return [item.name, item.code, item.academicYear, item.status];
     if (activeTab === 'subjects') return [item.subjectName, item.subjectCode, item.programName, item.status];
-    if (activeTab === 'batches') return [`${item.className} - ${item.section}`, item.programName, item.classTeacher, item.status];
-    return [item.title, item.eventType, item.eventDate, item.status];
+    return [`${item.className} - ${item.section}`, item.programName, item.classTeacher, item.status];
   };
 
   return (
@@ -99,7 +89,7 @@ export default function AcademicsManagement({ currentUser, academicYear = '2026-
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Academics / <span className="text-[#f39a5f]">Academic Setup</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Academics</h1>
-          <p className="text-sm text-slate-500 mt-1">Programs, subjects, batches, sections, and academic calendar setup.</p>
+          <p className="text-sm text-slate-500 mt-1">Programs, subjects, batches, and sections setup.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist academic setup.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
