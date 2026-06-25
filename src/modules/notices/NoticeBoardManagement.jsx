@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, Bell, CalendarDays, FileText, Megaphone, Plus, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   archiveNoticeItem,
@@ -10,7 +10,7 @@ import {
 import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { demoNoticeItems } from './demoNotices';
-import { filterNotices, formatDisplayDate, noticeAudiences, noticeTypes, summarizeNotices, validateNoticeForm } from './noticeUtils';
+import { filterNotices, formatDisplayDate, noticeAudiences, noticeTypes, validateNoticeForm } from './noticeUtils';
 import NoticeModal from './components/NoticeModal';
 import NoticePreviewPanel from './components/NoticePreviewPanel';
 import NoticeTable from './components/NoticeTable';
@@ -19,7 +19,6 @@ export default function NoticeBoardManagement({ currentUser, academicYear = '202
   const [notices, setNotices] = useState(isFirebaseConfigured ? [] : demoNoticeItems);
   const [selectedId, setSelectedId] = useState(isFirebaseConfigured ? '' : demoNoticeItems[0]?.id || '');
   const [filters, setFilters] = useState({ search: '', type: '', audience: '', status: '' });
-  const [loading, setLoading] = useState(isFirebaseConfigured);
   const [loadError, setLoadError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
@@ -34,8 +33,6 @@ export default function NoticeBoardManagement({ currentUser, academicYear = '202
       } catch (error) {
         console.warn('Using demo notices because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore notice records. Showing demo/local records.');
-      } finally {
-        setLoading(false);
       }
     };
     loadNotices();
@@ -47,14 +44,6 @@ export default function NoticeBoardManagement({ currentUser, academicYear = '202
   const canArchive = canAccess(defaultRoles, currentRoleId, 'notices.archive');
   const visibleNotices = useMemo(() => filterNotices(notices, filters), [notices, filters]);
   const selectedNotice = notices.find((item) => item.id === selectedId) || visibleNotices[0] || notices[0];
-  const summary = summarizeNotices(notices);
-
-  const stats = [
-    { label: 'Announcements', value: summary.total, icon: <Megaphone size={22} /> },
-    { label: 'Published', value: summary.published, icon: <Bell size={22} /> },
-    { label: 'Scheduled', value: summary.scheduled, icon: <CalendarDays size={22} /> },
-    { label: 'Archived/Expired', value: summary.expired + notices.filter((item) => item.status === 'Archived').length, icon: <Archive size={22} /> },
-  ];
 
   const buildPayload = (form) => ({
     ...form,
@@ -143,18 +132,6 @@ export default function NoticeBoardManagement({ currentUser, academicYear = '202
         <button onClick={() => setShowModal(true)} disabled={!canCreate} className="h-10 px-5 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
           <Plus size={16} /> Announcement
         </button>
-      </div>
-
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
-        {stats.map(({ label, value, icon }) => (
-          <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
-            <div className="h-12 w-12 bg-white rounded-lg flex items-center justify-center text-[#34363d] shadow-sm">{icon}</div>
-            <div>
-              <div className="text-xs text-slate-500">{label}</div>
-              <div className="text-xl font-bold text-slate-900">{loading ? '...' : value}</div>
-            </div>
-          </div>
-        ))}
       </div>
 
       <div className="flex flex-col xl:flex-row gap-5">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, Plus, Search, Send, Users } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   archiveTimetableEntry,
@@ -27,7 +27,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
   const [publications, setPublications] = useState(isFirebaseConfigured ? [] : demoTimetablePublications);
   const [selectedClass, setSelectedClass] = useState('All');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(isFirebaseConfigured);
   const [loadError, setLoadError] = useState('');
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [entryDefaults, setEntryDefaults] = useState({});
@@ -46,8 +45,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
       } catch (error) {
         console.warn('Using demo timetable because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore timetable records. Showing demo/local records.');
-      } finally {
-        setLoading(false);
       }
     };
     loadTimetable();
@@ -71,13 +68,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
         .some((value) => value.toLowerCase().includes(term))
     );
   }, [entries, search, selectedClass]);
-
-  const stats = [
-    { label: 'Entries', value: entries.filter((entry) => entry.status !== 'Archived').length, icon: <CalendarCheck size={22} /> },
-    { label: 'Classes', value: classOptions.length, icon: <Users size={22} /> },
-    { label: 'Faculty Assigned', value: new Set(entries.map((entry) => entry.facultyId)).size, icon: <Users size={22} /> },
-    { label: 'Published', value: publications.filter((item) => item.status === 'Published').length, icon: <Send size={22} /> },
-  ];
 
   const buildEntryPayload = (form) => {
     const facultyMember = faculty.find((item) => item.id === form.facultyId);
@@ -223,18 +213,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
             <Plus size={16} /> New Entry
           </button>
         </div>
-      </div>
-
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
-        {stats.map(({ label, value, icon }) => (
-          <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
-            <div className="h-12 w-12 bg-white rounded-lg flex items-center justify-center text-[#34363d] shadow-sm">{icon}</div>
-            <div>
-              <div className="text-xs text-slate-500">{label}</div>
-              <div className="text-xl font-bold text-slate-900">{loading ? '...' : value}</div>
-            </div>
-          </div>
-        ))}
       </div>
 
       <div className="flex flex-col xl:flex-row gap-5">
