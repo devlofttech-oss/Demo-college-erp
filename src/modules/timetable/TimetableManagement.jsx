@@ -3,9 +3,7 @@ import { Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   archiveTimetableEntry,
-  createClassroom,
   createTimetableEntry,
-  createTimetablePublication,
   getTimetableManagementData,
   updateTimetableEntry,
 } from '../../firebase/db';
@@ -13,18 +11,16 @@ import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { demoStaffMembers } from '../facultyStaff/demoFacultyStaff';
 import { demoStudents } from '../students/demoStudents';
-import { demoClassrooms, demoTimetableEntries, demoTimetablePublications } from './demoTimetable';
+import { demoClassrooms, demoTimetableEntries } from './demoTimetable';
 import { formatDisplayDate, getClassOptions, hasTimetableConflict, validateTimetableEntry } from './timetableUtils';
 import TimetableEntryModal from './components/TimetableEntryModal';
 import TimetableGrid from './components/TimetableGrid';
-import TimetableSidePanel from './components/TimetableSidePanel';
 
 export default function TimetableManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(isFirebaseConfigured ? [] : demoStudents);
   const [staff, setStaff] = useState(isFirebaseConfigured ? [] : demoStaffMembers);
   const [classrooms, setClassrooms] = useState(isFirebaseConfigured ? [] : demoClassrooms);
   const [entries, setEntries] = useState(isFirebaseConfigured ? [] : demoTimetableEntries);
-  const [publications, setPublications] = useState(isFirebaseConfigured ? [] : demoTimetablePublications);
   const [selectedClass, setSelectedClass] = useState('All');
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -41,7 +37,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         if (data.classrooms.length) setClassrooms(data.classrooms);
         setEntries(data.timetableEntries);
-        setPublications(data.publications);
       } catch (error) {
         console.warn('Using demo timetable because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore timetable records. Showing demo/local records.');
@@ -53,8 +48,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
   const currentRoleId = currentUser?.roleId || 'admin';
   const canCreate = canAccess(defaultRoles, currentRoleId, 'timetable.create');
   const canEdit = canAccess(defaultRoles, currentRoleId, 'timetable.edit');
-  const canPublish = canAccess(defaultRoles, currentRoleId, 'timetable.publish');
-  const canManageClassrooms = canAccess(defaultRoles, currentRoleId, 'timetable.classrooms');
 
   const faculty = staff.filter((member) => member.staffType === 'Faculty' && member.status !== 'Archived');
   const classOptions = getClassOptions(students);
@@ -148,45 +141,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
     }
   };
 
-  const publishTimetable = async () => {
-    if (!canPublish) {
-      toast.error('You do not have permission to publish timetables.');
-      return;
-    }
-    const classKey = selectedClass === 'All' ? 'All Classes' : selectedClass;
-    const payload = {
-      classKey,
-      status: 'Published',
-      publishedAtText: formatDisplayDate(),
-      entryCount: filteredEntries.filter((entry) => entry.status !== 'Archived').length,
-    };
-    try {
-      const id = await createTimetablePublication(payload);
-      setPublications((prev) => [{ id: id || `local-pub-${Date.now()}`, ...payload }, ...prev]);
-      setEntries((prev) => prev.map((entry) => selectedClass === 'All' || entry.classKey === selectedClass ? { ...entry, status: 'Published' } : entry));
-      toast.success('Timetable published');
-    } catch {
-      setPublications((prev) => [{ id: `local-pub-${Date.now()}`, ...payload }, ...prev]);
-      setEntries((prev) => prev.map((entry) => selectedClass === 'All' || entry.classKey === selectedClass ? { ...entry, status: 'Published' } : entry));
-      toast.success('Timetable published locally. Check Firebase setup to persist it.');
-    }
-  };
-
-  const seedClassrooms = async () => {
-    if (!canManageClassrooms) {
-      toast.error('You do not have permission to manage classrooms.');
-      return;
-    }
-    try {
-      const missing = demoClassrooms.filter((room) => !classrooms.some((item) => item.roomNo === room.roomNo));
-      await Promise.all(missing.map((room) => createClassroom(room)));
-      setClassrooms((prev) => [...prev, ...missing]);
-      toast.success(missing.length ? 'Classrooms synced' : 'Classrooms already available');
-    } catch {
-      toast.success('Classrooms available locally. Check Firebase setup to persist them.');
-    }
-  };
-
   const openEntryModal = (defaults = {}) => {
     setEntryDefaults(defaults);
     setShowEntryModal(true);
@@ -198,25 +152,19 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Academics / <span className="text-[#f39a5f]">Timetable Management</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Timetable Management</h1>
-          <p className="text-sm text-slate-500 mt-1">Class timetable creation, faculty timetable, classroom allocation, and publishing.</p>
+          <p className="text-sm text-slate-500 mt-1">Class timetable creation and schedule management.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist timetables.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={seedClassrooms} disabled={!canManageClassrooms} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm disabled:bg-slate-300">
-            Sync Classrooms
-          </button>
-          <button onClick={publishTimetable} disabled={!canPublish} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm disabled:bg-slate-300">
-            Publish
-          </button>
           <button onClick={() => openEntryModal()} disabled={!canCreate} className="h-10 px-5 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
             <Plus size={16} /> New Entry
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col xl:flex-row gap-5">
-        <div className="xl:w-[68%] min-w-0">
+      <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-5">
             {['All', ...classOptions].map((classKey) => (
               <button
@@ -243,8 +191,6 @@ export default function TimetableManagement({ currentUser, academicYear = '2026-
             onArchive={archiveEntry}
           />
         </div>
-
-        <TimetableSidePanel classrooms={classrooms} facultyEntries={filteredEntries} publications={publications} selectedClass={selectedClass === 'All' ? '' : selectedClass} />
       </div>
 
       {showEntryModal && (
