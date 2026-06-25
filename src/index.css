@@ -1062,10 +1062,10 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-shell .erp-sidebar-nav .erp-sidebar-item.is-active {
-  color:#02100d!important;
-  background:linear-gradient(135deg,var(--erp-accent),rgba(255,255,255,.92) 64%,#93c5fd)!important;
-  border-color:rgba(255,255,255,.26)!important;
-  box-shadow:0 12px 24px rgba(0,255,136,.12)!important;
+  color:var(--erp-accent)!important;
+  background:rgba(0,255,136,.12)!important;
+  border-color:rgba(0,255,136,.22)!important;
+  box-shadow:none!important;
 }
 
 .erp-shell .erp-sidebar-item-icon {
@@ -1126,9 +1126,9 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-shell .erp-sidebar-theme-switch button.is-active {
-  color:#02100d!important;
-  background:linear-gradient(135deg,var(--erp-accent),rgba(255,255,255,.92) 64%,#93c5fd)!important;
-  box-shadow:0 10px 20px rgba(0,255,136,.10)!important;
+  color:var(--erp-accent)!important;
+  background:rgba(0,255,136,.12)!important;
+  box-shadow:none!important;
 }
 
 .erp-shell .erp-sidebar.is-collapsed .erp-sidebar-brand-card,
