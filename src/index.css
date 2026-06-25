@@ -992,15 +992,9 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   -webkit-box-orient:vertical;
 }
 
-.erp-shell .erp-sidebar-brand-subtitle {
-  margin-top:4px;
-  color:var(--erp-muted)!important;
-  font-size:9px;
-}
-
 .erp-shell .erp-sidebar-collapse-button {
   position:absolute;
-  right:-14px;
+  right:10px;
   top:50%;
   width:34px;
   height:34px;
@@ -1027,6 +1021,24 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell .erp-sidebar-collapse-button svg {
   width:18px;
   height:18px;
+  stroke-width:3.2;
+}
+
+.erp-shell .erp-sidebar-expand-logo {
+  cursor:pointer;
+  color:var(--erp-muted)!important;
+  background:rgba(255,255,255,.035)!important;
+  border-color:rgba(255,255,255,.10)!important;
+}
+
+.erp-shell .erp-sidebar-expand-logo:hover {
+  color:var(--erp-text)!important;
+  background:rgba(255,255,255,.06)!important;
+  border-color:rgba(255,255,255,.20)!important;
+  transform:none!important;
+}
+
+.erp-shell .erp-sidebar-expand-logo svg {
   stroke-width:3.2;
 }
 
@@ -1170,20 +1182,6 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   padding-block:12px!important;
 }
 
-.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-collapse-button {
-  position:absolute;
-  right:-18px;
-  top:50%;
-  width:30px;
-  height:30px;
-  color:var(--erp-muted)!important;
-  background:#050d12!important;
-  border:2px solid #050d12!important;
-  box-shadow:0 0 0 1px rgba(255,255,255,.12),0 10px 22px rgba(0,0,0,.28)!important;
-  transform:translateY(-50%)!important;
-  z-index:5;
-}
-
 .erp-shell .erp-sidebar.is-collapsed .erp-sidebar-nav .erp-sidebar-item {
   justify-content:center!important;
   padding:0!important;
@@ -1219,7 +1217,6 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   color:#111827!important;
 }
 
-.erp-shell.light-mode .erp-sidebar-brand-subtitle,
 .erp-shell.light-mode .erp-sidebar-nav .erp-sidebar-item,
 .erp-shell.light-mode .erp-sidebar-theme-switch button {
   color:#65728a!important;
@@ -1238,6 +1235,18 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-shell.light-mode .erp-sidebar-collapse-button:hover {
+  color:#111827!important;
+  background:#eef2f7!important;
+  border-color:#cbd5e1!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-expand-logo {
+  color:#65728a!important;
+  background:#ffffff!important;
+  border-color:#d8deeb!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-expand-logo:hover {
   color:#111827!important;
   background:#eef2f7!important;
   border-color:#cbd5e1!important;
@@ -1294,13 +1303,6 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   color:#4f46e5!important;
   background:#dfe5ff!important;
   box-shadow:none!important;
-}
-
-.erp-shell.light-mode .erp-sidebar.is-collapsed .erp-sidebar-collapse-button {
-  color:#65728a!important;
-  background:#ffffff!important;
-  border-color:#f8fafc!important;
-  box-shadow:0 0 0 1px rgba(101,114,138,.24),0 10px 22px rgba(15,23,42,.16)!important;
 }
 
 /* Final light-mode sidebar cascade guard: legacy generic nav/span rules above must not reshape the new sidebar items. */

@@ -57,23 +57,35 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
     <aside className={`erp-sidebar ${collapsed ? 'is-collapsed' : ''} bg-white border-r border-slate-200 shrink-0 hidden lg:flex flex-col transition-all duration-300`}>
       <div className="erp-sidebar-sticky">
         <div className="erp-sidebar-brand-card">
-          <div className="erp-sidebar-logo">
-            <GraduationCap className="erp-sidebar-logo-icon" size={26} />
-          </div>
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="erp-sidebar-logo erp-sidebar-expand-logo"
+              title="Expand sidebar"
+            >
+              <ChevronRight className="erp-sidebar-logo-icon" size={26} />
+            </button>
+          ) : (
+            <div className="erp-sidebar-logo">
+              <GraduationCap className="erp-sidebar-logo-icon" size={26} />
+            </div>
+          )}
           {!collapsed && (
             <div className="erp-sidebar-brand-copy">
               <div className="erp-sidebar-brand-name">{collegeName}</div>
-              <div className="erp-sidebar-brand-subtitle">ERP Management Suite</div>
             </div>
           )}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="erp-sidebar-collapse-button"
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          </button>
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="erp-sidebar-collapse-button"
+              title="Collapse sidebar"
+            >
+              <ChevronLeft size={18} />
+            </button>
+          )}
         </div>
 
         <div className="erp-sidebar-menu-card">
