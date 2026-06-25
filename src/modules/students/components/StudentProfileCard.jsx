@@ -116,13 +116,6 @@ export default function StudentProfileCard({ canEdit = true, showSummaryTabs = t
         <DetailGrid title="Entrance & Qualifying Exam" fields={examAdmissionFields} student={student} />
         <DetailGrid title="Lateral Entry Diploma Details" fields={lateralAdmissionFields} student={student} />
         <DetailGrid title="Caste & Income Certificate Details" fields={certificateAdmissionFields} student={student} />
-        {(student.sourcePdf || student.sourceSlNo) && (
-          <div className="mt-5 rounded-lg bg-orange-50 border border-orange-100 p-3 text-xs text-orange-900">
-            Source: {student.sourcePdf || 'PDF admission statement'}
-            {student.sourceSlNo ? `, row ${student.sourceSlNo}` : ''}
-            {student.sourcePage ? `, page ${student.sourcePage}` : ''}
-          </div>
-        )}
       </div>
     </div>
   );

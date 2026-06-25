@@ -748,19 +748,19 @@ export default function StudentInformationManagement({ user, onLogout }) {
 function StudentDetailPage({ latestAdmission, onBack, student }) {
   return (
     <div>
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-slate-100 mb-5">
+      <div className="flex flex-col gap-4 pb-6 border-b border-slate-100 mb-5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="h-12 px-5 rounded-lg bg-[#fb8d49] text-white font-extrabold text-base flex items-center gap-2 self-start shadow-lg shadow-orange-200 hover:bg-[#e97934] focus:outline-none focus:ring-4 focus:ring-orange-200"
+        >
+          <ArrowLeft size={20} /> Back
+        </button>
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Academics / <span className="text-[#f39a5f]">Student Details</span></div>
           <h1 className="text-2xl font-bold text-slate-900">{student.name}</h1>
           <p className="text-sm text-slate-500 mt-1">{student.admissionNo} / {student.studentId}</p>
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="h-10 px-4 rounded-full bg-[#33373e] text-white font-semibold text-sm flex items-center gap-2 self-start xl:self-auto"
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
       </div>
 
       <StudentProfileCard canEdit={false} showSummaryTabs={false} student={student} />
