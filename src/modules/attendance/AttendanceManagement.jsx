@@ -16,7 +16,6 @@ import {
   summarizeAttendance,
 } from './attendanceUtils';
 import {
-  demoAttendanceNotifications,
   demoAttendanceStaff,
   demoAttendanceStudents,
   demoStaffAttendance,
@@ -25,16 +24,27 @@ import {
 import AttendanceReports from './components/AttendanceReports';
 import AttendanceTable from './components/AttendanceTable';
 
+function getTodayInputValue() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatInputDate(inputDate) {
+  return formatDisplayDate(new Date(`${inputDate}T00:00:00`));
+}
+
 export default function AttendanceManagement({ currentUser, academicYear = '2026-2027' }) {
   const [students, setStudents] = useState(isFirebaseConfigured ? [] : demoAttendanceStudents);
   const [staff, setStaff] = useState(isFirebaseConfigured ? [] : demoAttendanceStaff);
   const [studentAttendance, setStudentAttendance] = useState(isFirebaseConfigured ? [] : demoStudentAttendance);
   const [staffAttendance, setStaffAttendance] = useState(isFirebaseConfigured ? [] : demoStaffAttendance);
-  const [notifications, setNotifications] = useState(isFirebaseConfigured ? [] : demoAttendanceNotifications);
   const [mode, setMode] = useState('students');
   const [reportScope, setReportScope] = useState('daily');
   const [search, setSearch] = useState('');
-  const [selectedDate, setSelectedDate] = useState(formatDisplayDate());
+  const [selectedDateInput, setSelectedDateInput] = useState(getTodayInputValue);
   const [loading, setLoading] = useState(isFirebaseConfigured);
   const [loadError, setLoadError] = useState('');
   const [activeAttendanceTask, setActiveAttendanceTask] = useState('');
@@ -50,7 +60,6 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         setStudentAttendance(data.studentAttendance);
         setStaffAttendance(data.staffAttendance);
-        setNotifications(data.notifications);
       } catch (error) {
         console.warn('Using demo attendance because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore attendance records. Showing demo/local records.');
@@ -95,6 +104,8 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
   const canViewReports = canAccess(defaultRoles, currentRoleId, 'attendance.reports');
 
   const activeRecords = mode === 'students' ? studentAttendance : staffAttendance;
+  const selectedDate = formatInputDate(selectedDateInput);
+  const selectedDateRecords = activeRecords.filter((record) => record.dateText === selectedDate);
   const activeEntities = useMemo(() => {
     const term = search.trim().toLowerCase();
     const source = mode === 'students' ? students : staff;
@@ -106,13 +117,11 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
     );
   }, [mode, search, staff, students]);
 
-  const summary = summarizeAttendance(activeRecords);
-  const absentToday = activeRecords.filter((record) => record.dateText === selectedDate && record.status === 'Absent').length;
+  const summary = summarizeAttendance(selectedDateRecords);
   const stats = [
     { label: 'Present', value: summary.present, icon: <CheckCircle size={22} /> },
     { label: 'Absent', value: summary.absent, icon: <XCircle size={22} /> },
     { label: 'Attendance %', value: `${summary.percentage}%`, icon: <CalendarDays size={22} /> },
-    { label: 'Notifications', value: notifications.length || absentToday, icon: <Bell size={22} /> },
   ];
   const selectedEntity = selectedEntityId ? activeEntities.find((entity) => entity.id === selectedEntityId) || null : null;
   const selectedEntityKey = selectedEntity?.studentId || selectedEntity?.employeeId || '';
@@ -263,13 +272,11 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
     const attendanceUpdate = { parentNotified: true, parentNotifiedAtText: formatDisplayDate() };
 
     try {
-      const id = await createAttendanceNotification(notification);
+      await createAttendanceNotification(notification);
       await updateStudentAttendanceRecord(attendanceRecord.id, attendanceUpdate);
-      setNotifications((prev) => [{ id: id || `local-notification-${Date.now()}`, ...notification }, ...prev]);
       setStudentAttendance((prev) => prev.map((record) => record.id === attendanceRecord.id ? { ...record, ...attendanceUpdate } : record));
       toast.success('Parent notification queued');
     } catch {
-      setNotifications((prev) => [{ id: `local-notification-${Date.now()}`, ...notification }, ...prev]);
       setStudentAttendance((prev) => prev.map((record) => record.id === attendanceRecord.id ? { ...record, ...attendanceUpdate } : record));
       toast.success('Parent notification queued locally');
     }
@@ -288,10 +295,8 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
         <div className="flex items-center gap-3">
           <input
             type="date"
-            onChange={(event) => {
-              if (!event.target.value) return;
-              setSelectedDate(formatDisplayDate(new Date(`${event.target.value}T00:00:00`)));
-            }}
+            value={selectedDateInput}
+            onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
             className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
           />
         </div>
@@ -299,7 +304,7 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
 
       {!activeAttendanceTask ? (
       <>
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 py-5">
         {stats.map(({ label, value, icon }) => (
           <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
             <div className="h-12 w-12 bg-white rounded-lg flex items-center justify-center text-[#34363d] shadow-sm">{icon}</div>
