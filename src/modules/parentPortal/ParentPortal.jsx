@@ -78,11 +78,12 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027' }
   const parentNotices = useMemo(() => visibleParentNotices(notices), [notices]);
   const studentDocuments = useMemo(() => visibleStudentDocuments(documents, selectedStudent), [documents, selectedStudent]);
 
-  const stats = [
-    { label: 'Attendance', value: `${studentAttendance.percentage}%`, icon: <UserRound size={22} /> },
-    { label: 'Performance', value: `${performance.average}%`, icon: <GraduationCap size={22} /> },
-    { label: 'Fee Due', value: feeStatus.totalDue, icon: <Wallet size={22} /> },
-    { label: 'Notices', value: parentNotices.length, icon: <Bell size={22} /> },
+  const overviewItems = [
+    { label: 'Attendance', value: `${studentAttendance.percentage}%`, icon: <UserRound size={18} /> },
+    { label: 'Performance', value: `${performance.average}%`, icon: <GraduationCap size={18} /> },
+    { label: 'Fee Due', value: feeStatus.totalDue, icon: <Wallet size={18} /> },
+    { label: 'Notices', value: parentNotices.length, icon: <Bell size={18} /> },
+    { label: 'Documents', value: studentDocuments.length, icon: <FileText size={18} /> },
   ];
 
   if (!canView) {
@@ -99,7 +100,7 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027' }
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Parent Portal / <span className="text-[#f39a5f]">Student Overview</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Parent Portal</h1>
-          <p className="text-sm text-slate-500 mt-1">Attendance monitoring, academic performance tracking, fee status, notices, and verified documents.</p>
+          <p className="text-sm text-slate-500 mt-1">A focused view of attendance, academics, fees, notices, and verified documents.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist and load parent portal records.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
@@ -108,24 +109,37 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027' }
 
       {selectedStudent ? (
         <>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
-            {stats.map(({ label, value, icon }) => (
-              <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
-                <div className="h-12 w-12 bg-white rounded-lg flex items-center justify-center text-[#34363d] shadow-sm">{icon}</div>
-                <div>
-                  <div className="text-xs text-slate-500">{label}</div>
-                  <div className="text-xl font-bold text-slate-900">{loading ? '...' : value}</div>
-                </div>
+          <section className="my-5 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+              <div className="min-w-0">
+                <div className="text-xs font-bold uppercase text-slate-500">Selected Student</div>
+                <h2 className="mt-1 text-2xl font-extrabold text-slate-900">{selectedStudent.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {[selectedStudent.studentId, selectedStudent.className, selectedStudent.section].filter(Boolean).join(' | ')}
+                </p>
               </div>
-            ))}
-          </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 xl:min-w-[680px]">
+                {overviewItems.map(({ label, value, icon }) => (
+                  <div key={label} className="rounded-lg bg-[#f5f5f6] px-4 py-3">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                      <span className="text-[#34363d]">{icon}</span>
+                      {label}
+                    </div>
+                    <div className="mt-2 text-xl font-bold text-slate-900">{loading ? '...' : value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
 
-          <div className="grid xl:grid-cols-2 gap-5">
-            <AttendanceCard attendance={studentAttendance} />
-            <PerformanceCard performance={performance} />
-            <FeeStatusCard feeStatus={feeStatus} />
-            <ParentNoticePanel notices={parentNotices} />
-            <div className="xl:col-span-2">
+          <div className="grid xl:grid-cols-[1.35fr_0.9fr] gap-5">
+            <div className="space-y-5">
+              <PerformanceCard performance={performance} />
+              <AttendanceCard attendance={studentAttendance} />
+            </div>
+            <div className="space-y-5">
+              <FeeStatusCard feeStatus={feeStatus} />
+              <ParentNoticePanel notices={parentNotices} />
               <ParentDocumentsPanel documents={studentDocuments} />
             </div>
           </div>
