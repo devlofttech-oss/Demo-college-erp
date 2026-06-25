@@ -96,8 +96,8 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027' }
 
   return (
     <div>
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-slate-100">
-        <div>
+      <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-5 pb-6 border-b border-slate-100">
+        <div className="max-w-2xl">
           <div className="text-sm font-bold text-slate-500 mb-2">Parent Portal / <span className="text-[#f39a5f]">Student Overview</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Parent Portal</h1>
           <p className="text-sm text-slate-500 mt-1">A focused view of attendance, academics, fees, notices, and verified documents.</p>
