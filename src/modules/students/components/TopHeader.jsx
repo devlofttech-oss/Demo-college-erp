@@ -1,6 +1,6 @@
-import { LogOut, Menu, MessageSquareText, UserRound } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { canAccess, defaultRoles, getRoleById } from '../../userRoles/rolePermissions';
+import { useEffect, useRef, useState } from 'react';
+import { LogOut, UserRound } from 'lucide-react';
+import { defaultRoles, getRoleById } from '../../userRoles/rolePermissions';
 
 export default function TopHeader({
   academicYear,
@@ -10,35 +10,30 @@ export default function TopHeader({
   institute,
   onAcademicYearChange,
   onCourseChange,
-  onMenuToggle,
-  onNavigate,
   user,
   onLogout,
 }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileMenuRef = useRef(null);
   const currentRoleId = user?.roleId || 'admin';
   const currentRole = getRoleById(defaultRoles, currentRoleId);
-  const canViewNotices = canAccess(defaultRoles, currentRoleId, 'notices.view');
+  const isSuperAdmin = currentRoleId === 'super-admin';
   const userDisplayId = user?.displayId || user?.adminId || user?.employeeId || user?.uid?.slice(0, 8) || '-';
   const instituteId = user?.selectedCollege?.code || institute?.instituteId || institute?.code || '-';
 
-  const openNoticeBoard = () => {
-    if (!canViewNotices) {
-      toast.error('You do not have permission to open the notice board.');
-      return;
-    }
-    onNavigate?.('notice-board');
-  };
+  useEffect(() => {
+    const closeProfileMenu = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', closeProfileMenu);
+    return () => document.removeEventListener('mousedown', closeProfileMenu);
+  }, []);
 
   return (
     <header className="erp-header h-[72px] bg-white border-b border-slate-200 flex items-center justify-between px-5 lg:px-10 shrink-0">
       <div className="flex items-center gap-5 min-w-0">
-        <button
-          onClick={onMenuToggle}
-          className="h-12 w-12 rounded-full bg-[#fb9a5b] text-slate-800 flex items-center justify-center shadow-sm shrink-0"
-          title="Toggle menu"
-        >
-          <Menu size={20} />
-        </button>
         <div className="hidden md:flex items-center gap-3">
           <label className="text-xs font-semibold text-slate-500">
             <span className="sr-only">Course</span>
@@ -72,32 +67,41 @@ export default function TopHeader({
       </div>
 
       <div className="flex items-center gap-5">
-        <button onClick={openNoticeBoard} className="erp-notification-button relative h-10 w-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-500" title="Open notice board">
-          <MessageSquareText size={18} />
-          {canViewNotices && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-orange-500 border border-white" />}
-        </button>
-        <div className="hidden sm:block h-9 w-px bg-slate-200" />
-        <div className="hidden sm:block text-xs text-slate-700 leading-5">
-          <div>User ID : {userDisplayId}</div>
-          <div>Institute ID : {instituteId}</div>
-        </div>
-        <div className="hidden sm:block h-9 w-px bg-slate-200" />
+        {isSuperAdmin && (
+          <>
+            <div className="hidden sm:block h-9 w-px bg-slate-200" />
+            <div className="hidden sm:block text-xs text-slate-700 leading-5">
+              <div>User ID : {userDisplayId}</div>
+              <div>Institute ID : {instituteId}</div>
+            </div>
+            <div className="hidden sm:block h-9 w-px bg-slate-200" />
+          </>
+        )}
         <div className="text-right leading-tight">
           <div className="text-sm font-bold text-slate-900">{user?.name || 'Admin'}</div>
           <span className="inline-flex bg-[#ff9f68] text-white text-[9px] px-2 py-0.5 rounded-sm font-bold uppercase">
             {currentRole?.name || 'Admin'}
           </span>
         </div>
-        <div className="h-10 w-10 rounded-full bg-[#2e333b] text-emerald-300 flex items-center justify-center">
-          <UserRound size={22} />
+        <div ref={profileMenuRef} className="relative">
+          <button
+            onClick={() => setProfileOpen((open) => !open)}
+            className="h-10 w-10 rounded-full bg-[#2e333b] text-emerald-300 flex items-center justify-center"
+            title="Profile"
+          >
+            <UserRound size={22} />
+          </button>
+          {profileOpen && (
+            <div className="absolute right-0 top-12 z-50 w-44 rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
+              <button
+                onClick={onLogout}
+                className="w-full h-10 rounded-md px-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+              >
+                <LogOut size={16} /> Logout
+              </button>
+            </div>
+          )}
         </div>
-        <button
-          onClick={onLogout}
-          className="h-10 w-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200"
-          title="Logout"
-        >
-          <LogOut size={18} />
-        </button>
       </div>
     </header>
   );

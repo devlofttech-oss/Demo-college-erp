@@ -568,8 +568,6 @@ export default function StudentInformationManagement({ user, onLogout }) {
                 setSelectedCourseCode(courseCode);
                 setSelectedId('');
               }}
-              onMenuToggle={() => setSidebarCollapsed((prev) => !prev)}
-              onNavigate={setActivePage}
               user={{ ...user, selectedCollege: { ...user?.selectedCollege, name: institute.name, code: institute.instituteId || institute.code } }}
               onLogout={onLogout}
             />
