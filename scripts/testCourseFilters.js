@@ -25,4 +25,10 @@ assert.deepEqual(filterStudentScopedRecords([
   { id: 'fee-3', courseCode: 'BSCN' },
 ], [students[0]], 'BSCN', course).map((item) => item.id), ['fee-1', 'fee-3']);
 
+assert.deepEqual(filterStudentScopedRecords([
+  { id: 'student-doc', ownerRecordId: 's1', ownerType: 'Student' },
+  { id: 'staff-doc', ownerRecordId: 't1', ownerType: 'Staff', courseCode: 'BSCN' },
+  { id: 'other-staff-doc', ownerRecordId: 't2', ownerType: 'Staff', courseCode: 'BPT' },
+], [students[0]], 'BSCN', course).map((item) => item.id), ['student-doc', 'staff-doc']);
+
 console.log('Course filter tests passed.');

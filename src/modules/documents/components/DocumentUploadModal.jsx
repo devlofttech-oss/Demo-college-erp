@@ -15,6 +15,8 @@ export default function DocumentUploadModal({ students, staff, onClose, onSave }
   });
 
   const ownerOptions = form.ownerType === 'Student' ? students : staff;
+  const needsOwner = form.ownerType !== 'Academic Archive';
+  const ownerUnavailable = needsOwner && !ownerOptions.length;
 
   const changeOwnerType = (ownerType) => {
     const nextOptions = ownerType === 'Student' ? students : staff;
@@ -48,11 +50,13 @@ export default function DocumentUploadModal({ students, staff, onClose, onSave }
               {documentOwnerTypes.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
-          {form.ownerType !== 'Academic Archive' ? (
+          {needsOwner ? (
             <label>
               <span className="block text-xs font-semibold text-slate-500 mb-1.5">Owner</span>
-              <select value={form.ownerRecordId} onChange={(event) => setForm((prev) => ({ ...prev, ownerRecordId: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
-                {ownerOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              <select value={form.ownerRecordId} disabled={ownerUnavailable} onChange={(event) => setForm((prev) => ({ ...prev, ownerRecordId: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm disabled:opacity-60">
+                {ownerUnavailable ? (
+                  <option value="">No owners available</option>
+                ) : ownerOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>
           ) : (
@@ -85,7 +89,7 @@ export default function DocumentUploadModal({ students, staff, onClose, onSave }
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="h-10 px-5 rounded-lg bg-slate-100 text-slate-700 font-semibold text-sm">Cancel</button>
-          <button type="submit" className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm">Save Document</button>
+          <button type="submit" disabled={ownerUnavailable} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm disabled:bg-slate-300">Save Document</button>
         </div>
       </form>
     </div>

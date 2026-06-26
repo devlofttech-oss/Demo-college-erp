@@ -1,3 +1,4 @@
+import { Download, ExternalLink } from 'lucide-react';
 import StatusBadge from '../../students/components/StatusBadge';
 import { formatFileSize } from '../documentUtils';
 
@@ -29,9 +30,14 @@ export default function DocumentPreviewPanel({ canArchive = false, canVerify = f
               Tags: {document.tags || '-'}
             </div>
             {document.fileUrl ? (
-              <a href={document.fileUrl} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-lg bg-[#33373e] text-white text-sm font-semibold inline-flex items-center justify-center">
-                Open Document
-              </a>
+              <div className="grid sm:grid-cols-2 gap-2">
+                <a href={document.fileUrl} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-lg bg-[#33373e] text-white text-sm font-semibold inline-flex items-center justify-center gap-2">
+                  <ExternalLink size={16} /> Open
+                </a>
+                <a href={document.fileUrl} download={document.fileName || true} className="h-10 px-4 rounded-lg bg-[#33373e] text-white text-sm font-semibold inline-flex items-center justify-center gap-2">
+                  <Download size={16} /> Download
+                </a>
+              </div>
             ) : (
               <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">
                 File preview link is not available for this document yet.

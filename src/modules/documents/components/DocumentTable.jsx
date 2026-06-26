@@ -13,6 +13,11 @@ export default function DocumentTable({
   selectedId,
   showActions = true,
 }) {
+  const stopRowAction = (event, action) => {
+    event.stopPropagation();
+    action?.();
+  };
+
   return (
     <div className="overflow-hidden border border-slate-100 rounded-lg bg-white">
       <div className="overflow-x-auto">
@@ -56,15 +61,15 @@ export default function DocumentTable({
                 {showActions && (
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => onPreview(item)} className="h-8 w-8 rounded-md bg-white border border-slate-200 inline-flex items-center justify-center"><Eye size={14} /></button>
+                    <button onClick={(event) => stopRowAction(event, () => onPreview(item))} className="h-8 w-8 rounded-md bg-white border border-slate-200 inline-flex items-center justify-center"><Eye size={14} /></button>
                     {item.fileUrl && (
-                      <a href={item.fileUrl} target="_blank" rel="noreferrer" className="h-8 w-8 rounded-md bg-white border border-slate-200 inline-flex items-center justify-center">
+                      <a href={item.fileUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="h-8 w-8 rounded-md bg-white border border-slate-200 inline-flex items-center justify-center">
                         <Download size={14} />
                       </a>
                     )}
-                    <button onClick={() => onVerify(item, 'Verified')} disabled={!canVerify} className="h-8 w-8 rounded-md bg-white border border-emerald-200 text-emerald-700 inline-flex items-center justify-center disabled:text-slate-300 disabled:border-slate-200"><CheckCircle size={14} /></button>
-                    <button onClick={() => onVerify(item, 'Rejected')} disabled={!canVerify} className="h-8 w-8 rounded-md bg-white border border-rose-200 text-rose-700 inline-flex items-center justify-center disabled:text-slate-300 disabled:border-slate-200"><XCircle size={14} /></button>
-                    <button onClick={() => onArchive(item)} disabled={!canArchive || item.verificationStatus === 'Archived'} className="h-8 w-8 rounded-md bg-white border border-slate-200 inline-flex items-center justify-center disabled:text-slate-300"><Archive size={14} /></button>
+                    <button onClick={(event) => stopRowAction(event, () => onVerify(item, 'Verified'))} disabled={!canVerify} className="h-8 w-8 rounded-md bg-white border border-emerald-200 text-emerald-700 inline-flex items-center justify-center disabled:text-slate-300 disabled:border-slate-200"><CheckCircle size={14} /></button>
+                    <button onClick={(event) => stopRowAction(event, () => onVerify(item, 'Rejected'))} disabled={!canVerify} className="h-8 w-8 rounded-md bg-white border border-rose-200 text-rose-700 inline-flex items-center justify-center disabled:text-slate-300 disabled:border-slate-200"><XCircle size={14} /></button>
+                    <button onClick={(event) => stopRowAction(event, () => onArchive(item))} disabled={!canArchive || item.verificationStatus === 'Archived'} className="h-8 w-8 rounded-md bg-white border border-slate-200 inline-flex items-center justify-center disabled:text-slate-300"><Archive size={14} /></button>
                   </div>
                 </td>
                 )}

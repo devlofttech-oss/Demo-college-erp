@@ -107,6 +107,12 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
     const ownerList = form.ownerType === 'Student' ? courseStudents : staff;
     const owner = ownerList.find((item) => item.id === form.ownerRecordId);
     const ownerId = form.ownerType === 'Student' ? owner?.studentId : owner?.employeeId;
+    const courseCode = form.ownerType === 'Student'
+      ? owner?.courseCode || selectedCourseCode
+      : selectedCourseCode === 'all' ? '' : selectedCourseCode;
+    const courseName = form.ownerType === 'Student'
+      ? owner?.courseName || owner?.program || selectedCourse?.courseName || ''
+      : selectedCourse?.courseName || '';
     return {
       ownerType: form.ownerType,
       ownerRecordId: form.ownerRecordId,
@@ -115,6 +121,8 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
       archiveTitle: form.archiveTitle?.trim() || '',
       documentType: form.documentType.trim(),
       category: form.category,
+      courseCode,
+      courseName,
       tags: form.tags.trim(),
       verificationStatus: 'Pending Review',
       uploadedAtText: formatDisplayDate(),
@@ -134,32 +142,38 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
       return;
     }
     setUploading(true);
+    let fileData = {};
+    let uploadError = null;
     try {
       const ownerKey = form.ownerType === 'Academic Archive'
         ? form.archiveTitle
         : form.ownerRecordId;
-      const fileData = file
-        ? await uploadManagedDocumentFile({ ownerType: form.ownerType, ownerId: ownerKey, file })
-        : {};
-      const payload = { ...buildDocumentPayload(form, fileData), academicYear };
-      const id = await createManagedDocument(payload);
-      const created = { id: id || `local-document-${Date.now()}`, ...payload };
-      setDocuments((prev) => [created, ...prev]);
-      setSelectedId(created.id);
-      toast.success(id ? 'Document saved' : 'Document saved locally');
-    } catch {
-      const payload = { ...buildDocumentPayload(form, file ? {
+      if (file) {
+        fileData = await uploadManagedDocumentFile({ ownerType: form.ownerType, ownerId: ownerKey, file });
+      }
+    } catch (error) {
+      uploadError = error;
+      fileData = file ? {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type || 'application/octet-stream',
         fileUrl: '',
         storagePath: '',
-      } : {}), academicYear };
+      } : {};
+    }
+
+    const payload = { ...buildDocumentPayload(form, fileData), academicYear };
+    try {
       const id = await createManagedDocument(payload);
       const created = { id: id || `local-document-${Date.now()}`, ...payload };
       setDocuments((prev) => [created, ...prev]);
       setSelectedId(created.id);
-      toast.success('Document metadata saved locally. Check Firebase Storage setup for file upload.');
+      toast.success(uploadError ? 'Document metadata saved. File upload is unavailable.' : id ? 'Document saved' : 'Document saved locally');
+    } catch {
+      const created = { id: `local-document-${Date.now()}`, ...payload };
+      setDocuments((prev) => [created, ...prev]);
+      setSelectedId(created.id);
+      toast.success('Document saved locally. Check Firebase setup to persist it.');
     } finally {
       setUploading(false);
       setShowUploadModal(false);
