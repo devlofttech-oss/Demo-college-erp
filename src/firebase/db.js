@@ -755,6 +755,45 @@ export async function getSettingsData() {
   };
 }
 
+
+export async function getInstituteShellData() {
+  if (!db) return null;
+
+  try {
+    const settingsSnapshot = await getDoc(doc(db, 'systemSettings', 'institute'));
+    if (settingsSnapshot.exists()) {
+      return { id: settingsSnapshot.id, ...settingsSnapshot.data() };
+    }
+  } catch {
+    // Parent accounts cannot read systemSettings; fall back to public college data.
+  }
+
+  try {
+    const mainCollegeSnapshot = await getDoc(doc(db, 'colleges', 'main-campus'));
+    if (mainCollegeSnapshot.exists()) {
+      const college = { id: mainCollegeSnapshot.id, ...mainCollegeSnapshot.data() };
+      return {
+        ...college,
+        instituteId: college.instituteId || college.code,
+        address: college.address || college.location,
+        city: college.city || college.location,
+      };
+    }
+  } catch {
+    // Continue to collection fallback below.
+  }
+
+  const colleges = await listCollection('colleges').catch(() => []);
+  const college = colleges.find((item) => item.status !== 'Archived') || colleges[0] || null;
+  if (!college) return null;
+  return {
+    ...college,
+    instituteId: college.instituteId || college.code,
+    address: college.address || college.location,
+    city: college.city || college.location,
+  };
+}
+
 export async function saveSystemSetting(id, data) {
   if (!db || !id) return null;
   await setDoc(doc(db, 'systemSettings', id), {

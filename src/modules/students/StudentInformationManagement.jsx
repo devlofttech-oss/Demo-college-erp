@@ -11,8 +11,8 @@ import {
   createStudent,
   createStudentAdmission,
   createStudentDocument,
+  getInstituteShellData,
   getStudentInformationData,
-  getSettingsData,
   archiveStudent,
   restoreStudent,
   updateStudent,
@@ -43,7 +43,7 @@ import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import AcademicsManagement from '../academics/AcademicsManagement';
 import CurriculumManagement from '../curriculum/CurriculumManagement';
 import SettingsManagement from '../settings/SettingsManagement';
-import { demoInstituteSettings } from '../settings/demoSettings';
+import { demoInstituteSettings, normalizeInstituteSettings } from '../settings/demoSettings';
 import { filterStudentScopedRecords } from '../shared/courseFilters';
 
 function csvValue(value) {
@@ -294,8 +294,8 @@ export default function StudentInformationManagement({ user, onLogout }) {
     const loadShellSettings = async () => {
       if (!isFirebaseConfigured) return;
       try {
-        const data = await getSettingsData();
-        if (data.institute) setInstitute(data.institute);
+        const data = await getInstituteShellData();
+        if (data) setInstitute(normalizeInstituteSettings(data));
       } catch (error) {
         console.warn('Using demo institute settings because Firestore is not reachable.', error);
       }

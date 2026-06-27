@@ -4,17 +4,18 @@ import { Building2, GraduationCap } from 'lucide-react';
 import AuthPage from './pages/AuthPage';
 import StudentInformationManagement from './modules/students/StudentInformationManagement';
 import { logoutUser, subscribeToAuthState } from './firebase/auth';
-import { getSettingsData, getUserProfile } from './firebase/db';
+import { getInstituteShellData, getUserProfile } from './firebase/db';
 import ParticleBackground from './components/ParticleBackground';
-import { demoInstituteSettings } from './modules/settings/demoSettings';
+import { demoInstituteSettings, normalizeInstituteSettings } from './modules/settings/demoSettings';
 
 
 function buildCollegeFromInstitute(institute = demoInstituteSettings) {
+  const normalizedInstitute = normalizeInstituteSettings(institute);
   return {
     id: 'main-campus',
-    name: institute.name || '-',
-    code: institute.instituteId || institute.code || '-',
-    location: institute.city || institute.address || '-',
+    name: normalizedInstitute.name || '-',
+    code: normalizedInstitute.instituteId || normalizedInstitute.code || '-',
+    location: normalizedInstitute.city || normalizedInstitute.address || normalizedInstitute.location || '-',
   };
 }
 
@@ -120,8 +121,8 @@ export default function App() {
   useEffect(() => {
     const loadInstitute = async () => {
       try {
-        const data = await getSettingsData();
-        if (data.institute) setInstitute(data.institute);
+        const data = await getInstituteShellData();
+        if (data) setInstitute(normalizeInstituteSettings(data));
       } catch (error) {
         console.warn('Using demo institute for college selection.', error);
       }

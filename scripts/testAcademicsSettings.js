@@ -14,6 +14,7 @@ import {
   validateAcademicYearSettings,
   validateInstituteSettings,
 } from '../src/modules/settings/settingsUtils.js';
+import { normalizeInstituteSettings } from '../src/modules/settings/demoSettings.js';
 
 assert.equal(buildClassKey({ className: 'Class XII', section: 'A' }), 'Class XII - A');
 assert.deepEqual(summarizeAcademics([{}], [{}, {}], [{}], [{ status: 'Published' }, { status: 'Draft' }]), {
@@ -42,6 +43,8 @@ assert.deepEqual(
     enabledDefaults: 1,
   }
 );
+assert.equal(normalizeInstituteSettings({ name: 'DB College', code: 'DBC' }).name, 'DB College');
+assert.equal(normalizeInstituteSettings({ name: 'DB College', code: 'DBC' }).instituteId, 'DBC');
 assert.equal(validateInstituteSettings({}), 'Institute name is required.');
 assert.equal(validateInstituteSettings({ name: 'College', email: 'bad', phone: '123' }), 'Valid institute email is required.');
 assert.equal(validateInstituteSettings({ name: 'College', email: 'admin@college.edu', phone: '123' }), '');

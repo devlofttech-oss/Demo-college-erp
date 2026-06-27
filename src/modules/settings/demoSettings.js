@@ -1,3 +1,13 @@
+export function normalizeInstituteSettings(institute = {}) {
+  return {
+    ...demoInstituteSettings,
+    ...institute,
+    name: institute.name || demoInstituteSettings.name,
+    instituteId: institute.instituteId || institute.code || demoInstituteSettings.instituteId,
+    code: institute.code || institute.instituteId || demoInstituteSettings.code,
+  };
+}
+
 export const demoInstituteSettings = {
   id: 'institute',
   name: '-',
