@@ -1673,3 +1673,166 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   background:rgba(31,36,51,.42)!important;
   backdrop-filter:blur(8px);
 }
+
+/* Solid light-mode finish: no lavender gradients, same sidebar footprint as dark mode. */
+.erp-shell.light-mode {
+  --erp-bg:#f7f6ff;
+  --erp-surface:#ffffff;
+  --erp-surface-2:#f4f1ff;
+  --erp-surface-3:#ebe6ff;
+  --erp-border:rgba(124,92,255,.18);
+  --erp-text:#242336;
+  --erp-muted:#7a748e;
+  --erp-accent:#7c5cff;
+  --erp-accent-hover:#6847ea;
+  background:#f7f6ff!important;
+  background-image:none!important;
+}
+
+.erp-shell.light-mode > .flex > main,
+.erp-shell.light-mode .erp-header,
+.erp-shell.light-mode .erp-sidebar,
+.erp-shell.light-mode .erp-workspace,
+.erp-shell.light-mode [class~="bg-white"],
+.erp-shell.light-mode [class*="bg-[#f5f5f6]"],
+.erp-shell.light-mode [class*="bg-[#f0f0f2]"],
+.erp-shell.light-mode .erp-demo-table,
+.erp-shell.light-mode .erp-demo-table > button,
+.erp-shell.light-mode .erp-demo-table > div,
+.erp-shell.light-mode table thead,
+.erp-shell.light-mode table thead tr,
+.erp-shell.light-mode table thead th,
+.erp-shell.light-mode table [class*="bg-[#e7e7e9]"],
+.erp-shell.light-mode .erp-modal-form,
+.erp-shell.light-mode div[class*="fixed"][class*="inset-0"][class*="z-50"] > form {
+  background-image:none!important;
+}
+
+.erp-shell.light-mode > .flex > main {
+  background:#f7f6ff!important;
+}
+
+.erp-shell.light-mode .erp-sidebar {
+  background:#ffffff!important;
+  border-right:1px solid rgba(124,92,255,.16)!important;
+  box-shadow:18px 0 46px rgba(65,47,118,.08)!important;
+  padding-left:14px!important;
+  padding-right:14px!important;
+}
+
+.erp-shell.light-mode .erp-sidebar.is-collapsed {
+  padding-left:10px!important;
+  padding-right:10px!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-brand-card,
+.erp-shell.light-mode .erp-sidebar-menu-card,
+.erp-shell.light-mode .erp-sidebar-theme-switch {
+  background:#f8f7ff!important;
+  border-color:rgba(124,92,255,.14)!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-menu-card {
+  flex:1 1 auto!important;
+}
+
+.erp-shell.light-mode .erp-workspace {
+  background:#ffffff!important;
+  border-color:rgba(124,92,255,.16)!important;
+  box-shadow:0 20px 54px rgba(65,47,118,.08)!important;
+}
+
+.erp-shell.light-mode .erp-header {
+  background:#ffffff!important;
+  border-color:rgba(124,92,255,.14)!important;
+  box-shadow:0 10px 28px rgba(65,47,118,.06)!important;
+}
+
+.erp-shell.light-mode [class~="bg-white"] {
+  background:#ffffff!important;
+}
+
+.erp-shell.light-mode [class*="bg-[#f5f5f6]"],
+.erp-shell.light-mode [class*="bg-[#f0f0f2]"],
+.erp-shell.light-mode .erp-demo-table,
+.erp-shell.light-mode .erp-demo-table > button,
+.erp-shell.light-mode .erp-demo-table > div {
+  background:#f8f7ff!important;
+}
+
+.erp-shell.light-mode h1 {
+  background:none!important;
+  -webkit-text-fill-color:var(--erp-accent)!important;
+  color:var(--erp-accent)!important;
+  animation:none!important;
+}
+
+.erp-shell.light-mode table thead,
+.erp-shell.light-mode table thead tr,
+.erp-shell.light-mode table thead th,
+.erp-shell.light-mode table [class*="bg-[#e7e7e9]"] {
+  background:#f1eeff!important;
+}
+
+.erp-shell.light-mode button[class*="bg-[#333"],
+.erp-shell.light-mode button[class*="bg-[#343"],
+.erp-shell.light-mode button[class*="bg-[#fb"],
+.erp-shell.light-mode button[class*="bg-orange"],
+.erp-shell.light-mode button[class*="border-[#333"],
+.erp-shell.light-mode button[class*="border-[#343"],
+.erp-shell.light-mode button[class*="border-[#fb"],
+.erp-shell.light-mode button[class*="border-orange"],
+.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button),
+.erp-shell.light-mode .erp-header button:first-child {
+  background:var(--erp-accent)!important;
+  border-color:var(--erp-accent)!important;
+  color:#ffffff!important;
+  box-shadow:0 10px 24px rgba(124,92,255,.18)!important;
+}
+
+.erp-shell.light-mode button[class*="bg-[#333"]:hover:not(:disabled),
+.erp-shell.light-mode button[class*="bg-[#343"]:hover:not(:disabled),
+.erp-shell.light-mode button[class*="bg-[#fb"]:hover:not(:disabled),
+.erp-shell.light-mode button[class*="bg-orange"]:hover:not(:disabled),
+.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):hover:not(:disabled),
+.erp-shell.light-mode .erp-header button:first-child:hover:not(:disabled) {
+  background:var(--erp-accent-hover)!important;
+  border-color:var(--erp-accent-hover)!important;
+}
+
+.erp-shell.light-mode .erp-sidebar .erp-sidebar-menu-card > nav.erp-sidebar-nav > button.erp-sidebar-item {
+  color:#6d6880!important;
+}
+
+.erp-shell.light-mode .erp-sidebar .erp-sidebar-menu-card > nav.erp-sidebar-nav > button.erp-sidebar-item:hover {
+  background:#f1eeff!important;
+  color:#292342!important;
+}
+
+.erp-shell.light-mode .erp-sidebar .erp-sidebar-menu-card > nav.erp-sidebar-nav > button.erp-sidebar-item.is-active {
+  background:#ede8ff!important;
+  border-color:rgba(124,92,255,.24)!important;
+  color:#4b35b8!important;
+  box-shadow:none!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-logo,
+.erp-shell.light-mode .erp-sidebar-expand-logo,
+.erp-shell.light-mode .erp-sidebar-collapse-button {
+  background:#f1eeff!important;
+  border-color:rgba(124,92,255,.18)!important;
+  color:var(--erp-accent)!important;
+  box-shadow:none!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-theme-switch button {
+  background:#ffffff!important;
+  color:#6d6880!important;
+}
+
+.erp-shell.light-mode .erp-sidebar-theme-switch button.is-active {
+  background:#ede8ff!important;
+  color:var(--erp-accent)!important;
+}
