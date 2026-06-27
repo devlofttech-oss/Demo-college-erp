@@ -85,7 +85,9 @@ export function filterVisibleNoticesForRole(items = [], roleId = '', canManage =
   const audience = getNoticeAudienceForRole(roleId);
   return items.filter((item) => {
     const visibleStatus = getNoticeDisplayStatus(item, now) === 'Published';
-    const visibleAudience = item.audience === 'All' || (audience && item.audience === audience);
+    const visibleAudience = roleId === 'parent'
+      ? item.audience === 'Parents'
+      : item.audience === 'All' || (audience && item.audience === audience);
     return visibleStatus && visibleAudience;
   });
 }

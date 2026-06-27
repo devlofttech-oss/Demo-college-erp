@@ -161,7 +161,6 @@ export const defaultRoles = [
     permissions: [
       'academicCurriculum.view',
       'timetable.view',
-      'exams.view',
       'notices.view',
       'documents.view',
       'parentPortal.view',

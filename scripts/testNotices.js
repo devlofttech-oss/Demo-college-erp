@@ -103,6 +103,13 @@ assert.deepEqual(
   filterVisibleNoticesForRole(notices, 'student', false, now).map((item) => item.id),
   ['n1'],
 );
+assert.deepEqual(
+  filterVisibleNoticesForRole([
+    { ...notices[0], id: 'all-notice', audience: 'All' },
+    { ...notices[0], id: 'parent-notice', audience: 'Parents' },
+  ], 'parent', false, now).map((item) => item.id),
+  ['parent-notice'],
+);
 assert.equal(filterVisibleNoticesForRole(notices, 'admin', true, now).length, 4);
 
 assert.equal(validateNoticeForm({}), 'Title is required.');

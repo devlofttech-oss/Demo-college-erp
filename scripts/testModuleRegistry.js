@@ -57,7 +57,7 @@ assert.deepEqual(superAdminVisible, [
 ]);
 
 const parentVisible = enabled.filter((module) => canAccess(defaultRoles, 'parent', module.permission)).map((module) => module.id);
-assert.deepEqual(parentVisible, ['calendar', 'timetable', 'examination-results', 'notice-board', 'document-management', 'parent-portal']);
+assert.deepEqual(parentVisible, ['calendar', 'timetable', 'notice-board', 'document-management', 'parent-portal']);
 
 const facultyVisible = enabled.filter((module) => canAccess(defaultRoles, 'faculty', module.permission)).map((module) => module.id);
 assert.equal(facultyVisible.includes('calendar'), true);

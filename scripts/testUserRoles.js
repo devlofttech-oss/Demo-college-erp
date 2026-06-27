@@ -67,7 +67,7 @@ assert.equal(canAccess(defaultRoles, 'faculty', 'settings.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'academicCurriculum.view'), true);
 assert.equal(canAccess(defaultRoles, 'parent', 'academics.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'timetable.view'), true);
-assert.equal(canAccess(defaultRoles, 'parent', 'exams.view'), true);
+assert.equal(canAccess(defaultRoles, 'parent', 'exams.view'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'documents.view'), true);
 assert.equal(canAccess(defaultRoles, 'parent', 'documents.upload'), false);
 assert.equal(canAccess(defaultRoles, 'parent', 'parentPortal.view'), true);

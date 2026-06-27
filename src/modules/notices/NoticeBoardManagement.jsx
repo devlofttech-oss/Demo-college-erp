@@ -51,6 +51,7 @@ export default function NoticeBoardManagement({ currentUser, academicYear = '202
   const canEdit = canAccess(defaultRoles, currentRoleId, 'notices.edit');
   const canArchive = canAccess(defaultRoles, currentRoleId, 'notices.archive');
   const canManageNotices = canCreate || canEdit || canArchive;
+  const isParentViewer = currentRoleId === 'parent' && !canManageNotices;
   const courseNotices = useMemo(
     () => notices.filter((item) => noticeMatchesCourseScope(item, selectedCourseCode, selectedCourse)),
     [notices, selectedCourse, selectedCourseCode],
@@ -189,10 +190,16 @@ export default function NoticeBoardManagement({ currentUser, academicYear = '202
               <option value="">All Types</option>
               {noticeTypes.map((item) => <option key={item}>{item}</option>)}
             </select>
-            <select value={filters.audience} onChange={(event) => updateFilter('audience', event.target.value)} className="h-10 rounded-lg bg-[#f0f0f2] border-0 px-3 text-sm">
-              <option value="">All Audiences</option>
-              {noticeAudiences.map((item) => <option key={item}>{item}</option>)}
-            </select>
+            {isParentViewer ? (
+              <select value="Parents" disabled className="h-10 rounded-lg bg-[#f0f0f2] border-0 px-3 text-sm disabled:opacity-100">
+                <option value="Parents">Parents</option>
+              </select>
+            ) : (
+              <select value={filters.audience} onChange={(event) => updateFilter('audience', event.target.value)} className="h-10 rounded-lg bg-[#f0f0f2] border-0 px-3 text-sm">
+                <option value="">All Audiences</option>
+                {noticeAudiences.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            )}
             {canManageNotices && (
               <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="h-10 rounded-lg bg-[#f0f0f2] border-0 px-3 text-sm">
                 <option value="">All Statuses</option>
