@@ -73,6 +73,8 @@ const adminVisible = enabled.filter((module) => canAccess(defaultRoles, 'admin',
 assert.deepEqual(adminVisible, [
   'dashboard',
   'students',
+  'calendar',
+  'academics',
   'faculty-staff',
   'attendance',
   'timetable',
