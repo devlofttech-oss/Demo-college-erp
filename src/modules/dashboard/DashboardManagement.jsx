@@ -80,7 +80,7 @@ function DashboardCard({ color = '#38bdf8', icon, label, value, helper, onClick 
   return (
     <button
       onClick={onClick}
-      className="erp-dashboard-card min-h-28 rounded-lg border border-slate-100 bg-white p-4 text-left flex items-center gap-4 shadow-sm"
+      className="erp-dashboard-card min-h-28 min-w-0 rounded-lg border border-slate-100 bg-white p-4 text-left flex items-center gap-4 shadow-sm"
       style={{ '--card-color': color }}
     >
       <span className="h-13 w-13 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}22`, color }}>
@@ -238,7 +238,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
   ].filter(Boolean);
 
   return (
-    <div className="erp-dashboard">
+    <div className="erp-dashboard min-w-0">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-6 border-b border-slate-100">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
@@ -256,7 +256,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
 
       <div className="grid xl:grid-cols-[1.5fr_.9fr] gap-5">
         {canViewFinancialReports && (
-        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+        <section className="min-w-0 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-5">
             <div>
               <h2 className="font-bold text-slate-900">Payment Trend</h2>
@@ -267,7 +267,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
           <div className="relative">
             {hasCollectionTrend ? (
             <>
-            <svg viewBox="0 0 360 160" className="w-full h-64">
+            <svg viewBox="0 0 360 160" className="w-full h-64 max-w-full">
               <defs>
                 <linearGradient id="paymentTrendFill" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stopColor="#f97316" stopOpacity="0.28" />
@@ -299,7 +299,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
         </section>
         )}
 
-        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+        <section className="min-w-0 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-5">
             <h2 className="font-bold text-slate-900">Pending Work</h2>
             <AlertCircle size={18} className="text-[#fb8d49]" />
@@ -322,7 +322,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
 
       <div className="grid xl:grid-cols-[1fr_1fr] gap-5 mt-5">
         {canViewStudents && (
-        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+        <section className="min-w-0 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-5">
             <div>
               <h2 className="font-bold text-slate-900">Admissions Pipeline</h2>
@@ -331,7 +331,7 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
             <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-emerald-500">{loading ? '-' : `${admittedRate}%`}</span>
           </div>
           {hasAdmissionPipeline ? (
-          <div className="grid md:grid-cols-[1fr_.85fr] gap-5 items-center">
+          <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,.85fr)] gap-5 items-center">
             <div className="space-y-1">
               {courseAdmissionStages.map((stage) => (
                 <div
