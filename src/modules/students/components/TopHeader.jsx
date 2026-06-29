@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { LogOut, UserRound } from 'lucide-react';
-import SearchSelect from '../../../components/SearchSelect';
 import { defaultRoles, getRoleById } from '../../userRoles/rolePermissions';
 
 export default function TopHeader({
@@ -38,20 +37,19 @@ export default function TopHeader({
         <div className="hidden md:flex items-center gap-3">
           <label className="text-xs font-semibold text-slate-500">
             <span className="sr-only">Course</span>
-            <SearchSelect
+            <select
               value={courseCode}
-              onChange={onCourseChange}
-              options={[
-                { value: 'all', label: 'All Courses' },
-                ...courses.map((course) => ({
-                  value: course.courseCode,
-                  label: `${course.courseName} - ${course.admissionType || course.courseYear}`,
-                })),
-              ]}
-              placeholder="Search courses..."
+              onChange={(event) => onCourseChange?.(event.target.value)}
               className="w-72 h-11 bg-white border border-slate-200 rounded-lg shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-4 text-sm text-slate-600 outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
               title="Select course"
-            />
+            >
+              <option value="all">All Courses</option>
+              {courses.map((course) => (
+                <option key={course.courseCode} value={course.courseCode}>
+                  {course.courseName} - {course.admissionType || course.courseYear}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="text-xs font-semibold text-slate-500">
             <span className="sr-only">Academic Year</span>
