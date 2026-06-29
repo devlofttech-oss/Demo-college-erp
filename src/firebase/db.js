@@ -243,14 +243,15 @@ export async function updateRole(id, data) {
 
 export async function getFacultyStaffData(academicYear = '') {
   const yearConstraints = academicYearWhere(academicYear);
-  const [staff, departments, leaveRecords, attendanceRecords] = await Promise.all([
+  const [staff, departments, leaveRecords, attendanceRecords, timetableEntries] = await Promise.all([
     listCollection('staffMembers'),
     listCollection('departments'),
     listCollection('staffLeaveRecords', yearConstraints),
     listCollection('staffAttendanceRecords', yearConstraints),
+    listCollection('timetableEntries', yearConstraints),
   ]);
 
-  return { staff, departments, leaveRecords: filterByAcademicYear(leaveRecords, academicYear), attendanceRecords: filterByAcademicYear(attendanceRecords, academicYear) };
+  return { staff, departments, leaveRecords: filterByAcademicYear(leaveRecords, academicYear), attendanceRecords: filterByAcademicYear(attendanceRecords, academicYear), timetableEntries: filterByAcademicYear(timetableEntries, academicYear) };
 }
 
 export async function getDashboardData(academicYear = '') {
@@ -341,15 +342,16 @@ export async function createStaffAttendanceRecord(data) {
 
 export async function getAttendanceManagementData(academicYear = '') {
   const yearConstraints = academicYearWhere(academicYear);
-  const [students, staff, studentAttendance, staffAttendance, notifications] = await Promise.all([
+  const [students, staff, studentAttendance, staffAttendance, notifications, academicSubjects] = await Promise.all([
     listCollection('students', yearConstraints),
     listCollection('staffMembers'),
     listCollection('studentAttendanceRecords', yearConstraints),
     listCollection('staffAttendanceRecords', yearConstraints),
     listCollection('attendanceNotifications', yearConstraints),
+    listCollection('academicSubjects', yearConstraints),
   ]);
 
-  return { students: filterByAcademicYear(students, academicYear), staff, studentAttendance: filterByAcademicYear(studentAttendance, academicYear), staffAttendance: filterByAcademicYear(staffAttendance, academicYear), notifications: filterByAcademicYear(notifications, academicYear) };
+  return { students: filterByAcademicYear(students, academicYear), staff, studentAttendance: filterByAcademicYear(studentAttendance, academicYear), staffAttendance: filterByAcademicYear(staffAttendance, academicYear), notifications: filterByAcademicYear(notifications, academicYear), academicSubjects: filterByAcademicYear(academicSubjects, academicYear) };
 }
 
 export async function createStudentAttendanceRecord(data) {
@@ -545,7 +547,6 @@ export async function createFeeAdjustment(data) {
   return createCollectionDocument('feeAdjustments', data);
 }
 
-
 export async function getHostelManagementData(academicYear = '') {
   const yearConstraints = academicYearWhere(academicYear);
   const [hostelRooms, hostelAllocations, hostelRecords] = await Promise.all([
@@ -554,7 +555,11 @@ export async function getHostelManagementData(academicYear = '') {
     listCollection('hostelRecords', yearConstraints),
   ]);
 
-  return { hostelRooms, hostelAllocations, hostelRecords };
+  return {
+    hostelRooms: filterByAcademicYear(hostelRooms, academicYear),
+    hostelAllocations: filterByAcademicYear(hostelAllocations, academicYear),
+    hostelRecords: filterByAcademicYear(hostelRecords, academicYear),
+  };
 }
 
 export async function createHostelRoom(data) {
@@ -762,6 +767,16 @@ export async function updateAcademicCalendarEvent(id, data) {
   });
 }
 
+export async function restoreTimetableEntry(id, data = {}) {
+  if (!db || !id || id.startsWith('demo-') || id.startsWith('local-')) return;
+  await updateDoc(doc(db, 'timetableEntries', id), {
+    ...data,
+    status: 'Draft',
+    restoredAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function getSettingsData() {
   const [settings] = await Promise.all([
     listCollection('systemSettings'),
@@ -778,7 +793,6 @@ export async function getSettingsData() {
     moduleDefaults: byId.moduleDefaults || null,
   };
 }
-
 
 export async function getInstituteShellData() {
   if (!db) return null;
@@ -825,5 +839,19 @@ export async function saveSystemSetting(id, data) {
     id,
     updatedAt: serverTimestamp(),
   }, { merge: true });
+  if (id === 'institute') {
+    await setDoc(doc(db, 'colleges', 'main-campus'), {
+      name: data.name || '',
+      code: data.instituteId || data.code || '',
+      instituteId: data.instituteId || data.code || '',
+      location: data.city || data.address || '',
+      address: data.address || '',
+      city: data.city || '',
+      logoUrl: data.logoUrl || '',
+      logoFileName: data.logoFileName || '',
+      status: data.status || 'Active',
+      updatedAt: serverTimestamp(),
+    }, { merge: true }).catch(() => {});
+  }
   return id;
 }

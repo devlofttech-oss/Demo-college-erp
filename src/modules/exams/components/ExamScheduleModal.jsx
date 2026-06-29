@@ -6,7 +6,11 @@ export default function ExamScheduleModal({ classOptions, faculty, initialSchedu
     examName: initialSchedule?.examName || 'Mid Term Examination',
     classKey: initialSchedule?.classKey || classOptions[0] || '',
     subject: initialSchedule?.subject || '',
+    examType: initialSchedule?.examType || 'Written',
     examDate: initialSchedule?.examDate || '',
+    startTime: initialSchedule?.startTime || '',
+    durationMinutes: initialSchedule?.durationMinutes || 180,
+    roomNo: initialSchedule?.roomNo || '',
     maxMarks: initialSchedule?.maxMarks || 100,
     facultyId: initialSchedule?.facultyId || faculty[0]?.id || '',
     status: initialSchedule?.status || 'Scheduled',
@@ -43,8 +47,26 @@ export default function ExamScheduleModal({ classOptions, faculty, initialSchedu
             <input value={form.subject} onChange={(event) => setForm((prev) => ({ ...prev, subject: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
           </label>
           <label>
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Exam Type</span>
+            <select value={form.examType} onChange={(event) => setForm((prev) => ({ ...prev, examType: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
+              {['Written', 'Practical', 'Internal', 'Viva'].map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Exam Date</span>
             <input type="date" value={form.examDate} onChange={(event) => setForm((prev) => ({ ...prev, examDate: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+          </label>
+          <label>
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Start Time</span>
+            <input type="time" value={form.startTime} onChange={(event) => setForm((prev) => ({ ...prev, startTime: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+          </label>
+          <label>
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Duration Minutes</span>
+            <input type="number" value={form.durationMinutes} onChange={(event) => setForm((prev) => ({ ...prev, durationMinutes: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+          </label>
+          <label>
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Room / Hall</span>
+            <input value={form.roomNo} onChange={(event) => setForm((prev) => ({ ...prev, roomNo: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
           </label>
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Max Marks</span>

@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, Lock, Mail, ShieldCheck, Users } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ShieldCheck, Users } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { loginWithEmail, logoutUser, sendResetPasswordEmail } from '../firebase/auth';
 import { isFirebaseConfigured } from '../firebase/config';
 import { getUserProfile } from '../firebase/db';
+import devloftLogo from '../../assets/logo.png';
 
 const roleOptions = [
   { id: 'parent', label: 'Parent', aliases: ['parent'] },
@@ -32,6 +33,7 @@ export default function AuthPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const selectedRole = roleOptions.find((role) => role.id === form.roleId) || roleOptions[0];
 
@@ -80,10 +82,10 @@ export default function AuthPage() {
     <main className="auth-shell min-h-screen bg-[#f1f2f4] flex items-center justify-center p-6">
       <section className="auth-panel w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-[0_18px_60px_rgba(15,23,42,0.12)] overflow-hidden">
         <div className="bg-[#1b1f21] text-white p-7">
-          <div className="h-14 w-14 rounded-full bg-white text-emerald-700 flex items-center justify-center mb-5">
-            <GraduationCap size={30} />
+          <div className="h-16 w-16 rounded-xl bg-white flex items-center justify-center mb-5 overflow-hidden">
+            <img src={devloftLogo} alt="Devloft" className="h-full w-full object-contain p-2" />
           </div>
-          <h1 className="text-2xl font-bold">Devloft College Management</h1>
+          <h1 className="text-3xl font-bold">Devloft College Management</h1>
           <p className="text-sm text-slate-300 mt-1">College Management Suite</p>
         </div>
 
@@ -145,14 +147,22 @@ export default function AuthPage() {
             <div className="relative">
               <Lock size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 minLength={6}
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-                className="w-full h-11 rounded-lg bg-[#f5f5f6] border border-slate-200 pl-10 pr-3 outline-none focus:ring-2 focus:ring-orange-100"
+                className="w-full h-11 rounded-lg bg-[#f5f5f6] border border-slate-200 pl-10 pr-11 outline-none focus:ring-2 focus:ring-orange-100"
                 placeholder="minimum 6 characters"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-md text-slate-500 hover:bg-white flex items-center justify-center"
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
             </div>
           </label>
 

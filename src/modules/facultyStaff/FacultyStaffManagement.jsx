@@ -13,6 +13,7 @@ import {
 } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { demoAttendanceRecords, demoDepartments, demoLeaveRecords, demoStaffMembers } from './demoFacultyStaff';
+import { demoTimetableEntries } from '../timetable/demoTimetable';
 import { buildAttendanceKey, formatDisplayDate, relationMatchesStaff, validateLeaveForm, validateStaffForm } from './facultyStaffUtils';
 import { defaultRoles, canAccess } from '../userRoles/rolePermissions';
 import LeaveModal from './components/LeaveModal';
@@ -33,7 +34,13 @@ function StaffDetailPage({
   onLeaveDecision,
   onOpenDocuments,
   staffMember,
+  timetableEntries,
 }) {
+  const [showAllDetails, setShowAllDetails] = useState(false);
+  const attendanceTotal = attendanceRecords.length;
+  const presentCount = attendanceRecords.filter((item) => item.status === 'Present').length;
+  const attendanceRate = attendanceTotal ? Math.round((presentCount / attendanceTotal) * 100) : 0;
+
   return (
     <div>
       <div className="flex flex-col gap-4 pb-6 border-b border-slate-100 mb-5">
@@ -63,8 +70,44 @@ function StaffDetailPage({
         onLeaveDecision={onLeaveDecision}
         onOpenDocuments={onOpenDocuments}
         showActions={false}
+        showExtendedDetails={showAllDetails}
         staffMember={staffMember}
       />
+      <div className="grid xl:grid-cols-[1fr_1fr] gap-5 mb-5">
+        <section className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-bold text-slate-900">Attendance Graph</h3>
+            <span className="text-xl font-extrabold text-[#33373e]">{attendanceRate}%</span>
+          </div>
+          <div className="h-3 rounded-full bg-[#f5f5f6] overflow-hidden">
+            <div className="h-full bg-emerald-500" style={{ width: `${attendanceRate}%` }} />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg bg-[#f5f5f6] p-3">Present<br /><b>{presentCount}</b></div>
+            <div className="rounded-lg bg-[#f5f5f6] p-3">Absent<br /><b>{attendanceRecords.filter((item) => item.status === 'Absent').length}</b></div>
+            <div className="rounded-lg bg-[#f5f5f6] p-3">Records<br /><b>{attendanceTotal}</b></div>
+          </div>
+        </section>
+        <section className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
+          <h3 className="font-bold text-slate-900 mb-4">Timetable</h3>
+          <div className="space-y-3">
+            {timetableEntries.slice(0, 5).map((entry) => (
+              <div key={entry.id} className="rounded-lg bg-[#f5f5f6] p-3 text-sm">
+                <div className="font-semibold text-slate-900">{entry.subject}</div>
+                <div className="text-xs text-slate-500 mt-1">{entry.day} | {entry.timeSlot} | {entry.classKey}</div>
+              </div>
+            ))}
+            {!timetableEntries.length && <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">No timetable entries assigned.</div>}
+          </div>
+        </section>
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowAllDetails((open) => !open)}
+        className="mb-5 h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm"
+      >
+        {showAllDetails ? 'Hide all details' : 'View all details'}
+      </button>
     </div>
   );
 }
@@ -74,6 +117,7 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
   const [departments, setDepartments] = useState(isFirebaseConfigured ? [] : demoDepartments);
   const [leaveRecords, setLeaveRecords] = useState(isFirebaseConfigured ? [] : demoLeaveRecords);
   const [attendanceRecords, setAttendanceRecords] = useState(isFirebaseConfigured ? [] : demoAttendanceRecords);
+  const [timetableEntries, setTimetableEntries] = useState(isFirebaseConfigured ? [] : demoTimetableEntries);
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -111,6 +155,7 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
         setSelectedId('');
         setLeaveRecords(data.leaveRecords || []);
         setAttendanceRecords(data.attendanceRecords || []);
+        setTimetableEntries(data.timetableEntries || []);
       } catch (error) {
         console.warn('Using demo faculty/staff because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore faculty/staff records. Showing demo/local records.');
@@ -123,6 +168,9 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
   const selectedStaff = selectedId ? courseStaffMembers.find((member) => member.id === selectedId) || null : null;
   const selectedLeaves = leaveRecords.filter((record) => relationMatchesStaff(record, selectedStaff));
   const selectedAttendance = attendanceRecords.filter((record) => relationMatchesStaff(record, selectedStaff));
+  const selectedTimetableEntries = timetableEntries.filter((entry) => (
+    entry.facultyId === selectedStaff?.id || entry.facultyName === selectedStaff?.name
+  ));
 
   const selectStaff = (staffId) => {
     setSelectedId(staffId);
@@ -371,6 +419,7 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '20
             ownerType: 'Staff',
           })}
           staffMember={selectedStaff}
+          timetableEntries={selectedTimetableEntries}
         />
       ) : (
       <>

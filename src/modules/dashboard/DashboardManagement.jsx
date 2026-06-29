@@ -10,7 +10,6 @@ import { isFirebaseConfigured } from '../../firebase/config';
 import { formatCurrency, summarizeFees } from '../fees/feeUtils';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { filterByCourse, filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
-import { buildAdmissionStages } from './dashboardUtils';
 
 const fallbackDashboardData = {
   students: demoStudents,
@@ -141,7 +140,6 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
   const canViewFinancialReports = canAccess(defaultRoles, currentRoleId, 'financialReports.view');
   const {
     students = [],
-    studentAdmissions = [],
     staff = [],
     feeAssignments = [],
     feeCollections = [],
@@ -150,7 +148,6 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
     examSchedules = [],
   } = dashboardData || emptyDashboardData;
   const courseStudents = scopedStudents.length ? scopedStudents : filterStudentsByCourse(students, selectedCourseCode, selectedCourse);
-  const courseAdmissions = filterStudentScopedRecords(studentAdmissions, courseStudents, selectedCourseCode, selectedCourse);
   const courseFeeAssignments = filterStudentScopedRecords(feeAssignments, courseStudents, selectedCourseCode, selectedCourse);
   const courseAssignmentIds = new Set(courseFeeAssignments.map((item) => item.id).filter(Boolean));
   const courseFeeCollections = filterStudentScopedRecords(feeCollections, courseStudents, selectedCourseCode, selectedCourse)
@@ -185,15 +182,20 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
   const highlightPoint = trendPoints[highlightIndex];
   const tooltipX = Math.min(highlightPoint[0] + 12, 232);
   const tooltipY = Math.max(highlightPoint[1] - 34, 8);
-  const courseAdmissionStages = useMemo(
-    () => buildAdmissionStages(courseStudents, courseAdmissions),
-    [courseAdmissions, courseStudents]
-  );
-  const maxAdmissionStageValue = Math.max(...courseAdmissionStages.map((stage) => stage.value), 0);
-  const hasAdmissionPipeline = maxAdmissionStageValue > 0;
-  const admittedRate = courseAdmissionStages[0].value
-    ? Math.round((courseAdmissionStages[2].value / courseAdmissionStages[0].value) * 100)
-    : 0;
+  const courseStrength = useMemo(() => {
+    const grouped = activeStudents.reduce((map, student) => {
+      const key = student.courseName || student.program || student.courseCode || 'Unassigned';
+      map[key] = (map[key] || 0) + 1;
+      return map;
+    }, {});
+    return Object.entries(grouped)
+      .map(([label, value]) => ({ label, value }))
+      .sort((first, second) => second.value - first.value)
+      .slice(0, 5);
+  }, [activeStudents]);
+  const maxCourseStrength = Math.max(...courseStrength.map((item) => item.value), 1);
+  const verifiedDocuments = courseDocuments.filter((item) => item.verificationStatus === 'Verified' || item.verificationStatus === 'Source PDF').length;
+  const documentReadiness = courseDocuments.length ? Math.round((verifiedDocuments / courseDocuments.length) * 100) : 0;
   const paymentSplit = [
     { label: 'Collected', value: courseFeeSummary.totalCollected, color: '#22c55e' },
     { label: 'Pending', value: courseFeeSummary.totalOutstanding, color: '#f59e0b' },
@@ -325,39 +327,42 @@ export default function DashboardManagement({ academicYear = '2026-2027', curren
         <section className="min-w-0 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-5">
             <div>
-              <h2 className="font-bold text-slate-900">Admissions Pipeline</h2>
-              <p className="text-xs text-slate-500 mt-1">Derived from student admission and status records.</p>
+              <h2 className="font-bold text-slate-900">Course Strength</h2>
+              <p className="text-xs text-slate-500 mt-1">Active student distribution and record readiness.</p>
             </div>
-            <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-emerald-500">{loading ? '-' : `${admittedRate}%`}</span>
+            <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-emerald-600">{loading ? '-' : `${documentReadiness}% docs ready`}</span>
           </div>
-          {hasAdmissionPipeline ? (
-          <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,.85fr)] gap-5 items-center">
-            <div className="space-y-1">
-              {courseAdmissionStages.map((stage) => (
-                <div
-                  key={stage.label}
-                  className="mx-auto h-10"
-                  style={{
-                    width: `${Math.max(12, Math.round((stage.value / maxAdmissionStageValue) * 100))}%`,
-                    background: stage.color,
-                    clipPath: 'polygon(0 0, 100% 0, 88% 100%, 12% 100%)',
-                  }}
-                />
-              ))}
-            </div>
+          {courseStrength.length ? (
+          <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,.75fr)] gap-5 items-center">
             <div className="space-y-3">
-              {courseAdmissionStages.map((stage) => (
-                <div key={stage.label} className="flex items-center gap-3 text-sm">
-                  <span className="h-3 w-3 rounded-sm" style={{ background: stage.color }} />
-                  <span className="text-slate-600">{stage.label}</span>
-                  <b className="ml-auto text-slate-900">{loading ? '-' : stage.value}</b>
+              {courseStrength.map((item, index) => (
+                <div key={item.label}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold text-slate-700 truncate">{item.label}</span>
+                    <b>{loading ? '-' : item.value}</b>
+                  </div>
+                  <div className="mt-2 h-3 rounded-full bg-[#f5f5f6] overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.max(8, Math.round((item.value / maxCourseStrength) * 100))}%`,
+                        background: ['#2563eb', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'][index],
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
+            </div>
+            <div className="relative h-40 w-40 mx-auto rounded-full" style={{ background: `conic-gradient(#22c55e 0 ${documentReadiness}%, #f59e0b ${documentReadiness}% 100%)` }}>
+              <div className="absolute inset-7 rounded-full bg-white flex flex-col items-center justify-center">
+                <span className="text-3xl font-extrabold text-slate-900">{loading ? '-' : `${documentReadiness}%`}</span>
+                <span className="text-xs text-slate-500">Docs ready</span>
+              </div>
             </div>
           </div>
           ) : (
             <div className="h-44 rounded-lg bg-[#f5f5f6] flex items-center justify-center text-sm text-slate-500">
-              No admission records yet.
+              No active student distribution available.
             </div>
           )}
         </section>

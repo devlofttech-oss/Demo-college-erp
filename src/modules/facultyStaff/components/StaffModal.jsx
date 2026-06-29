@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Upload, UserRound } from 'lucide-react';
 
 const defaultForm = {
   name: '',
@@ -9,12 +10,27 @@ const defaultForm = {
   phone: '',
   email: '',
   qualification: '',
+  photoUrl: '',
+  photoName: '',
   status: 'Active',
 };
 
 export default function StaffModal({ initialStaff = null, mode = 'create', departments, onClose, onSave }) {
   const isEdit = mode === 'edit';
   const [form, setForm] = useState({ ...defaultForm, department: departments[0]?.name || 'Science', ...initialStaff });
+
+  const uploadPhoto = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((prev) => ({
+        ...prev,
+        photoUrl: reader.result,
+        photoName: file.name,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   const submit = (event) => {
     event.preventDefault();
@@ -32,6 +48,20 @@ export default function StaffModal({ initialStaff = null, mode = 'create', depar
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full hover:bg-slate-100 text-slate-500">x</button>
         </div>
         <div className="p-6 grid sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2 rounded-lg bg-[#f5f5f6] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="h-20 w-20 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center overflow-hidden shrink-0">
+              {form.photoUrl ? (
+                <img src={form.photoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <UserRound size={34} />
+              )}
+            </div>
+            <label className="inline-flex h-10 px-4 rounded-lg bg-white border border-slate-200 text-sm font-semibold items-center justify-center gap-2 cursor-pointer w-fit">
+              <Upload size={16} /> Profile Photo
+              <input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadPhoto(event.target.files?.[0])} />
+            </label>
+            <span className="text-xs text-slate-500">{form.photoName || 'Optional faculty/staff profile picture'}</span>
+          </div>
           {[
             ['name', 'Name'],
             ['employeeId', 'Employee ID'],

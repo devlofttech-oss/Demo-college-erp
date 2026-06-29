@@ -26,7 +26,7 @@ export default function DocumentTable({
           <thead className="bg-[#f5f5f6] text-slate-500">
             <tr>
               <th className="text-left px-4 py-3 font-semibold">Document</th>
-              <th className="text-left px-4 py-3 font-semibold">Owner</th>
+              <th className="text-left px-4 py-3 font-semibold">Name</th>
               <th className="text-left px-4 py-3 font-semibold">Category</th>
               <th className="text-left px-4 py-3 font-semibold">Uploaded</th>
               <th className="text-left px-4 py-3 font-semibold">Status</th>
@@ -51,6 +51,7 @@ export default function DocumentTable({
                 <td className="px-4 py-3">
                   <div className="font-semibold text-slate-900">{item.documentType}</div>
                   <div className="text-xs text-slate-500">{item.fileName || 'Metadata only'} | {formatFileSize(item.fileSize)}</div>
+                  {(item.notes || item.tags || item.note) && <div className="text-xs text-slate-500 mt-1">{item.note || item.notes || item.tags}</div>}
                 </td>
                 <td className="px-4 py-3">
                   <div className="text-slate-700">{item.ownerName || item.archiveTitle}</div>

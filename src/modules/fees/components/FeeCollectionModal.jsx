@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import SearchSelect from '../../../components/SearchSelect';
 import { formatCurrency } from '../feeUtils';
 
 export default function FeeCollectionModal({ assignments, initialAssignmentId = '', onClose, onSave, students = [] }) {
@@ -51,17 +52,28 @@ export default function FeeCollectionModal({ assignments, initialAssignmentId = 
           {manualMode ? (
           <label className="sm:col-span-2">
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Student</span>
-            <select value={form.studentRecordId} onChange={(event) => setForm((prev) => ({ ...prev, studentRecordId: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
-              {students.map((item) => <option key={item.id} value={item.id}>{item.name} - {item.studentId || item.admissionNo}</option>)}
-            </select>
+            <SearchSelect
+              value={form.studentRecordId}
+              onChange={(studentRecordId) => setForm((prev) => ({ ...prev, studentRecordId }))}
+              options={students.map((item) => ({
+                value: item.id,
+                label: `${item.name} - ${item.studentId || item.admissionNo}`,
+              }))}
+              placeholder="Search student..."
+            />
           </label>
           ) : (
           <label className="sm:col-span-2">
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Student Fee</span>
-            <select value={form.assignmentId} onChange={(event) => setForm((prev) => ({ ...prev, assignmentId: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
-              <option value="">Select due assignment</option>
-              {assignments.map((item) => <option key={item.id} value={item.id}>{item.studentName} - {formatCurrency(item.dueAmount)} due</option>)}
-            </select>
+            <SearchSelect
+              value={form.assignmentId}
+              onChange={(assignmentId) => setForm((prev) => ({ ...prev, assignmentId }))}
+              options={assignments.map((item) => ({
+                value: item.id,
+                label: `${item.studentName} - ${formatCurrency(item.dueAmount)} due`,
+              }))}
+              placeholder="Search student fee..."
+            />
           </label>
           )}
           <label>

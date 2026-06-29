@@ -15,7 +15,7 @@ function buildCollegeFromInstitute(institute = demoInstituteSettings) {
     id: 'main-campus',
     name: normalizedInstitute.name || '-',
     code: normalizedInstitute.instituteId || normalizedInstitute.code || '-',
-    location: normalizedInstitute.city || normalizedInstitute.address || normalizedInstitute.location || '-',
+    location: normalizedInstitute.city || normalizedInstitute.address || '-',
   };
 }
 

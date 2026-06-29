@@ -16,8 +16,8 @@ export function getYearKey(dateText = '') {
   return parts.length === 3 ? parts[2] : dateText;
 }
 
-export function buildAttendanceKey(entityId, dateText) {
-  return `${entityId}-${dateText}`;
+export function buildAttendanceKey(entityId, dateText, subjectName = '') {
+  return [entityId, dateText, subjectName].filter(Boolean).join('-');
 }
 
 export function relationMatchesEntity(record, entity) {
@@ -36,6 +36,15 @@ export function summarizeAttendance(records) {
 export function buildReport(records, scope) {
   return records.reduce((acc, record) => {
     const key = scope === 'yearly' ? getYearKey(record.dateText) : scope === 'monthly' ? getMonthKey(record.dateText) : record.dateText;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(record);
+    return acc;
+  }, {});
+}
+
+export function buildSubjectReport(records = []) {
+  return records.reduce((acc, record) => {
+    const key = record.subjectName || record.subject || 'General Attendance';
     if (!acc[key]) acc[key] = [];
     acc[key].push(record);
     return acc;

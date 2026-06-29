@@ -21,6 +21,7 @@ import {
   demoStaffAttendance,
   demoStudentAttendance,
 } from './demoAttendance';
+import { demoAcademicSubjects } from '../academics/demoAcademics';
 import AttendanceReports from './components/AttendanceReports';
 import AttendanceTable from './components/AttendanceTable';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
@@ -42,8 +43,10 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
   const [staff, setStaff] = useState(isFirebaseConfigured ? [] : demoAttendanceStaff);
   const [studentAttendance, setStudentAttendance] = useState(isFirebaseConfigured ? [] : demoStudentAttendance);
   const [staffAttendance, setStaffAttendance] = useState(isFirebaseConfigured ? [] : demoStaffAttendance);
+  const [academicSubjects, setAcademicSubjects] = useState(isFirebaseConfigured ? [] : demoAcademicSubjects);
   const [mode, setMode] = useState('students');
   const [reportScope, setReportScope] = useState('daily');
+  const [selectedSubjectCode, setSelectedSubjectCode] = useState('');
   const [search, setSearch] = useState('');
   const [selectedDateInput, setSelectedDateInput] = useState(getTodayInputValue);
   const [loading, setLoading] = useState(isFirebaseConfigured);
@@ -61,6 +64,7 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
         if (data.staff.length) setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         setStudentAttendance(data.studentAttendance);
         setStaffAttendance(data.staffAttendance);
+        setAcademicSubjects(data.academicSubjects || []);
       } catch (error) {
         console.warn('Using demo attendance because Firestore is not reachable.', error);
         setLoadError('Unable to load Firestore attendance records. Showing demo/local records.');
@@ -105,8 +109,25 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
   const canViewReports = canAccess(defaultRoles, currentRoleId, 'attendance.reports');
 
   const courseStudents = scopedStudents.length ? scopedStudents : filterStudentsByCourse(students, selectedCourseCode, selectedCourse);
+  const subjectOptions = useMemo(() => {
+    const subjects = academicSubjects
+      .filter((subject) => selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName)
+      .map((subject) => ({
+        code: subject.subjectCode || subject.id || subject.subjectName,
+        name: subject.subjectName || subject.name,
+      }))
+      .filter((subject) => subject.name);
+    if (subjects.length) return subjects;
+    return [
+      { code: 'general', name: selectedCourse?.courseName ? `${selectedCourse.courseName} Attendance` : 'General Attendance' },
+    ];
+  }, [academicSubjects, selectedCourse, selectedCourseCode]);
+  const selectedSubject = subjectOptions.find((subject) => subject.code === selectedSubjectCode) || subjectOptions[0];
   const courseStudentAttendance = filterStudentScopedRecords(studentAttendance, courseStudents, selectedCourseCode, selectedCourse);
-  const activeRecords = mode === 'students' ? courseStudentAttendance : staffAttendance;
+  const allModeRecords = mode === 'students' ? courseStudentAttendance : staffAttendance;
+  const activeRecords = mode === 'students'
+    ? allModeRecords.filter((record) => !selectedSubject?.name || (record.subjectName || record.subject || 'General Attendance') === selectedSubject.name)
+    : allModeRecords;
   const selectedDate = formatInputDate(selectedDateInput);
   const selectedDateRecords = activeRecords.filter((record) => record.dateText === selectedDate);
   const activeEntities = useMemo(() => {
@@ -212,8 +233,9 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
   const activeBranch = activeBranches.find((branch) => branch.id === activeAttendanceBranch);
   const markAttendance = async (entity, status) => {
     const entityId = entity.studentId || entity.employeeId;
-    const key = buildAttendanceKey(entityId, selectedDate);
-    const exists = activeRecords.find((record) => buildAttendanceKey(record.entityId, record.dateText) === key);
+    const subjectName = mode === 'students' ? selectedSubject?.name || 'General Attendance' : '';
+    const key = buildAttendanceKey(entityId, selectedDate, subjectName);
+    const exists = allModeRecords.find((record) => buildAttendanceKey(record.entityId, record.dateText, record.subjectName || record.subject || '') === key);
     if (exists) {
       toast.error('Attendance already marked for selected date.');
       return;
@@ -228,6 +250,10 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
       className: entity.className || '',
       section: entity.section || '',
       department: entity.department || '',
+      courseCode: entity.courseCode || selectedCourseCode,
+      courseName: entity.courseName || entity.program || selectedCourse?.courseName || '',
+      subjectCode: mode === 'students' ? selectedSubject?.code || '' : '',
+      subjectName,
       dateText: selectedDate,
       status,
       markedAtText: formatDisplayDate(),
@@ -291,6 +317,18 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
         <div className="flex items-center gap-3">
+          {mode === 'students' && (
+            <select
+              value={selectedSubject?.code || ''}
+              onChange={(event) => setSelectedSubjectCode(event.target.value)}
+              className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
+              title="Subject"
+            >
+              {subjectOptions.map((subject) => (
+                <option key={subject.code} value={subject.code}>{subject.name}</option>
+              ))}
+            </select>
+          )}
           <input
             type="date"
             value={selectedDateInput}
@@ -378,7 +416,7 @@ export default function AttendanceManagement({ currentUser, academicYear = '2026
 
       {activeAttendanceTask === 'reports' ? (
         canViewReports ? (
-          <AttendanceReports records={activeRecords} scope={reportScope} />
+          <AttendanceReports records={mode === 'students' ? courseStudentAttendance : staffAttendance} scope={reportScope} />
         ) : (
           <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm text-sm text-slate-500">You do not have permission to view attendance reports.</div>
         )

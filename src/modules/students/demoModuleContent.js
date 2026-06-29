@@ -144,7 +144,7 @@ export const demoModuleContent = {
     subtitle: 'Institute profile, academic year, modules, and student ID configuration.',
     actions: ['Save Institute', 'Configure IDs', 'Manage Roles'],
     rows: [
-      ['Institute', 'COLLEGE NAME', 'Active'],
+      ['Institute', 'Maurya Institute of Allied Health Sciences', 'Active'],
       ['Academic Year', '2026-2027', 'Active'],
       ['Student ID Format', 'STU-{number}', 'Active'],
     ],

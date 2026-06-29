@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import SearchSelect from '../../../components/SearchSelect';
 
 export default function MarksEntryModal({ schedules, students, onClose, onSave }) {
   const [form, setForm] = useState({
@@ -36,9 +37,15 @@ export default function MarksEntryModal({ schedules, students, onClose, onSave }
           </label>
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Student</span>
-            <select value={form.studentRecordId} onChange={(event) => setForm((prev) => ({ ...prev, studentRecordId: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
-              {students.map((item) => <option key={item.id} value={item.id}>{item.name} / {item.studentId}</option>)}
-            </select>
+            <SearchSelect
+              value={form.studentRecordId}
+              onChange={(studentRecordId) => setForm((prev) => ({ ...prev, studentRecordId }))}
+              options={students.map((item) => ({
+                value: item.id,
+                label: `${item.name} / ${item.studentId}`,
+              }))}
+              placeholder="Search student..."
+            />
           </label>
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Marks Obtained / {selectedSchedule?.maxMarks || 0}</span>

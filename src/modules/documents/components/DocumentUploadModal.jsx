@@ -1,31 +1,33 @@
 import { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 import SearchSelect from '../../../components/SearchSelect';
-import { documentCategories, documentOwnerTypes } from '../documentUtils';
+import { documentCategories, documentOwnerTypes, documentTypes } from '../documentUtils';
 
 export default function DocumentUploadModal({ students, staff, onClose, onSave }) {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [form, setForm] = useState({
-    ownerType: 'Student',
-    ownerRecordId: students[0]?.id || '',
+    ownerType: '',
+    ownerRecordId: '',
+    ownerName: '',
     archiveTitle: '',
     documentType: '',
+    note: '',
     category: 'Identity',
-    tags: '',
+    notes: '',
   });
 
   const ownerOptions = form.ownerType === 'Student' ? students : staff;
-  const needsOwner = form.ownerType !== 'Academic Archive';
+  const needsOwner = ['Student', 'Staff'].includes(form.ownerType);
   const ownerUnavailable = needsOwner && !ownerOptions.length;
 
   const changeOwnerType = (ownerType) => {
-    const nextOptions = ownerType === 'Student' ? students : staff;
     setForm((prev) => ({
       ...prev,
       ownerType,
-      ownerRecordId: ownerType === 'Academic Archive' ? '' : nextOptions[0]?.id || '',
-      archiveTitle: ownerType === 'Academic Archive' ? prev.archiveTitle : '',
+      ownerRecordId: '',
+      ownerName: ownerType === 'Other' ? prev.ownerName : '',
+      archiveTitle: '',
     }));
   };
 
@@ -48,12 +50,13 @@ export default function DocumentUploadModal({ students, staff, onClose, onSave }
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Owner Type</span>
             <select value={form.ownerType} onChange={(event) => changeOwnerType(event.target.value)} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
+              <option value="">Select owner type</option>
               {documentOwnerTypes.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
           {needsOwner ? (
             <label>
-              <span className="block text-xs font-semibold text-slate-500 mb-1.5">Owner</span>
+              <span className="block text-xs font-semibold text-slate-500 mb-1.5">Name</span>
               <SearchSelect
                 value={form.ownerRecordId}
                 disabled={ownerUnavailable}
@@ -67,13 +70,16 @@ export default function DocumentUploadModal({ students, staff, onClose, onSave }
             </label>
           ) : (
             <label>
-              <span className="block text-xs font-semibold text-slate-500 mb-1.5">Archive Title</span>
-              <input value={form.archiveTitle} onChange={(event) => setForm((prev) => ({ ...prev, archiveTitle: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+              <span className="block text-xs font-semibold text-slate-500 mb-1.5">Name</span>
+              <input value={form.ownerName} disabled={!form.ownerType} onChange={(event) => setForm((prev) => ({ ...prev, ownerName: event.target.value }))} placeholder={form.ownerType ? 'Enter name' : 'Select owner type first'} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100" />
             </label>
           )}
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Document Type</span>
-            <input value={form.documentType} onChange={(event) => setForm((prev) => ({ ...prev, documentType: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+            <select value={form.documentType} onChange={(event) => setForm((prev) => ({ ...prev, documentType: event.target.value, note: event.target.value === 'Other' ? prev.note : '' }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
+              <option value="">Select document type</option>
+              {documentTypes.map((item) => <option key={item}>{item}</option>)}
+            </select>
           </label>
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Category</span>
@@ -81,21 +87,27 @@ export default function DocumentUploadModal({ students, staff, onClose, onSave }
               {documentCategories.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
+          {form.documentType === 'Other' && (
+            <label className="sm:col-span-2">
+              <span className="block text-xs font-semibold text-slate-500 mb-1.5">Note</span>
+              <input value={form.note} onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))} placeholder="Note" className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+            </label>
+          )}
           <label className="sm:col-span-2">
-            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Tags</span>
-            <input value={form.tags} onChange={(event) => setForm((prev) => ({ ...prev, tags: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Notes</span>
+            <input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
           </label>
           <div className="sm:col-span-2 rounded-lg bg-[#f5f5f6] p-4">
             <input ref={fileInputRef} type="file" className="hidden" onChange={(event) => setFile(event.target.files?.[0] || null)} />
             <button type="button" onClick={() => fileInputRef.current?.click()} className="h-10 px-4 rounded-lg bg-white border border-slate-200 text-sm font-semibold inline-flex items-center gap-2">
               <Upload size={16} /> Choose File
             </button>
-            <span className="ml-3 text-sm text-slate-600">{file?.name || 'No file selected. Metadata can still be saved.'}</span>
+            <span className="ml-3 text-sm text-slate-600">{file?.name || 'No file selected.'}</span>
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="h-10 px-5 rounded-lg bg-slate-100 text-slate-700 font-semibold text-sm">Cancel</button>
-          <button type="submit" disabled={ownerUnavailable} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm disabled:bg-slate-300">Save Document</button>
+          <button type="submit" disabled={!form.ownerType || ownerUnavailable} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm disabled:bg-slate-300">Save Document</button>
         </div>
       </form>
     </div>

@@ -41,7 +41,7 @@ if (missing.length) {
 const collections = {
   colleges: {
     purpose: 'College master records available to Super Admin users',
-    fields: ['id', 'name', 'code', 'location', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['id', 'name', 'code', 'location', 'logoUrl', 'logoFileName', 'status', 'createdAtText', 'updatedAtText'],
   },
   students: {
     purpose: 'Main student profile records',
@@ -49,6 +49,8 @@ const collections = {
       'admissionNo',
       'studentId',
       'name',
+      'profilePhotoUrl',
+      'profilePhotoName',
       'className',
       'section',
       'program',
@@ -108,7 +110,7 @@ const collections = {
   },
   staffMembers: {
     purpose: 'Faculty and staff master records',
-    fields: ['employeeId', 'name', 'staffType', 'department', 'designation', 'phone', 'email', 'qualification', 'institution', 'city', 'dateOfBirth', 'specialization', 'joiningDate', 'appointmentType', 'address', 'previousExperience', 'publications', 'researchProjects', 'qualificationDetails', 'documentFileName', 'documentStatus', 'status', 'createdAtText', 'updatedAtText', 'archivedAtText', 'restoredAtText'],
+    fields: ['employeeId', 'name', 'photoUrl', 'photoName', 'staffType', 'department', 'designation', 'phone', 'email', 'qualification', 'institution', 'city', 'dateOfBirth', 'specialization', 'joiningDate', 'appointmentType', 'address', 'previousExperience', 'publications', 'researchProjects', 'qualificationDetails', 'documentFileName', 'documentStatus', 'status', 'createdAtText', 'updatedAtText', 'archivedAtText', 'restoredAtText'],
   },
   departments: {
     purpose: 'Department master data and allocation support',
@@ -124,7 +126,7 @@ const collections = {
   },
   studentAttendanceRecords: {
     purpose: 'Student daily attendance tracking',
-    fields: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'dateText', 'status', 'markedAtText', 'parentNotified', 'parentNotifiedAtText'],
+    fields: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'courseCode', 'courseName', 'subjectCode', 'subjectName', 'dateText', 'status', 'markedAtText', 'parentNotified', 'parentNotifiedAtText'],
   },
   attendanceNotifications: {
     purpose: 'Parent notification queue metadata for attendance events',
@@ -144,7 +146,7 @@ const collections = {
   },
   examSchedules: {
     purpose: 'Exam schedule records',
-    fields: ['examName', 'classKey', 'subject', 'academicYear', 'examDate', 'maxMarks', 'facultyId', 'facultyName', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['examName', 'classKey', 'subject', 'examType', 'academicYear', 'examDate', 'startTime', 'durationMinutes', 'roomNo', 'maxMarks', 'facultyId', 'facultyName', 'status', 'createdAtText', 'updatedAtText'],
   },
   internalAssessments: {
     purpose: 'Internal assessment setup records',
@@ -178,18 +180,6 @@ const collections = {
     purpose: 'Fee concessions, waivers, and approved adjustments',
     fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'reason', 'status', 'createdAtText'],
   },
-  hostelRooms: {
-    purpose: 'Hostel room master records and occupancy counts',
-    fields: ['roomNo', 'hostelName', 'blockName', 'floor', 'capacity', 'occupiedCount', 'wardenName', 'academicYear', 'status', 'createdAtText', 'updatedAtText'],
-  },
-  hostelAllocations: {
-    purpose: 'Student hostel room allocation records',
-    fields: ['studentRecordId', 'studentId', 'studentName', 'courseCode', 'courseName', 'roomNo', 'hostelName', 'allocatedOn', 'academicYear', 'status', 'guardianPhone', 'createdAtText', 'updatedAtText'],
-  },
-  hostelRecords: {
-    purpose: 'Hostel inspections, maintenance, and administrative records',
-    fields: ['recordType', 'title', 'hostelName', 'roomNo', 'recordDate', 'academicYear', 'status', 'notes', 'createdAtText', 'updatedAtText'],
-  },
   financialReportSnapshots: {
     purpose: 'Saved financial report summary snapshots',
     fields: ['reportName', 'filters', 'totalAssigned', 'lifetimeCollected', 'filteredCollected', 'totalAdjusted', 'totalOutstanding', 'overdueAmount', 'dueSoonAmount', 'collectionRate', 'classCount', 'dueStudentCount', 'status', 'createdAtText'],
@@ -199,8 +189,8 @@ const collections = {
     fields: ['type', 'title', 'referenceNo', 'audience', 'academicYear', 'priority', 'body', 'publishDate', 'expiryDate', 'status', 'createdByName', 'createdAtText', 'updatedAtText', 'archivedAtText'],
   },
   managedDocuments: {
-    purpose: 'Student, staff, and academic archive document metadata',
-    fields: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'archiveTitle', 'documentType', 'category', 'fileName', 'fileSize', 'fileType', 'fileUrl', 'storagePath', 'verificationStatus', 'uploadedAtText', 'verifiedAtText', 'archivedAtText', 'tags'],
+    purpose: 'Student, staff, and other document metadata',
+    fields: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'archiveTitle', 'documentType', 'note', 'category', 'fileName', 'fileSize', 'fileType', 'fileUrl', 'storagePath', 'verificationStatus', 'uploadedAtText', 'verifiedAtText', 'archivedAtText', 'notes', 'tags'],
   },
   parentPortalLinks: {
     purpose: 'Optional parent-to-student relationship map for portal filtering',
@@ -224,7 +214,7 @@ const collections = {
   },
   systemSettings: {
     purpose: 'Institute profile, academic year, ID formats, and module defaults',
-    fields: ['id', 'name', 'instituteId', 'code', 'email', 'phone', 'address', 'city', 'startsOn', 'endsOn', 'student', 'admission', 'employee', 'receipt', 'studentAdmissions', 'staffLeave', 'timetablePublishing', 'parentPortal', 'onlinePayments', 'receiptGeneration', 'communicationModule', 'updatedAtText'],
+    fields: ['id', 'name', 'instituteId', 'code', 'logoUrl', 'logoFileName', 'email', 'phone', 'address', 'city', 'startsOn', 'endsOn', 'student', 'admission', 'employee', 'receipt', 'studentAdmissions', 'staffLeave', 'timetablePublishing', 'parentPortal', 'onlinePayments', 'receiptGeneration', 'communicationModule', 'updatedAtText'],
   },
 };
 

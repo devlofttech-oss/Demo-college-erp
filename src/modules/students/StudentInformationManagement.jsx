@@ -286,10 +286,12 @@ export default function StudentInformationManagement({ user, onLogout }) {
       ? canViewStudents
       : accessibleModules.some((module) => module.id === activePage);
     if (!isActivePageAllowed) {
-      const nextPage = accessibleModules[0]?.id || 'dashboard';
+      const nextPage = currentRoleId === 'parent' && accessibleModules.some((module) => module.id === 'parent-portal')
+        ? 'parent-portal'
+        : accessibleModules[0]?.id || 'dashboard';
       queueMicrotask(() => navigateToModule(nextPage, { replace: true }));
     }
-  }, [accessibleModules, activePage, canViewStudents, navigateToModule]);
+  }, [accessibleModules, activePage, canViewStudents, currentRoleId, navigateToModule]);
 
   useEffect(() => {
     const loadShellSettings = async () => {
@@ -302,6 +304,14 @@ export default function StudentInformationManagement({ user, onLogout }) {
       }
     };
     loadShellSettings();
+  }, []);
+
+  useEffect(() => {
+    const updateInstituteFromSettings = (event) => {
+      if (event.detail) setInstitute(normalizeInstituteSettings(event.detail));
+    };
+    window.addEventListener('institute-settings-updated', updateInstituteFromSettings);
+    return () => window.removeEventListener('institute-settings-updated', updateInstituteFromSettings);
   }, []);
 
   useEffect(() => {
@@ -359,6 +369,9 @@ export default function StudentInformationManagement({ user, onLogout }) {
 
   const selectedStudent = selectedId ? courseStudents.find((student) => student.id === selectedId) || null : null;
   const selectedAdmissions = admissions.filter((record) => relationMatches(record, selectedStudent) && recordBelongsToYear(record));
+  const selectedDocuments = studentDocuments.filter((record) => relationMatches(record, selectedStudent) && recordBelongsToYear(record));
+  const selectedPromotions = promotions.filter((record) => relationMatches(record, selectedStudent) && recordBelongsToYear(record));
+  const selectedTransfers = transfers.filter((record) => relationMatches(record, selectedStudent) && recordBelongsToYear(record));
   const latestAdmission = latestRecord(selectedAdmissions);
 
   const filteredStudents = useMemo(() => {
@@ -420,7 +433,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
       ...form,
       admissionNo: `ADM-2026-${nextNumber}`,
       studentId: `STU-${nextNumber}`,
-      institute: institute.name || form.collegeName || '',
+      institute: 'Maurya Institute of Allied Health Sciences',
       academicYear: selectedAcademicYear,
       status: 'Admission Review',
       createdAtText,
@@ -645,9 +658,12 @@ export default function StudentInformationManagement({ user, onLogout }) {
                 selectedStudent ? (
                   <StudentDetailPage
                     canEdit={canEditStudents}
+                    documents={selectedDocuments}
                     latestAdmission={latestAdmission}
                     onEdit={setEditingStudent}
+                    promotions={selectedPromotions}
                     student={selectedStudent}
+                    transfers={selectedTransfers}
                     onBack={goBackOneStudentStep}
                     onOpenDocuments={openOwnerDocuments}
                   />
@@ -823,7 +839,27 @@ export default function StudentInformationManagement({ user, onLogout }) {
   );
 }
 
-function StudentDetailPage({ canEdit, latestAdmission, onBack, onEdit, onOpenDocuments, student }) {
+function StudentMetricCard({ label, value, helper, tone = '#fb8d49' }) {
+  return (
+    <div className="rounded-lg bg-[#f5f5f6] p-4">
+      <div className="text-xs font-semibold text-slate-500">{label}</div>
+      <div className="mt-1 text-2xl font-extrabold text-slate-900">{value}</div>
+      <div className="mt-3 h-2 rounded-full bg-white overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Number(value) || 0)}%`, background: tone }} />
+      </div>
+      <div className="mt-2 text-xs text-slate-500">{helper}</div>
+    </div>
+  );
+}
+
+function StudentDetailPage({ canEdit, documents = [], latestAdmission, onBack, onEdit, onOpenDocuments, promotions = [], student, transfers = [] }) {
+  const [showAllDetails, setShowAllDetails] = useState(false);
+  const verifiedDocs = documents.filter((item) => item.verificationStatus === 'Verified' || item.verificationStatus === 'Source PDF').length;
+  const documentPercentage = documents.length ? Math.round((verifiedDocs / documents.length) * 100) : 0;
+  const admissionStatus = latestAdmission?.status || student.status || 'Active';
+  const profileCompletionFields = ['name', 'studentId', 'guardianName', 'phone', 'email', 'address', 'dob', 'gender', 'courseName', 'academicYear'];
+  const profileCompletion = Math.round((profileCompletionFields.filter((key) => student[key]).length / profileCompletionFields.length) * 100);
+
   return (
     <div>
       <div className="flex flex-col gap-4 pb-6 border-b border-slate-100 mb-5">
@@ -850,9 +886,70 @@ function StudentDetailPage({ canEdit, latestAdmission, onBack, onEdit, onOpenDoc
           ownerRecordId: student.id,
           ownerType: 'Student',
         })}
-        showSummaryTabs={false}
+        showExtendedDetails={showAllDetails}
+        showSummaryTabs
         student={student}
       />
+
+      <div className="grid md:grid-cols-3 gap-4 mb-5">
+        <StudentMetricCard label="Profile Completion" value={profileCompletion} helper="Core profile fields recorded" tone="#2563eb" />
+        <StudentMetricCard label="Document Readiness" value={documentPercentage} helper={`${verifiedDocs}/${documents.length || 0} documents verified`} tone="#22c55e" />
+        <StudentMetricCard label="Admission Progress" value={admissionStatus === 'Active' || admissionStatus === 'Approved' ? 100 : 55} helper={admissionStatus} tone="#f59e0b" />
+      </div>
+
+      <div className="grid xl:grid-cols-[1.1fr_.9fr] gap-5 mb-5">
+        <section className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-bold text-slate-900">Parent Portal View</h3>
+            <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-slate-600">View only</span>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 text-sm">
+            {[
+              ['Guardian', student.guardianName],
+              ['Phone', student.phone],
+              ['Email', student.email],
+              ['Course', student.courseName || student.program],
+              ['Class', `${student.className || '-'} - ${student.section || '-'}`],
+              ['Academic Year', student.academicYear],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-[#f5f5f6] p-3">
+                <div className="text-xs text-slate-500">{label}</div>
+                <div className="font-semibold text-slate-900 mt-1 break-words">{value || '-'}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
+          <h3 className="font-bold text-slate-900 mb-4">Documents & Movement</h3>
+          <div className="space-y-3 text-sm">
+            {[
+              ['Verified Documents', verifiedDocs, '#22c55e'],
+              ['Pending Documents', Math.max(0, documents.length - verifiedDocs), '#f59e0b'],
+              ['Promotions', promotions.length, '#2563eb'],
+              ['Transfers', transfers.length, '#ef4444'],
+            ].map(([label, value, color]) => (
+              <div key={label}>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-600">{label}</span>
+                  <b>{value}</b>
+                </div>
+                <div className="mt-1 h-2 rounded-full bg-[#f5f5f6] overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, Number(value) * 25)}%`, background: color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowAllDetails((open) => !open)}
+        className="mb-5 h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm"
+      >
+        {showAllDetails ? 'Hide all details' : 'View all details'}
+      </button>
 
       <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
         <h3 className="font-bold mb-4">Student Timeline</h3>
@@ -860,8 +957,8 @@ function StudentDetailPage({ canEdit, latestAdmission, onBack, onEdit, onOpenDoc
           <div className="rounded-lg bg-[#f5f5f6] p-3">
             Admission status: {latestAdmission?.status || student.status}. Created on {student.createdAtText || latestAdmission?.submittedAtText || 'today'}.
           </div>
-          <div className="rounded-lg bg-[#f5f5f6] p-3">Documents available: {student.documents?.length || 0}</div>
-          <div className="rounded-lg bg-[#f5f5f6] p-3">Payment and attendance summaries stay linked to their own modules.</div>
+          <div className="rounded-lg bg-[#f5f5f6] p-3">Documents available: {documents.length}</div>
+          <div className="rounded-lg bg-[#f5f5f6] p-3">Parent portal information is shown here as read-only student context.</div>
         </div>
       </div>
     </div>

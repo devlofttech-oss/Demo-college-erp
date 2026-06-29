@@ -2376,3 +2376,49 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   border-color:rgba(3,53,0,.52)!important;
   box-shadow:0 0 0 3px rgba(3,53,0,.10)!important;
 }
+
+.erp-shell.light-mode .erp-branch-focus {
+  background:linear-gradient(90deg,#eef7eb 0%,#ffffff 58%,#f8fbf7 100%)!important;
+  border-color:#b8d4b0!important;
+  box-shadow:0 18px 42px rgba(3,53,0,.08)!important;
+}
+
+.erp-shell.light-mode .erp-branch-icon {
+  background:#ffffff!important;
+  border:1px solid #b8d4b0!important;
+  color:#033500!important;
+}
+
+.erp-shell.light-mode .erp-record-payment-button,
+.erp-shell.light-mode button.erp-record-payment-button {
+  background:#033500!important;
+  border:1px solid #033500!important;
+  color:#ffffff!important;
+  box-shadow:0 12px 26px rgba(3,53,0,.22)!important;
+}
+
+.erp-shell.light-mode .erp-record-payment-button:hover:not(:disabled),
+.erp-shell.light-mode button.erp-record-payment-button:hover:not(:disabled) {
+  background:#022800!important;
+  border-color:#022800!important;
+  color:#ffffff!important;
+}
+
+.erp-shell.light-mode .erp-record-payment-button svg {
+  color:#ffffff!important;
+  stroke:#ffffff!important;
+}
+
+.erp-shell.light-mode .erp-shell table thead,
+.erp-shell.light-mode .erp-demo-table thead,
+.erp-shell.light-mode table thead,
+.erp-shell.light-mode table thead tr,
+.erp-shell.light-mode table thead th,
+.erp-shell.light-mode table [class*="bg-[#e7e7e9]"] {
+  background:#e3f0df!important;
+  color:#3f4b3c!important;
+}
+
+.erp-shell.light-mode .erp-workspace {
+  border-color:#c8ddc2!important;
+}

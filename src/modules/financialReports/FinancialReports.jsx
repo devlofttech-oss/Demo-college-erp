@@ -46,6 +46,143 @@ function downloadCsv(filename, rows = []) {
   URL.revokeObjectURL(url);
 }
 
+function pdfSafe(value) {
+  return String(value ?? '')
+    .replace(/₹/g, 'Rs ')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+}
+
+function textCommand(text, x, y, size = 10) {
+  return `BT /F1 ${size} Tf ${x} ${y} Td (${pdfSafe(text)}) Tj ET`;
+}
+
+function rectCommand(x, y, width, height, color = '0.96 0.60 0.36') {
+  return `${color} rg ${x} ${y} ${width} ${height} re f`;
+}
+
+function buildPdf(pages = []) {
+  const objects = [];
+  const addObject = (content) => {
+    objects.push(content);
+    return objects.length;
+  };
+  addObject('<< /Type /Catalog /Pages 2 0 R >>');
+  addObject('');
+  const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const pageIds = [];
+  pages.forEach((content) => {
+    const contentId = addObject(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  });
+  objects[1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((content, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${content}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+}
+
+function downloadPdf(filename, {
+  activeReport,
+  analytics,
+  collectionRows,
+  filters,
+  outstandingRows,
+  selectedCourseCode,
+  summary,
+}) {
+  const pages = [];
+  const activeRows = activeReport === 'collections' ? collectionRows : outstandingRows;
+  const makePage = (rows, pageIndex) => {
+    const content = [];
+    let y = 758;
+    if (pageIndex === 0) {
+      content.push(textCommand('Financial Report', 40, y, 18));
+      y -= 18;
+      content.push(textCommand(`Course: ${selectedCourseCode === 'all' ? 'All Courses' : selectedCourseCode} | ${filters.fromDate} to ${filters.toDate}`, 40, y, 9));
+      y -= 30;
+      [
+        ['Assigned Fees', formatCurrency(summary.totalAssigned)],
+        ['Period Collection', formatCurrency(summary.filteredCollected)],
+        ['Outstanding', formatCurrency(summary.totalOutstanding)],
+        ['Collection Rate', `${summary.collectionRate}%`],
+      ].forEach(([label, value], index) => {
+        const x = 40 + (index % 2) * 260;
+        const rowY = y - Math.floor(index / 2) * 44;
+        content.push(rectCommand(x, rowY - 20, 230, 32, '0.96 0.97 0.98'));
+        content.push(textCommand(label, x + 10, rowY, 8));
+        content.push(textCommand(value, x + 10, rowY - 14, 12));
+      });
+      y -= 104;
+      content.push(textCommand('Class Analytics', 40, y, 13));
+      y -= 20;
+      analytics.slice(0, 6).forEach((item) => {
+        content.push(textCommand(`${item.classKey} (${item.collectionRate}%)`, 40, y, 9));
+        content.push(rectCommand(210, y - 4, 220, 7, '0.90 0.93 0.96'));
+        content.push(rectCommand(210, y - 4, Math.max(4, Math.round((item.collectionRate / 100) * 220)), 7, '0.96 0.60 0.36'));
+        content.push(textCommand(`Collected ${formatCurrency(item.collected)} | Due ${formatCurrency(item.outstanding)}`, 440, y, 8));
+        y -= 18;
+      });
+      y -= 12;
+      content.push(textCommand(activeReport === 'collections' ? 'Collection Report' : 'Outstanding Report', 40, y, 13));
+      y -= 18;
+    } else {
+      content.push(textCommand(`Financial Report continued (${pageIndex + 1})`, 40, y, 14));
+      y -= 26;
+    }
+
+    const headers = activeReport === 'collections'
+      ? ['Student', 'Class', 'Date', 'Mode', 'Amount']
+      : ['Student', 'Class', 'Due Date', 'Aging', 'Outstanding'];
+    const widths = [145, 105, 78, 86, 92];
+    let x = 40;
+    headers.forEach((header, index) => {
+      content.push(textCommand(header, x, y, 8));
+      x += widths[index];
+    });
+    y -= 12;
+
+    rows.forEach((item) => {
+      const values = activeReport === 'collections'
+        ? [item.studentName, item.classKey || '-', item.paymentDate || '-', item.paymentMode || '-', formatCurrency(item.amount)]
+        : [item.studentName, item.classKey || '-', item.dueDate || '-', item.dueBucket || '-', formatCurrency(item.dueAmount)];
+      let rowX = 40;
+      values.forEach((value, index) => {
+        content.push(textCommand(String(value).slice(0, index === 0 ? 22 : 14), rowX, y, 8));
+        rowX += widths[index];
+      });
+      y -= 13;
+    });
+    return content.join('\n');
+  };
+
+  const firstPageRows = activeRows.slice(0, 28);
+  pages.push(makePage(firstPageRows, 0));
+  for (let index = 28; index < activeRows.length; index += 45) {
+    pages.push(makePage(activeRows.slice(index, index + 45), pages.length));
+  }
+  const blob = new Blob([buildPdf(pages)], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function FinancialReports({ currentUser, academicYear = '2026-2027', scopedStudents = [], selectedCourse = null, selectedCourseCode = 'all' }) {
   const [structures, setStructures] = useState(isFirebaseConfigured ? [] : demoFinancialStructures);
   const [assignments, setAssignments] = useState(isFirebaseConfigured ? [] : demoFinancialAssignments);
@@ -53,6 +190,7 @@ export default function FinancialReports({ currentUser, academicYear = '2026-202
   const [adjustments, setAdjustments] = useState(isFirebaseConfigured ? [] : demoFinancialAdjustments);
   const [snapshots, setSnapshots] = useState(isFirebaseConfigured ? [] : demoFinancialSnapshots);
   const [activeReport, setActiveReport] = useState('collections');
+  const [exportFormat, setExportFormat] = useState('pdf');
   const [filters, setFilters] = useState({
     fromDate: '2026-06-01',
     toDate: new Date().toISOString().slice(0, 10),
@@ -141,7 +279,7 @@ export default function FinancialReports({ currentUser, academicYear = '2026-202
     }
   };
 
-  const exportReport = () => {
+  const exportCsvReport = () => {
     if (!canExport) {
       toast.error('You do not have permission to export reports.');
       return;
@@ -182,6 +320,30 @@ export default function FinancialReports({ currentUser, academicYear = '2026-202
     toast.success('Outstanding report exported');
   };
 
+  const exportPdfReport = () => {
+    if (!canExport) {
+      toast.error('You do not have permission to export reports.');
+      return;
+    }
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const courseLabel = selectedCourseCode === 'all' ? 'all-courses' : selectedCourseCode.toLowerCase();
+    downloadPdf(`financial-${activeReport}-${courseLabel}-${timestamp}.pdf`, {
+      activeReport,
+      analytics: classAnalytics,
+      collectionRows: collectionReport.rows,
+      filters,
+      outstandingRows: outstandingReport.rows,
+      selectedCourseCode,
+      summary,
+    });
+    toast.success('PDF report exported');
+  };
+
+  const exportReport = () => {
+    if (exportFormat === 'csv') exportCsvReport();
+    else exportPdfReport();
+  };
+
   if (!canView) {
     return (
       <div className="rounded-lg bg-[#f5f5f6] p-6 text-sm text-slate-600">
@@ -201,6 +363,15 @@ export default function FinancialReports({ currentUser, academicYear = '2026-202
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={exportFormat}
+            onChange={(event) => setExportFormat(event.target.value)}
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+            title="Export format"
+          >
+            <option value="pdf">PDF with graph</option>
+            <option value="csv">CSV</option>
+          </select>
           <button onClick={exportReport} disabled={!canExport} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
             <Download size={16} /> Export
           </button>

@@ -117,6 +117,15 @@ export default function ExaminationResultManagement({ currentUser, academicYear 
   const selectedScheduleMarks = selectedSchedule
     ? courseMarks.filter((mark) => mark.examScheduleId === selectedSchedule.id)
     : [];
+  const marksCompletion = courseSchedules.length && courseStudents.length
+    ? Math.round((courseMarks.length / Math.max(1, courseSchedules.length * courseStudents.length)) * 100)
+    : 0;
+  const resultDistribution = [
+    { label: 'Pass', value: courseResults.filter((item) => item.status === 'Pass').length, color: '#22c55e' },
+    { label: 'Needs Improvement', value: courseResults.filter((item) => item.status === 'Needs Improvement').length, color: '#ef4444' },
+    { label: 'Pending', value: Math.max(0, courseStudents.length - courseResults.length), color: '#f59e0b' },
+  ];
+  const maxResultValue = Math.max(...resultDistribution.map((item) => item.value), 1);
 
   const openExamTask = (taskId) => {
     setActiveExamTask(taskId);
@@ -199,6 +208,8 @@ export default function ExaminationResultManagement({ currentUser, academicYear 
       examName: form.examName.trim(),
       subject: form.subject.trim(),
       maxMarks: Number(form.maxMarks),
+      durationMinutes: Number(form.durationMinutes || 0),
+      roomNo: form.roomNo?.trim() || '',
       facultyName: facultyMember?.name || '',
       status: form.status || 'Scheduled',
     };
@@ -386,6 +397,48 @@ export default function ExaminationResultManagement({ currentUser, academicYear 
 
       {!activeExamTask ? (
       <>
+      <div className="grid lg:grid-cols-[1.15fr_.85fr] gap-5 mb-5">
+        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="font-bold text-slate-900">Exam Readiness</h2>
+            <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-slate-600">{marksCompletion}% marks entered</span>
+          </div>
+          <div className="grid sm:grid-cols-4 gap-3 text-sm">
+            {[
+              ['Schedules', courseSchedules.length],
+              ['Marks Entries', courseMarks.length],
+              ['Results', courseResults.length],
+              ['Report Cards', courseReportCards.length],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-[#f5f5f6] p-3">
+                <div className="text-xs text-slate-500">{label}</div>
+                <div className="mt-1 text-2xl font-extrabold text-slate-900">{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 space-y-3">
+            {resultDistribution.map((item) => (
+              <div key={item.label}>
+                <div className="flex justify-between text-sm"><span>{item.label}</span><b>{item.value}</b></div>
+                <div className="mt-1 h-2 rounded-full bg-[#f5f5f6] overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${Math.max(4, (item.value / maxResultValue) * 100)}%`, background: item.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+          <h2 className="font-bold text-slate-900 mb-4">Exam Desk Workflow</h2>
+          <div className="space-y-3 text-sm">
+            {['Schedule exams', 'Prepare halls and invigilation', 'Enter subject marks', 'Generate results and report cards'].map((label, index) => (
+              <div key={label} className="flex items-center gap-3 rounded-lg bg-[#f5f5f6] p-3">
+                <span className="h-7 w-7 rounded-full bg-white flex items-center justify-center font-bold text-[#fb8d49]">{index + 1}</span>
+                <span className="font-semibold text-slate-700">{label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
       <div className="grid md:grid-cols-3 gap-4">
         {examTaskOptions.map((task) => (
           <button key={task.id} onClick={() => openExamTask(task.id)} className="group min-h-40 text-left rounded-lg border border-slate-100 bg-white p-5 shadow-sm hover:-translate-y-1 transition-all">

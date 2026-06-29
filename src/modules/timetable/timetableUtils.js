@@ -56,10 +56,10 @@ export function normalizeTimeSlotFields(entry = {}) {
   };
 }
 
-export function getTimeSlotOptions(entries = []) {
+export function getTimeSlotOptions(entries = [], { includeArchived = false } = {}) {
   const options = new Map();
   entries
-    .filter((entry) => entry.status !== 'Archived')
+    .filter((entry) => includeArchived || entry.status !== 'Archived')
     .map(normalizeTimeSlotFields)
     .forEach((entry) => {
       const label = getTimeSlotLabel(entry);

@@ -7,6 +7,7 @@ export function formatDisplayDate(date = new Date()) {
 }
 
 export function relationMatchesStaff(record, staffMember) {
+  if (!record || !staffMember) return false;
   return record.staffRecordId === staffMember.id || record.employeeId === staffMember.employeeId;
 }
 

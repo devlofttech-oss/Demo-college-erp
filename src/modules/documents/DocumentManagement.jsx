@@ -91,17 +91,20 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
     const courseName = form.ownerType === 'Student'
       ? owner?.courseName || owner?.program || selectedCourse?.courseName || ''
       : selectedCourse?.courseName || '';
+    const otherOwnerName = form.ownerName?.trim() || '';
     return {
       ownerType: form.ownerType,
       ownerRecordId: form.ownerRecordId,
-      ownerId: form.ownerType === 'Academic Archive' ? `ARCHIVE-${Date.now()}` : ownerId || '',
-      ownerName: form.ownerType === 'Academic Archive' ? 'Academic Records Archive' : owner?.name || '',
-      archiveTitle: form.archiveTitle?.trim() || '',
+      ownerId: form.ownerType === 'Other' ? `OTHER-${Date.now()}` : ownerId || '',
+      ownerName: form.ownerType === 'Other' ? otherOwnerName : owner?.name || '',
+      archiveTitle: form.ownerType === 'Other' ? otherOwnerName : '',
       documentType: form.documentType.trim(),
+      note: form.note?.trim() || '',
       category: form.category,
       courseCode,
       courseName,
-      tags: form.tags.trim(),
+      notes: form.notes?.trim() || '',
+      tags: form.notes?.trim() || '',
       verificationStatus: 'Pending Review',
       uploadedAtText: formatDisplayDate(),
       verifiedAtText: '',
@@ -123,8 +126,8 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
     let fileData = {};
     let uploadError = null;
     try {
-      const ownerKey = form.ownerType === 'Academic Archive'
-        ? form.archiveTitle
+      const ownerKey = form.ownerType === 'Other'
+        ? form.ownerName
         : form.ownerRecordId;
       if (file) {
         fileData = await uploadManagedDocumentFile({ ownerType: form.ownerType, ownerId: ownerKey, file });
@@ -219,7 +222,7 @@ export default function DocumentManagement({ currentUser, academicYear = '2026-2
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Demo mode: add Firebase keys to persist documents and upload files.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
-        {!isOwnerFilterActive && (
+        {!isOwnerFilterActive && canUpload && (
           <button onClick={() => setShowUploadModal(true)} disabled={!canUpload || uploading} className="h-10 px-5 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
             <Plus size={16} /> {uploading ? 'Uploading...' : 'Upload Document'}
           </button>

@@ -39,6 +39,7 @@ export default function StudentProfileCard({
   canEdit = true,
   onEdit,
   onOpenDocuments,
+  showExtendedDetails = true,
   showSummaryTabs = true,
   student,
 }) {
@@ -54,8 +55,12 @@ export default function StudentProfileCard({
     <div className="bg-white border border-slate-100 rounded-lg p-5 mb-5 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 pb-5 border-b border-slate-100">
         <div className="flex items-center gap-4 min-w-0">
-          <div className="h-20 w-20 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center shrink-0">
-            <UserRound size={38} />
+          <div className="h-20 w-20 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center shrink-0 overflow-hidden">
+            {student.profilePhotoUrl ? (
+              <img src={student.profilePhotoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <UserRound size={38} />
+            )}
           </div>
           <div className="min-w-0">
             <h2 className="text-2xl font-extrabold text-slate-900 break-words">{student.name}</h2>
@@ -111,10 +116,14 @@ export default function StudentProfileCard({
           <DetailItem label="Email" value={student.email} />
         </div>
 
-        <DetailGrid title="RGUHS Admission Details" fields={commonAdmissionFields} student={student} />
-        <DetailGrid title="Entrance & Qualifying Exam" fields={examAdmissionFields} student={student} />
-        <DetailGrid title="Lateral Entry Diploma Details" fields={lateralAdmissionFields} student={student} />
-        <DetailGrid title="Caste & Income Certificate Details" fields={certificateAdmissionFields} student={student} />
+        {showExtendedDetails && (
+          <>
+            <DetailGrid title="RGUHS Admission Details" fields={commonAdmissionFields} student={student} />
+            <DetailGrid title="Entrance & Qualifying Exam" fields={examAdmissionFields} student={student} />
+            <DetailGrid title="Lateral Entry Diploma Details" fields={lateralAdmissionFields} student={student} />
+            <DetailGrid title="Caste & Income Certificate Details" fields={certificateAdmissionFields} student={student} />
+          </>
+        )}
       </div>
     </div>
   );

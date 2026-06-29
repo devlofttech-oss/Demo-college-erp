@@ -13,6 +13,8 @@ export const demoInstituteSettings = {
   name: '-',
   instituteId: '-',
   code: '-',
+  logoUrl: '',
+  logoFileName: '',
   email: '-',
   phone: '-',
   address: '-',

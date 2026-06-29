@@ -22,6 +22,7 @@ export default function StaffProfilePanel({
   onLeaveDecision,
   onOpenDocuments,
   showActions = true,
+  showExtendedDetails = true,
   staffMember,
 }) {
   const relatedLeaves = leaveRecords.slice(0, 4);
@@ -52,8 +53,12 @@ export default function StaffProfilePanel({
             </div>
           </div>
           <div className="flex items-center gap-4 mb-5">
-            <div className="h-20 w-20 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center">
-              <UserRound size={38} />
+            <div className="h-20 w-20 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center overflow-hidden">
+              {staffMember.photoUrl ? (
+                <img src={staffMember.photoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <UserRound size={38} />
+              )}
             </div>
             <div>
               <div className="text-lg font-bold">{staffMember.name}</div>
@@ -83,6 +88,7 @@ export default function StaffProfilePanel({
         </div>
       </div>
 
+      {showExtendedDetails && (
       <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm mb-5">
         <h3 className="font-bold mb-4">Extracted Information</h3>
         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -100,7 +106,9 @@ export default function StaffProfilePanel({
           <DetailItem label="Research Projects" value={staffMember.researchProjects} />
         </div>
       </div>
+      )}
 
+      {showExtendedDetails && (
       <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm mb-5">
         <h3 className="font-bold mb-4">Qualifications</h3>
         {staffMember.qualificationDetails?.length ? (
@@ -113,6 +121,7 @@ export default function StaffProfilePanel({
           <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">No qualification details recorded.</div>
         )}
       </div>
+      )}
 
       <div className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm mb-5">
         <h3 className="font-bold mb-4">Documents</h3>

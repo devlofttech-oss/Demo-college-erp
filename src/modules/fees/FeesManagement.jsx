@@ -609,7 +609,7 @@ export default function FeesManagement({ currentUser, academicYear = '2026-2027'
             <button
               onClick={() => { setCollectionAssignmentId(''); setShowCollectionModal(true); }}
               disabled={!canCollect}
-              className="h-11 px-5 rounded-lg bg-[#00e589] text-[#04110b] font-extrabold text-sm flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(0,229,137,0.35)] hover:bg-[#3cffad] disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none"
+              className="erp-record-payment-button h-11 px-5 rounded-lg bg-[#033500] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-[0_12px_26px_rgba(3,53,0,0.22)] hover:bg-[#022800] disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none"
             >
               <Plus size={16} /> Record Payment
             </button>

@@ -10,9 +10,9 @@ import {
 const students = [{ id: 's1', studentId: 'STU-1', name: 'Student One' }];
 const staff = [{ id: 't1', employeeId: 'EMP-1', name: 'Staff One' }];
 const documents = [
-  { id: 'd1', ownerType: 'Student', ownerRecordId: 's1', ownerId: 'STU-1', documentType: 'Aadhaar', category: 'Identity', verificationStatus: 'Verified', fileSize: 1024, tags: 'identity' },
-  { id: 'd2', ownerType: 'Staff', ownerRecordId: 't1', ownerId: 'EMP-1', documentType: 'Degree', category: 'HR', verificationStatus: 'Pending Review', fileSize: 1048576, tags: 'qualification' },
-  { id: 'd3', ownerType: 'Academic Archive', archiveTitle: 'Result Archive', documentType: 'Result Register', category: 'Academic', verificationStatus: 'Archived', fileSize: 500, tags: 'result' },
+  { id: 'd1', ownerType: 'Student', ownerRecordId: 's1', ownerId: 'STU-1', documentType: 'Aadhaar', category: 'Identity', verificationStatus: 'Verified', fileSize: 1024, notes: 'identity' },
+  { id: 'd2', ownerType: 'Staff', ownerRecordId: 't1', ownerId: 'EMP-1', documentType: 'Marks Card', category: 'Academic', verificationStatus: 'Pending Review', fileSize: 1048576, notes: 'qualification' },
+  { id: 'd3', ownerType: 'Other', ownerName: 'Result Archive', documentType: 'Other', note: 'Result Register', category: 'Academic', verificationStatus: 'Archived', fileSize: 500, notes: 'result' },
 ];
 
 assert.equal(formatFileSize(500), '500 B');
@@ -32,8 +32,8 @@ assert.deepEqual(summarizeDocuments(documents), {
 });
 
 assert.equal(filterDocuments(documents, { ownerType: 'Student' }).length, 1);
-assert.equal(filterDocuments(documents, { category: 'Academic' }).length, 1);
-assert.equal(filterDocuments(documents, { search: 'degree' }).length, 1);
+assert.equal(filterDocuments(documents, { category: 'Academic' }).length, 2);
+assert.equal(filterDocuments(documents, { search: 'qualification' }).length, 1);
 
 assert.equal(validateDocumentForm({}), 'Owner type is required.');
 assert.equal(validateDocumentForm({
@@ -41,11 +41,12 @@ assert.equal(validateDocumentForm({
   ownerRecordId: '',
   documentType: 'Aadhaar',
   category: 'Identity',
-}), 'Owner is required.');
+}), 'Name is required.');
 assert.equal(validateDocumentForm({
-  ownerType: 'Academic Archive',
-  archiveTitle: 'Result Archive',
-  documentType: 'Result Register',
+  ownerType: 'Other',
+  ownerName: 'Result Archive',
+  documentType: 'Other',
+  note: 'Result Register',
   category: 'Academic',
 }), '');
 

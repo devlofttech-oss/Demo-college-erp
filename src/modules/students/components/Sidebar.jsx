@@ -5,12 +5,22 @@ import { canAccess, defaultRoles } from '../../userRoles/rolePermissions';
 export default function Sidebar({ activePage, collapsed = false, currentUser, institute, onNavigate, onThemeToggle, onToggleCollapse, themeMode = 'dark' }) {
   const currentRoleId = currentUser?.roleId || 'admin';
   const isSuperAdmin = currentRoleId === 'super-admin';
-  const canShowHiddenModule = (module) => isSuperAdmin || (module.id === 'parent-portal' && canAccess(defaultRoles, currentRoleId, 'parentPortal.view'));
+  const parentModuleOrder = ['parent-portal', 'timetable', 'notice-board', 'document-management', 'calendar'];
+  const canShowHiddenModule = (module) => {
+    if (module.id === 'parent-portal') return currentRoleId === 'parent';
+    return isSuperAdmin;
+  };
   const collegeName = institute?.name || '-';
   const navItems = getEnabledModules()
     .filter((module) => !module.permission || canAccess(defaultRoles, currentRoleId, module.permission))
     .filter((module) => !module.footer)
     .filter((module) => !module.hideFromSidebar || canShowHiddenModule(module))
+    .sort((first, second) => {
+      if (currentRoleId !== 'parent') return 0;
+      const firstIndex = parentModuleOrder.indexOf(first.id);
+      const secondIndex = parentModuleOrder.indexOf(second.id);
+      return (firstIndex === -1 ? 99 : firstIndex) - (secondIndex === -1 ? 99 : secondIndex);
+    })
     .map((module) => {
       const Icon = module.icon;
       return {
@@ -65,11 +75,19 @@ export default function Sidebar({ activePage, collapsed = false, currentUser, in
               className="erp-sidebar-logo erp-sidebar-expand-logo"
               title="Expand sidebar"
             >
-              <ChevronRight className="erp-sidebar-logo-icon" size={26} />
+              {institute?.logoUrl ? (
+                <img src={institute.logoUrl} alt="" className="h-full w-full object-contain rounded-lg" />
+              ) : (
+                <ChevronRight className="erp-sidebar-logo-icon" size={26} />
+              )}
             </button>
           ) : (
             <div className="erp-sidebar-logo">
-              <GraduationCap className="erp-sidebar-logo-icon" size={26} />
+              {institute?.logoUrl ? (
+                <img src={institute.logoUrl} alt="" className="h-full w-full object-contain rounded-lg" />
+              ) : (
+                <GraduationCap className="erp-sidebar-logo-icon" size={26} />
+              )}
             </div>
           )}
           {!collapsed && (

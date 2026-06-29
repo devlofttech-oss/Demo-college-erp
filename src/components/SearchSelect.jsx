@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 
 function normalizeOptions(options = []) {
   return options.map((option) => (
@@ -19,14 +19,12 @@ export default function SearchSelect({
   const inputId = useId();
   const normalizedOptions = useMemo(() => normalizeOptions(options), [options]);
   const selectedOption = normalizedOptions.find((option) => option.value === value) || null;
-  const [query, setQuery] = useState(selectedOption?.label || '');
-
-  useEffect(() => {
-    setQuery(selectedOption?.label || '');
-  }, [selectedOption?.label]);
+  const [draftQuery, setDraftQuery] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const query = isEditing ? draftQuery : selectedOption?.label || '';
 
   const selectFromQuery = (nextQuery) => {
-    setQuery(nextQuery);
+    setDraftQuery(nextQuery);
     const match = normalizedOptions.find((option) => option.label.toLowerCase() === nextQuery.trim().toLowerCase());
     if (match) onChange?.(match.value);
   };
@@ -37,8 +35,12 @@ export default function SearchSelect({
         list={inputId}
         value={query}
         disabled={disabled}
+        onFocus={() => {
+          setIsEditing(true);
+          setDraftQuery(selectedOption?.label || '');
+        }}
         onChange={(event) => selectFromQuery(event.target.value)}
-        onBlur={() => setQuery(selectedOption?.label || '')}
+        onBlur={() => setIsEditing(false)}
         placeholder={placeholder}
         className={`erp-search-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#033500] focus:ring-2 focus:ring-[rgba(3,53,0,.12)] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       />

@@ -20,7 +20,7 @@ export const moduleRegistry = [
     group: 'Daily Work',
     icon: LayoutDashboard,
     status: 'active',
-    permission: 'students.view',
+    permission: 'dashboard.view',
   },
   {
     id: 'students',
@@ -35,11 +35,10 @@ export const moduleRegistry = [
     id: 'calendar',
     label: 'Curriculum',
     path: '/modules/calendar',
-    group: 'Admin Setup',
+    group: 'Daily Work',
     icon: CalendarDays,
     status: 'active',
     permission: 'academicCurriculum.view',
-    hideFromSidebar: true,
   },
   {
     id: 'academics',

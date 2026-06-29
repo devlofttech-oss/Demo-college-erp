@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, BookOpen, Building2, CalendarDays, Hash, Save, Settings, Shield, Users } from 'lucide-react';
+import { ArrowLeft, BookOpen, Building2, CalendarDays, Hash, Save, Settings, Upload, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSettingsData, saveSystemSetting } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
-import { demoAcademicYearSettings, demoIdFormatSettings, demoInstituteSettings, demoModuleDefaultSettings } from './demoSettings';
+import { demoAcademicYearSettings, demoIdFormatSettings, demoInstituteSettings, demoModuleDefaultSettings, normalizeInstituteSettings } from './demoSettings';
 import { buildNextId, formatDisplayDate, summarizeSettings, validateAcademicYearSettings, validateInstituteSettings } from './settingsUtils';
 import AcademicsManagement from '../academics/AcademicsManagement';
 import UserRoleManagement from '../userRoles/UserRoleManagement';
@@ -38,7 +38,7 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
       if (!isFirebaseConfigured) return;
       try {
         const data = await getSettingsData();
-        if (data.institute) setInstitute(data.institute);
+        if (data.institute) setInstitute(normalizeInstituteSettings(data.institute));
         if (data.academicYear) setAcademicYear(data.academicYear);
         if (data.idFormats) setIdFormats(data.idFormats);
         if (data.moduleDefaults) setModuleDefaults(data.moduleDefaults);
@@ -53,6 +53,7 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
   }, []);
 
   const currentRoleId = currentUser?.roleId || 'admin';
+  const isSuperAdmin = currentRoleId === 'super-admin';
   const canManage = canAccess(defaultRoles, currentRoleId, 'settings.manage');
   const canManageUsers = canAccess(defaultRoles, currentRoleId, 'users.view');
   const canViewAcademics = canAccess(defaultRoles, currentRoleId, 'academics.view');
@@ -94,6 +95,7 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
       description: 'Student, admission, employee, and receipt numbering.',
       icon: <Hash size={24} />,
       meta: loading ? '-' : summary.idFormats,
+      superAdminOnly: true,
     },
     {
       id: 'module-defaults',
@@ -101,8 +103,10 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
       description: 'Turn default ERP behaviors on or off.',
       icon: <Settings size={24} />,
       meta: loading ? '-' : `${summary.enabledDefaults} on`,
+      superAdminOnly: true,
     },
   ];
+  const visibleSetupSections = setupSections.filter((section) => !section.superAdminOnly || isSuperAdmin);
 
   const saveSettings = async () => {
     if (!canManage) {
@@ -114,13 +118,21 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
     const yearMessage = validateAcademicYearSettings(academicYear);
     if (yearMessage) return toast.error(yearMessage);
     const updatedAtText = formatDisplayDate();
-    try {
-      await Promise.all([
-        saveSystemSetting('institute', { ...institute, updatedAtText }),
+    const saveOperations = [
+        saveSystemSetting('institute', { ...normalizeInstituteSettings(institute), updatedAtText }),
         saveSystemSetting('academicYear', { ...academicYear, updatedAtText }),
+    ];
+    if (isSuperAdmin) {
+      saveOperations.push(
         saveSystemSetting('idFormats', { ...idFormats, updatedAtText }),
-        saveSystemSetting('moduleDefaults', { ...moduleDefaults, updatedAtText }),
-      ]);
+        saveSystemSetting('moduleDefaults', { ...moduleDefaults, updatedAtText })
+      );
+    }
+    try {
+      await Promise.all(saveOperations);
+      window.dispatchEvent(new CustomEvent('institute-settings-updated', {
+        detail: normalizeInstituteSettings({ ...institute, updatedAtText }),
+      }));
       toast.success('Settings saved');
       setLoadError('');
     } catch (error) {
@@ -131,6 +143,22 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
   };
 
   const toggleDefault = (key) => setModuleDefaults((prev) => ({ ...prev, [key]: !prev[key] }));
+  const uploadLogo = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Upload an image file for the logo.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setInstitute((prev) => ({
+        ...prev,
+        logoUrl: reader.result,
+        logoFileName: file.name,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
   const openSection = (sectionId) => {
     setActiveSection(sectionId);
     window.history.pushState({ ...(window.history.state || {}), settingsFlow: { section: sectionId } }, '');
@@ -164,7 +192,7 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
 
       {!activeSection && (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 py-5">
-          {setupSections.map((section) => (
+          {visibleSetupSections.map((section) => (
             <button
               key={section.id}
               onClick={() => !section.disabled && openSection(section.id)}
@@ -230,6 +258,20 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
         <section className="bg-white border border-slate-100 rounded-lg p-5">
           <h3 className="font-bold mb-4">Institute Profile</h3>
           <div className="grid sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2 rounded-lg bg-[#f5f5f6] p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="h-20 w-20 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                {institute.logoUrl ? (
+                  <img src={institute.logoUrl} alt="" className="h-full w-full object-contain p-2" />
+                ) : (
+                  <Building2 size={30} className="text-slate-400" />
+                )}
+              </div>
+              <label className="inline-flex h-10 px-4 rounded-lg bg-white border border-slate-200 text-sm font-semibold items-center justify-center gap-2 cursor-pointer w-fit">
+                <Upload size={16} /> Upload Logo
+                <input type="file" accept="image/*" className="sr-only" onChange={(event) => uploadLogo(event.target.files?.[0])} />
+              </label>
+              <span className="text-xs text-slate-500">{institute.logoFileName || 'Logo appears in the top-left app shell after saving.'}</span>
+            </div>
             {['name', 'instituteId', 'code', 'email', 'phone', 'city'].map((key) => (
               <label key={key}><span className="block text-xs font-semibold text-slate-500 mb-1.5 capitalize">{key}</span><input value={institute[key] || ''} onChange={(event) => setInstitute((prev) => ({ ...prev, [key]: event.target.value }))} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm" /></label>
             ))}

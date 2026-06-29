@@ -25,25 +25,25 @@ const shouldReset = process.argv.includes('--reset');
 const confirmed = process.argv.includes('--yes-i-understand-this-deletes-data');
 
 const schemas = {
-  colleges: ['id', 'name', 'code', 'location', 'status'],
+  colleges: ['id', 'name', 'code', 'location', 'logoUrl', 'logoFileName', 'status'],
   admissionBatches: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
-  students: ['admissionNo', 'studentId', 'name', 'nameAsInAadhaar', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'mobileNo', 'alternatePhoneNo', 'phone', 'email', 'address', 'nationality', 'state', 'ruralUrban', 'religion', 'className', 'section', 'program', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'guardianName', 'idHolder', 'academicYear', 'seatType', 'govtSeatType', 'actualCategory', 'seatSelectCategory', 'admissionDate', 'keaCetNumber', 'sspId', 'neetRegNo', 'neetRank', 'cetRegNo', 'cetRank', 'qualifyingExamName', 'qualifyingExamRegNo', 'qualifyingMaxMarks', 'qualifyingSecuredMarks', 'qualifyingPassDate', 'qualifyingBoard', 'optionalSubject', 'optionalMaxMarks', 'optionalSecuredMarks', 'diplomaCourse', 'diplomaCourseDuration', 'diplomaPassedDate', 'diplomaBoard', 'diplomaMaxMarks', 'diplomaSecuredMarks', 'casteRdNumber', 'casteCategory', 'casteName', 'casteCertificateStudentName', 'casteCertificateFatherName', 'incomeRdNumber', 'incomeCategory', 'incomeCasteName', 'annualIncome', 'incomeCertificateStudentName', 'incomeCertificateFatherName', 'sourcePdf', 'sourcePage', 'sourceSlNo', 'sourceColumns', 'status', 'createdAtText'],
+  students: ['admissionNo', 'studentId', 'name', 'profilePhotoUrl', 'profilePhotoName', 'nameAsInAadhaar', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'mobileNo', 'alternatePhoneNo', 'phone', 'email', 'address', 'nationality', 'state', 'ruralUrban', 'religion', 'className', 'section', 'program', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'guardianName', 'idHolder', 'academicYear', 'seatType', 'govtSeatType', 'actualCategory', 'seatSelectCategory', 'admissionDate', 'keaCetNumber', 'sspId', 'neetRegNo', 'neetRank', 'cetRegNo', 'cetRank', 'qualifyingExamName', 'qualifyingExamRegNo', 'qualifyingMaxMarks', 'qualifyingSecuredMarks', 'qualifyingPassDate', 'qualifyingBoard', 'optionalSubject', 'optionalMaxMarks', 'optionalSecuredMarks', 'diplomaCourse', 'diplomaCourseDuration', 'diplomaPassedDate', 'diplomaBoard', 'diplomaMaxMarks', 'diplomaSecuredMarks', 'casteRdNumber', 'casteCategory', 'casteName', 'casteCertificateStudentName', 'casteCertificateFatherName', 'incomeRdNumber', 'incomeCategory', 'incomeCasteName', 'annualIncome', 'incomeCertificateStudentName', 'incomeCertificateFatherName', 'sourcePdf', 'sourcePage', 'sourceSlNo', 'sourceColumns', 'status', 'createdAtText'],
   studentAdmissions: ['studentRecordId', 'studentId', 'admissionNo', 'academicYear', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'idHolder', 'admissionDate', 'seatType', 'actualCategory', 'status', 'submittedAtText', 'sourcePdf', 'sourcePage', 'sourceSlNo'],
   studentDocuments: ['studentRecordId', 'studentId', 'documentType', 'academicYear', 'uploadedBy', 'fileName', 'verificationStatus', 'uploadedAtText'],
   studentPromotions: ['studentRecordId', 'studentId', 'fromClass', 'toClass', 'academicYear', 'status', 'approvedBy', 'approvedAtText'],
   studentTransfers: ['studentRecordId', 'studentId', 'transferType', 'reason', 'academicYear', 'status', 'requestedAtText'],
   users: ['uid', 'name', 'email', 'roleId', 'displayId', 'collegeIds', 'status', 'linkedStudentRecordIds', 'linkedStudentIds', 'createdAtText'],
   roles: ['id', 'name', 'description', 'locked', 'permissions'],
-  staffMembers: ['employeeId', 'name', 'staffType', 'department', 'designation', 'phone', 'email', 'qualification', 'institution', 'city', 'dateOfBirth', 'specialization', 'joiningDate', 'appointmentType', 'address', 'previousExperience', 'publications', 'researchProjects', 'qualificationDetails', 'documentFileName', 'documentStatus', 'status', 'createdAtText'],
+  staffMembers: ['employeeId', 'name', 'photoUrl', 'photoName', 'staffType', 'department', 'designation', 'phone', 'email', 'qualification', 'institution', 'city', 'dateOfBirth', 'specialization', 'joiningDate', 'appointmentType', 'address', 'previousExperience', 'publications', 'researchProjects', 'qualificationDetails', 'documentFileName', 'documentStatus', 'status', 'createdAtText'],
   departments: ['name', 'headName', 'status'],
   staffLeaveRecords: ['staffRecordId', 'employeeId', 'leaveType', 'fromDate', 'toDate', 'reason', 'status'],
   staffAttendanceRecords: ['staffRecordId', 'employeeId', 'academicYear', 'dateText', 'status', 'markedAtText'],
-  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'academicYear', 'dateText', 'status'],
+  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'courseCode', 'courseName', 'subjectCode', 'subjectName', 'academicYear', 'dateText', 'status'],
   attendanceNotifications: ['studentRecordId', 'studentId', 'studentName', 'channel', 'academicYear', 'reason', 'status'],
   classrooms: ['roomNo', 'building', 'capacity', 'status'],
   timetableEntries: ['classKey', 'subject', 'academicYear', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status'],
   timetablePublications: ['classKey', 'academicYear', 'status', 'publishedAtText', 'entryCount'],
-  examSchedules: ['examName', 'classKey', 'subject', 'academicYear', 'examDate', 'maxMarks', 'facultyId', 'facultyName', 'status'],
+  examSchedules: ['examName', 'classKey', 'subject', 'examType', 'academicYear', 'examDate', 'startTime', 'durationMinutes', 'roomNo', 'maxMarks', 'facultyId', 'facultyName', 'status'],
   internalAssessments: ['title', 'classKey', 'subject', 'academicYear', 'maxMarks', 'status'],
   marksEntries: ['examScheduleId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'subject', 'academicYear', 'marksObtained', 'maxMarks', 'percentage', 'grade', 'status'],
   studentResults: ['studentRecordId', 'studentId', 'studentName', 'classKey', 'examName', 'academicYear', 'totalObtained', 'totalMax', 'percentage', 'grade', 'status'],
@@ -52,18 +52,18 @@ const schemas = {
   feeAssignments: ['feeStructureId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'academicYear', 'totalAmount', 'paidAmount', 'adjustmentAmount', 'dueAmount', 'dueDate', 'status'],
   feeCollections: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'status'],
   feeAdjustments: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'reason', 'status'],
-  hostelRooms: ['roomNo', 'hostelName', 'blockName', 'floor', 'capacity', 'occupiedCount', 'wardenName', 'academicYear', 'status'],
-  hostelAllocations: ['studentRecordId', 'studentId', 'studentName', 'courseCode', 'courseName', 'roomNo', 'hostelName', 'allocatedOn', 'academicYear', 'status', 'guardianPhone'],
-  hostelRecords: ['recordType', 'title', 'hostelName', 'roomNo', 'recordDate', 'academicYear', 'status', 'notes'],
+  hostelRooms: ['roomNo', 'hostelName', 'blockName', 'floor', 'capacity', 'occupiedCount', 'wardenName', 'academicYear', 'status', 'createdAtText'],
+  hostelAllocations: ['studentRecordId', 'studentId', 'studentName', 'courseCode', 'courseName', 'roomNo', 'hostelName', 'allocatedOn', 'academicYear', 'status', 'guardianPhone', 'createdAtText'],
+  hostelRecords: ['recordType', 'title', 'hostelName', 'roomNo', 'recordDate', 'academicYear', 'status', 'notes', 'createdAtText'],
   financialReportSnapshots: ['reportName', 'totalAssigned', 'lifetimeCollected', 'totalOutstanding', 'collectionRate', 'status'],
   noticeItems: ['type', 'title', 'referenceNo', 'audience', 'academicYear', 'priority', 'body', 'publishDate', 'expiryDate', 'status'],
-  managedDocuments: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'documentType', 'category', 'academicYear', 'fileName', 'verificationStatus'],
+  managedDocuments: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'documentType', 'note', 'category', 'academicYear', 'fileName', 'verificationStatus', 'notes'],
   parentPortalLinks: ['parentEmail', 'studentRecordId', 'studentId', 'relationship', 'status'],
   academicPrograms: ['name', 'code', 'academicYear', 'status'],
   academicSubjects: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'status'],
   academicBatches: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'academicYear', 'status'],
   academicCalendarEvents: ['title', 'eventType', 'eventDate', 'audience', 'academicYear', 'status'],
-  systemSettings: ['id', 'name', 'instituteId', 'code', 'email', 'phone', 'startsOn', 'endsOn', 'student', 'admission', 'employee', 'moduleDefaults'],
+  systemSettings: ['id', 'name', 'instituteId', 'code', 'logoUrl', 'logoFileName', 'email', 'phone', 'startsOn', 'endsOn', 'student', 'admission', 'employee', 'moduleDefaults'],
 };
 
 const allPermissions = [
@@ -74,11 +74,11 @@ const allPermissions = [
   'timetable.view', 'timetable.create', 'timetable.edit', 'timetable.publish', 'timetable.classrooms',
   'exams.view', 'exams.schedule', 'exams.assessments', 'exams.marks', 'exams.results', 'exams.reportCards',
   'fees.view', 'fees.setup', 'fees.assign', 'fees.collect', 'fees.adjust', 'fees.reports',
-    'hostel.view', 'hostel.manage',
+  'hostel.view', 'hostel.manage',
   'financialReports.view', 'financialReports.export', 'financialReports.snapshots',
   'notices.view', 'notices.create', 'notices.edit', 'notices.archive',
   'documents.view', 'documents.upload', 'documents.verify', 'documents.archive',
-  'parentPortal.view', 'settings.view', 'settings.manage',
+  'parentPortal.view', 'parentPortal.viewAll', 'settings.view', 'settings.manage',
 ];
 
 const adminPermissions = [
@@ -88,23 +88,28 @@ const adminPermissions = [
   'timetable.view', 'timetable.create', 'timetable.edit', 'timetable.publish', 'timetable.classrooms',
   'exams.view', 'exams.schedule', 'exams.assessments', 'exams.marks', 'exams.results', 'exams.reportCards',
   'fees.view', 'fees.setup', 'fees.assign', 'fees.collect', 'fees.adjust', 'fees.reports',
-    'hostel.view', 'hostel.manage',
+  'hostel.view', 'hostel.manage',
   'financialReports.view', 'financialReports.export', 'financialReports.snapshots',
   'notices.view', 'notices.create', 'notices.edit', 'notices.archive',
   'documents.view', 'documents.upload', 'documents.verify', 'documents.archive',
 ];
 
 const facultyPermissions = [
+  'students.view',
   'attendance.view', 'attendance.markStudents', 'attendance.reports',
   'academicCurriculum.view',
   'timetable.view',
   'exams.view', 'exams.marks',
   'notices.view',
+  'documents.view',
+  'hostel.view',
 ];
 
 const parentPermissions = [
   'academicCurriculum.view',
   'timetable.view',
+  'notices.view',
+  'documents.view',
   'parentPortal.view',
 ];
 
@@ -189,7 +194,7 @@ function buildFacultySeed() {
 
 const seed = {
   colleges: {
-    'main-campus': { id: 'main-campus', name: 'COLLEGE NAME', code: 'COL-097', location: 'Main Campus', status: 'Active', createdAtText: '19 Jun 2026' },
+    'main-campus': { id: 'main-campus', name: 'Maurya Institute of Allied Health Sciences', code: 'COL-097', location: 'Main Campus', logoUrl: '', logoFileName: '', status: 'Active', createdAtText: '19 Jun 2026' },
   },
   students: {
     'seed-student-vivek': { admissionNo: 'ADM-2026-04449', studentId: 'STU-4449', name: 'Vivek Sharma', className: 'Class XII', section: 'A', program: 'CBSE Science', guardianName: 'Rajesh Sharma', idHolder: 'Vivek Sharma', guardianEmail: 'parent.vivek@example.com', phone: '+91 98765 43210', email: 'vivek.sharma@student.edu', academicYear: '2026-2027', status: 'Active', createdAtText: '03 Jun 2026' },
@@ -233,8 +238,8 @@ const seed = {
     'seed-staff-att-kavita': { staffRecordId: 'seed-staff-kavita', employeeId: 'EMP-1001', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026' },
   },
   studentAttendanceRecords: {
-    'seed-student-att-vivek': { entityType: 'Student', entityRecordId: 'seed-student-vivek', entityId: 'STU-4449', entityName: 'Vivek Sharma', className: 'Class XII', section: 'A', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026', parentNotified: false },
-    'seed-student-att-vaibhavi': { entityType: 'Student', entityRecordId: 'seed-student-vaibhavi', entityId: 'STU-4450', entityName: 'Vaibhavi Aggarwal', className: 'Class XI', section: 'B', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Absent', markedAtText: '18 Jun 2026', parentNotified: true },
+    'seed-student-att-vivek': { entityType: 'Student', entityRecordId: 'seed-student-vivek', entityId: 'STU-4449', entityName: 'Vivek Sharma', className: 'Class XII', section: 'A', courseCode: 'SCI-XII', courseName: 'CBSE Science', subjectCode: 'PHY-12', subjectName: 'Physics', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026', parentNotified: false },
+    'seed-student-att-vaibhavi': { entityType: 'Student', entityRecordId: 'seed-student-vaibhavi', entityId: 'STU-4450', entityName: 'Vaibhavi Aggarwal', className: 'Class XI', section: 'B', courseCode: 'COM-XI', courseName: 'PU Commerce', subjectCode: 'ACC-11', subjectName: 'Accountancy', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Absent', markedAtText: '18 Jun 2026', parentNotified: true },
   },
   attendanceNotifications: {
     'seed-att-note-vaibhavi': { studentRecordId: 'seed-student-vaibhavi', studentId: 'STU-4450', studentName: 'Vaibhavi Aggarwal', channel: 'Parent Portal', academicYear: '2026-2027', reason: 'Absent on 18 Jun 2026', status: 'Queued', createdAtText: '18 Jun 2026' },
@@ -249,7 +254,7 @@ const seed = {
     'seed-tt-pub-xii-a': { classKey: 'Class XII - A', academicYear: '2026-2027', status: 'Published', publishedAtText: '10 Jun 2026', entryCount: 1 },
   },
   examSchedules: {
-    'seed-exam-physics': { examName: 'Mid Term Examination', classKey: 'Class XII - A', subject: 'Physics', academicYear: '2026-2027', examDate: '2026-06-25', maxMarks: 50, facultyId: 'seed-staff-kavita', facultyName: 'Dr. Kavita Menon', status: 'Scheduled', createdAtText: '12 Jun 2026' },
+    'seed-exam-physics': { examName: 'Mid Term Examination', classKey: 'Class XII - A', subject: 'Physics', examType: 'Written', academicYear: '2026-2027', examDate: '2026-06-25', startTime: '09:30', durationMinutes: 180, roomNo: '101', maxMarks: 50, facultyId: 'seed-staff-kavita', facultyName: 'Dr. Kavita Menon', status: 'Scheduled', createdAtText: '12 Jun 2026' },
   },
   internalAssessments: {
     'seed-assessment-physics': { title: 'Physics Internal Assessment', classKey: 'Class XII - A', subject: 'Physics', academicYear: '2026-2027', maxMarks: 20, status: 'Active', createdAtText: '12 Jun 2026' },
@@ -290,7 +295,7 @@ const seed = {
     'seed-notice-library': { type: 'Digital Notice', title: 'Library timing update', referenceNo: 'NOTICE-2026-001', audience: 'Students', academicYear: '2026-2027', priority: 'Normal', body: 'Library hours are extended until 6 PM during revision week.', publishDate: '2026-06-18', expiryDate: '2026-06-30', status: 'Published', createdByName: 'Admin Office', createdAtText: '18 Jun 2026' },
   },
   managedDocuments: {
-    'seed-managed-doc-vivek': { ownerType: 'Student', ownerRecordId: 'seed-student-vivek', ownerId: 'STU-4449', ownerName: 'Vivek Sharma', documentType: 'Aadhaar Card', category: 'Identity', academicYear: '2026-2027', fileName: 'vivek-aadhaar.pdf', fileSize: 248000, fileType: 'application/pdf', fileUrl: '', storagePath: '', verificationStatus: 'Verified', uploadedAtText: '10 Jun 2026', verifiedAtText: '11 Jun 2026', tags: 'identity, student' },
+    'seed-managed-doc-vivek': { ownerType: 'Student', ownerRecordId: 'seed-student-vivek', ownerId: 'STU-4449', ownerName: 'Vivek Sharma', documentType: 'Aadhaar', category: 'Identity', academicYear: '2026-2027', fileName: 'vivek-aadhaar.pdf', fileSize: 248000, fileType: 'application/pdf', fileUrl: '', storagePath: '', verificationStatus: 'Verified', uploadedAtText: '10 Jun 2026', verifiedAtText: '11 Jun 2026', notes: 'identity, student', tags: 'identity, student' },
   },
   parentPortalLinks: {
     'seed-parent-link-vivek': { parentUserId: 'seed-parent-user', parentEmail: 'parent.vivek@example.com', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', relationship: 'Father', status: 'Active' },
@@ -308,7 +313,7 @@ const seed = {
     'seed-calendar-orientation': { title: 'Orientation Day', eventType: 'Academic', eventDate: '2026-06-01', audience: 'All', academicYear: '2026-2027', status: 'Published', createdAtText: '25 May 2026' },
   },
   systemSettings: {
-    institute: { id: 'institute', name: 'COLLEGE NAME', instituteId: 'COL-097', code: 'COL-097', email: 'admin@college.edu', phone: '+91 98765 00000', address: 'Main Campus Road', city: 'Bengaluru', status: 'Active', updatedAtText: '19 Jun 2026' },
+    institute: { id: 'institute', name: 'Maurya Institute of Allied Health Sciences', instituteId: 'COL-097', code: 'COL-097', logoUrl: '', logoFileName: '', email: 'admin@college.edu', phone: '+91 98765 00000', address: 'Main Campus Road', city: 'Bengaluru', status: 'Active', updatedAtText: '19 Jun 2026' },
     academicYear: { id: 'academicYear', name: '2026-2027', startsOn: '2026-06-01', endsOn: '2027-03-31', status: 'Active', updatedAtText: '19 Jun 2026' },
     idFormats: { id: 'idFormats', student: 'STU-{number}', admission: 'ADM-{year}-{number}', employee: 'EMP-{number}', receipt: 'REC-{year}-{number}', updatedAtText: '19 Jun 2026' },
     moduleDefaults: { id: 'moduleDefaults', studentAdmissions: true, staffLeave: true, timetablePublishing: true, parentPortal: true, onlinePayments: false, receiptGeneration: false, communicationModule: false, updatedAtText: '19 Jun 2026' },
@@ -323,9 +328,11 @@ Object.assign(clientReadySeed, {
   colleges: {
     'main-campus': {
       id: 'main-campus',
-      name: 'Maurya Group of Institutions',
+      name: 'Maurya Institute of Allied Health Sciences',
       code: 'MAURYA',
       location: 'Mysuru',
+      logoUrl: '',
+      logoFileName: '',
       status: 'Active',
       createdAtText: '09 Jan 2026',
     },
@@ -349,9 +356,11 @@ Object.assign(clientReadySeed, {
   systemSettings: {
     institute: {
       id: 'institute',
-      name: 'Maurya Group of Institutions',
+      name: 'Maurya Institute of Allied Health Sciences',
       instituteId: 'MAURYA',
       code: 'MAURYA',
+      logoUrl: '',
+      logoFileName: '',
       email: 'admin@maurya.edu',
       phone: '',
       address: 'Mysuru',

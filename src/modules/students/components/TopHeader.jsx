@@ -18,6 +18,7 @@ export default function TopHeader({
   const currentRoleId = user?.roleId || 'admin';
   const currentRole = getRoleById(defaultRoles, currentRoleId);
   const isSuperAdmin = currentRoleId === 'super-admin';
+  const isParent = currentRoleId === 'parent';
   const userDisplayId = user?.displayId || user?.adminId || user?.employeeId || user?.uid?.slice(0, 8) || '-';
   const instituteId = user?.selectedCollege?.code || institute?.instituteId || institute?.code || '-';
 
@@ -51,6 +52,7 @@ export default function TopHeader({
               ))}
             </select>
           </label>
+          {!isParent && (
           <label className="text-xs font-semibold text-slate-500">
             <span className="sr-only">Academic Year</span>
             <select
@@ -63,6 +65,7 @@ export default function TopHeader({
               ))}
             </select>
           </label>
+          )}
         </div>
       </div>
 

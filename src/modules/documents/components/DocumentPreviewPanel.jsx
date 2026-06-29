@@ -27,7 +27,7 @@ export default function DocumentPreviewPanel({ canArchive = false, canVerify = f
               <div className="rounded-lg bg-[#f5f5f6] p-3">Verified<br /><b>{document.verifiedAtText || '-'}</b></div>
             </div>
             <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-600">
-              Tags: {document.tags || '-'}
+              Notes: {document.note || document.notes || document.tags || '-'}
             </div>
             {document.fileUrl ? (
               <div className="grid sm:grid-cols-2 gap-2">

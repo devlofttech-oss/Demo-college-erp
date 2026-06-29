@@ -122,12 +122,21 @@ export default function ParentPortal({ currentUser, academicYear = '2026-2027', 
         <>
           <section className="my-5 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
-              <div className="min-w-0">
-                <div className="text-xs font-bold uppercase text-slate-500">Selected Student</div>
-                <h2 className="mt-1 text-2xl font-extrabold text-slate-900">{selectedStudent.name}</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {[selectedStudent.studentId, selectedStudent.className, selectedStudent.section].filter(Boolean).join(' | ')}
-                </p>
+              <div className="min-w-0 flex items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center overflow-hidden shrink-0">
+                  {selectedStudent.profilePhotoUrl ? (
+                    <img src={selectedStudent.profilePhotoUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <UserRound size={30} />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold uppercase text-slate-500">Selected Student</div>
+                  <h2 className="mt-1 text-2xl font-extrabold text-slate-900">{selectedStudent.name}</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {[selectedStudent.studentId, selectedStudent.className, selectedStudent.section].filter(Boolean).join(' | ')}
+                  </p>
+                </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3 xl:min-w-[680px]">
                 {overviewItems.map(({ label, value, icon }) => (

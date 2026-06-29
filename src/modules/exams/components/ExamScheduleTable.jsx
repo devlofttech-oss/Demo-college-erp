@@ -23,15 +23,15 @@ export default function ExamScheduleTable({ schedules, canEdit, onEdit, onSelect
             >
               <td className="px-5 py-4 rounded-l-lg">
                 <div className="font-bold text-slate-900">{schedule.examName}</div>
-                <div className="text-xs text-slate-500">{schedule.facultyName}</div>
+                <div className="text-xs text-slate-500">{schedule.examType || 'Written'} | {schedule.facultyName}</div>
               </td>
               <td className="px-5 py-4">
                 <div>{schedule.classKey}</div>
                 <div className="text-xs text-slate-500">{schedule.subject}</div>
               </td>
               <td className="px-5 py-4">
-                <div>{schedule.examDate}</div>
-                <div className="text-xs text-slate-500">Max: {schedule.maxMarks}</div>
+                <div>{schedule.examDate}{schedule.startTime ? ` | ${schedule.startTime}` : ''}</div>
+                <div className="text-xs text-slate-500">Max: {schedule.maxMarks}{schedule.roomNo ? ` | Hall ${schedule.roomNo}` : ''}</div>
               </td>
               <td className={`px-5 py-4 ${showActions ? '' : 'rounded-r-lg'}`}><StatusBadge value={schedule.status} /></td>
               {showActions && (

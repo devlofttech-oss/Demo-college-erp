@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import SearchSelect from '../../../components/SearchSelect';
 import { formatCurrency } from '../feeUtils';
 
 export default function FeeAdjustmentModal({ assignments, initialAssignmentId = '', onClose, onSave }) {
@@ -26,9 +27,15 @@ export default function FeeAdjustmentModal({ assignments, initialAssignmentId = 
         <div className="p-6 space-y-4">
           <label className="block">
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Student Fee</span>
-            <select value={form.assignmentId} onChange={(event) => setForm((prev) => ({ ...prev, assignmentId: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
-              {assignments.map((item) => <option key={item.id} value={item.id}>{item.studentName} - {formatCurrency(item.dueAmount)} due</option>)}
-            </select>
+            <SearchSelect
+              value={form.assignmentId}
+              onChange={(assignmentId) => setForm((prev) => ({ ...prev, assignmentId }))}
+              options={assignments.map((item) => ({
+                value: item.id,
+                label: `${item.studentName} - ${formatCurrency(item.dueAmount)} due`,
+              }))}
+              placeholder="Search student fee..."
+            />
           </label>
           <label className="block">
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Adjustment Amount</span>

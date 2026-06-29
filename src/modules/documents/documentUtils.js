@@ -1,5 +1,6 @@
-export const documentOwnerTypes = ['Student', 'Staff', 'Academic Archive'];
-export const documentCategories = ['Identity', 'Admission', 'Academic', 'HR', 'Finance', 'Archive', 'Other'];
+export const documentOwnerTypes = ['Student', 'Staff', 'Other'];
+export const documentTypes = ['Aadhaar', 'PAN Card', 'Marks Card', 'Transfer Certificate', 'Other'];
+export const documentCategories = ['Identity', 'Admission', 'Academic', 'Finance', 'Other'];
 export const documentStatuses = ['Pending Review', 'Verified', 'Rejected', 'Archived'];
 
 export function formatDisplayDate(date = new Date()) {
@@ -25,7 +26,7 @@ export function resolveOwnerName(document, students = [], staff = []) {
   if (document.ownerType === 'Staff') {
     return staff.find((item) => item.id === document.ownerRecordId)?.name || document.ownerId || 'Staff';
   }
-  return document.archiveTitle || 'Academic Archive';
+  return document.archiveTitle || document.ownerName || 'Other';
 }
 
 export function summarizeDocuments(documents = []) {
@@ -58,6 +59,7 @@ export function filterDocuments(documents = [], filters = {}) {
       item.ownerName,
       item.ownerId,
       item.archiveTitle,
+      item.notes,
       item.tags,
     ]
       .filter(Boolean)
@@ -68,9 +70,10 @@ export function filterDocuments(documents = [], filters = {}) {
 
 export function validateDocumentForm(form) {
   if (!documentOwnerTypes.includes(form.ownerType)) return 'Owner type is required.';
-  if (form.ownerType !== 'Academic Archive' && !form.ownerRecordId) return 'Owner is required.';
-  if (form.ownerType === 'Academic Archive' && !form.archiveTitle?.trim()) return 'Archive title is required.';
+  if (form.ownerType !== 'Other' && !form.ownerRecordId) return 'Name is required.';
+  if (form.ownerType === 'Other' && !form.ownerName?.trim()) return 'Name is required.';
   if (!form.documentType?.trim()) return 'Document type is required.';
+  if (form.documentType === 'Other' && !form.note?.trim()) return 'Note is required when document type is Other.';
   if (!documentCategories.includes(form.category)) return 'Category is required.';
   return '';
 }

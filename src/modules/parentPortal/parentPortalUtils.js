@@ -65,9 +65,9 @@ export function recordsForStudent(records = [], student = {}) {
 export function buildParentAttendance(records = [], student = {}, academicSubjects = []) {
   const summary = summarizeAttendance(records);
   const subjects = getCourseSubjects(student, academicSubjects);
-  const hasSubjectRecords = records.some((record) => record.subject);
+  const hasSubjectRecords = records.some((record) => record.subject || record.subjectName);
   const subjectRows = subjects.map((subject) => {
-    const subjectRecords = records.filter((record) => normalizeSubject(record.subject) === normalizeSubject(subject));
+    const subjectRecords = records.filter((record) => normalizeSubject(record.subjectName || record.subject) === normalizeSubject(subject));
     const rowRecords = hasSubjectRecords ? subjectRecords : records;
     const rowSummary = summarizeAttendance(rowRecords);
     return {

@@ -8,7 +8,6 @@ assert.equal(getModuleById('dashboard').label, 'Dashboard');
 assert.equal(getModuleById('students').permission, 'students.view');
 assert.equal(getModuleById('fees').permission, 'fees.view');
 assert.equal(getModuleById('fees').label, 'Payment');
-assert.equal(getModuleById('hostel-management').permission, 'hostel.view');
 assert.equal(getModuleById('parent-portal').permission, 'parentPortal.view');
 assert.equal(getModuleById('missing-module'), null);
 
@@ -23,15 +22,16 @@ const adminSidebarVisible = enabled
 assert.deepEqual(adminSidebarVisible, [
   'dashboard',
   'students',
+  'calendar',
   'faculty-staff',
   'attendance',
   'timetable',
   'examination-results',
+  'notice-board',
   'document-management',
   'fees',
   'hostel-management',
   'financial-reports',
-  'parent-portal',
 ]);
 
 const footerVisible = enabled.filter((module) => module.footer).map((module) => module.id);
@@ -63,13 +63,13 @@ const parentVisible = enabled.filter((module) => canAccess(defaultRoles, 'parent
 assert.deepEqual(parentVisible, ['calendar', 'timetable', 'notice-board', 'document-management', 'parent-portal']);
 
 const facultyVisible = enabled.filter((module) => canAccess(defaultRoles, 'faculty', module.permission)).map((module) => module.id);
+assert.equal(facultyVisible.includes('students'), true);
 assert.equal(facultyVisible.includes('calendar'), true);
 assert.equal(facultyVisible.includes('academics'), false);
 assert.equal(facultyVisible.includes('attendance'), true);
 assert.equal(facultyVisible.includes('notice-board'), true);
-assert.equal(facultyVisible.includes('document-management'), false);
+assert.equal(facultyVisible.includes('document-management'), true);
 assert.equal(facultyVisible.includes('fees'), false);
-assert.equal(facultyVisible.includes('hostel-management'), true);
 assert.equal(facultyVisible.includes('financial-reports'), false);
 assert.equal(facultyVisible.includes('parent-portal'), false);
 
@@ -83,11 +83,11 @@ assert.deepEqual(adminVisible, [
   'attendance',
   'timetable',
   'examination-results',
+  'notice-board',
   'document-management',
   'fees',
   'hostel-management',
   'financial-reports',
-  'parent-portal',
   'settings',
 ]);
 

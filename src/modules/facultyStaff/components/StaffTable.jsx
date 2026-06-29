@@ -33,8 +33,12 @@ export default function StaffTable({ staff, canArchive, canEdit, canManageLeave,
             >
               <td className="px-5 py-4 rounded-l-lg">
                 <div className="flex items-center gap-3 text-left">
-                  <span className="h-10 w-10 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center">
-                    <UserRound size={20} />
+                  <span className="h-10 w-10 rounded-full bg-[#30343c] text-emerald-300 flex items-center justify-center overflow-hidden">
+                    {member.photoUrl ? (
+                      <img src={member.photoUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <UserRound size={20} />
+                    )}
                   </span>
                   <span>
                     <span className="block font-bold text-slate-900">{member.name}</span>

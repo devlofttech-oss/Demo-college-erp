@@ -190,12 +190,16 @@ export default function CurriculumManagement({ currentUser, academicYear = '2026
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={() => setShowModal(true)} disabled={!canManage} className="h-10 px-5 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
-            <Plus size={16} /> Add Event
-          </button>
-          <button onClick={publishCurriculum} disabled={!canManage} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
-            <Send size={16} /> Publish
-          </button>
+          {canManage && (
+            <>
+              <button onClick={() => setShowModal(true)} className="h-10 px-5 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2">
+                <Plus size={16} /> Add Event
+              </button>
+              <button onClick={publishCurriculum} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm flex items-center gap-2">
+                <Send size={16} /> Publish
+              </button>
+            </>
+          )}
           <button onClick={downloadCurriculum} className="h-10 px-5 rounded-lg bg-[#33373e] text-white font-semibold text-sm flex items-center gap-2">
             <Download size={16} /> Download
           </button>
