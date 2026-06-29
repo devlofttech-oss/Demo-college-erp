@@ -2339,10 +2339,10 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-shell.light-mode .erp-sidebar-theme-switch button.is-active {
-  background:#f7f8f7!important;
-  border-color:#dfe5de!important;
-  color:#263026!important;
-  box-shadow:none!important;
+  background:#e1f0de!important;
+  border-color:#8fbc86!important;
+  color:#033500!important;
+  box-shadow:inset 0 0 0 1px rgba(3,53,0,.08)!important;
 }
 
 .erp-shell.light-mode .erp-dashboard-donut-hole {
