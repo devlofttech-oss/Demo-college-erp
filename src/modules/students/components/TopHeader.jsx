@@ -1,7 +1,72 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LogOut, UserRound } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, LogOut, UserRound } from 'lucide-react';
 import { defaultRoles, getRoleById } from '../../userRoles/rolePermissions';
 import mauryaLogo from '../../../../assets/maurya.png';
+
+const departmentOrder = [
+  'Maurya College of Nursing',
+  'Maurya College of Physiotherapy',
+  'Maurya College of Allied Health Sciences',
+];
+
+function getCourseLabel(course = {}) {
+  const suffix = course.admissionType || course.courseYear || '';
+  return [course.courseName || course.name || course.courseCode, suffix].filter(Boolean).join(' - ');
+}
+
+function getDepartmentLabel(course = {}) {
+  const source = [
+    course.department,
+    course.departmentName,
+    course.collegeName,
+    course.institute,
+    course.courseName,
+    course.courseCode,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (source.includes('nursing')) return 'Maurya College of Nursing';
+  if (source.includes('physio') || source.includes('bpt')) return 'Maurya College of Physiotherapy';
+  if (
+    source.includes('allied') ||
+    source.includes('bot') ||
+    source.includes('atot') ||
+    source.includes('occupational') ||
+    source.includes('anaesthesia') ||
+    source.includes('anesthesia') ||
+    source.includes('operation') ||
+    source.includes('imaging') ||
+    source.includes('mit') ||
+    source.includes('mlt')
+  ) {
+    return 'Maurya College of Allied Health Sciences';
+  }
+
+  const fallback = course.collegeName || course.department || course.institute || 'Other Courses';
+  return fallback
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\bMysore\b|\bMysuru\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Other Courses';
+}
+
+function buildDepartmentCourseGroups(courses = []) {
+  const groups = new Map();
+  courses.forEach((course) => {
+    if (!course?.courseCode) return;
+    const departmentName = getDepartmentLabel(course);
+    if (!groups.has(departmentName)) groups.set(departmentName, { name: departmentName, courses: [] });
+    groups.get(departmentName).courses.push(course);
+  });
+
+  return [...groups.values()].sort((a, b) => {
+    const firstIndex = departmentOrder.indexOf(a.name);
+    const secondIndex = departmentOrder.indexOf(b.name);
+    if (firstIndex !== -1 || secondIndex !== -1) {
+      return (firstIndex === -1 ? 999 : firstIndex) - (secondIndex === -1 ? 999 : secondIndex);
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
 
 export default function TopHeader({
   academicYear,
@@ -15,7 +80,10 @@ export default function TopHeader({
   onLogout,
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
+  const [courseMenuOpen, setCourseMenuOpen] = useState(false);
+  const [expandedDepartment, setExpandedDepartment] = useState('');
   const profileMenuRef = useRef(null);
+  const courseMenuRef = useRef(null);
   const currentRoleId = user?.roleId || 'admin';
   const currentRole = getRoleById(defaultRoles, currentRoleId);
   const isSuperAdmin = currentRoleId === 'super-admin';
@@ -27,20 +95,41 @@ export default function TopHeader({
   const selectedCourseValue = isParent && !courses.some((course) => course.courseCode === courseCode)
     ? courses[0]?.courseCode || ''
     : courseCode;
-  const courseOptions = useMemo(() => courses.map((course) => (
-    <option key={course.courseCode} value={course.courseCode}>
-      {course.courseName} - {course.admissionType || course.courseYear}
-    </option>
-  )), [courses]);
+  const selectedCourse = useMemo(
+    () => courses.find((course) => course.courseCode === selectedCourseValue) || null,
+    [courses, selectedCourseValue]
+  );
+  const courseGroups = useMemo(() => buildDepartmentCourseGroups(courses), [courses]);
+  const selectedDepartmentName = selectedCourse ? getDepartmentLabel(selectedCourse) : '';
+  const selectedCourseLabel = selectedCourse
+    ? getCourseLabel(selectedCourse)
+    : isParent && !courses.length
+      ? 'Student Course'
+      : 'All Courses';
+  const coursePickerDisabled = isParent && courses.length <= 1;
+
+  const toggleCourseMenu = () => {
+    if (coursePickerDisabled) return;
+    if (!courseMenuOpen) setExpandedDepartment(selectedDepartmentName);
+    setCourseMenuOpen((open) => !open);
+  };
+
+  const selectCourse = (nextCourseCode) => {
+    onCourseChange?.(nextCourseCode);
+    setCourseMenuOpen(false);
+  };
 
   useEffect(() => {
-    const closeProfileMenu = (event) => {
+    const closeMenus = (event) => {
       if (!profileMenuRef.current?.contains(event.target)) {
         setProfileOpen(false);
       }
+      if (!courseMenuRef.current?.contains(event.target)) {
+        setCourseMenuOpen(false);
+      }
     };
-    document.addEventListener('mousedown', closeProfileMenu);
-    return () => document.removeEventListener('mousedown', closeProfileMenu);
+    document.addEventListener('mousedown', closeMenus);
+    return () => document.removeEventListener('mousedown', closeMenus);
   }, []);
 
   return (
@@ -52,19 +141,79 @@ export default function TopHeader({
         </div>
         <div className="erp-header-actions">
         <div className="erp-header-filters">
-          <label className="text-xs font-semibold text-slate-500">
+          <label className="erp-course-picker-label text-xs font-semibold text-slate-500">
             <span className="sr-only">Course</span>
-            <select
-              value={selectedCourseValue}
-              onChange={(event) => onCourseChange?.(event.target.value)}
-              disabled={isParent && courses.length <= 1}
-              className="erp-header-select bg-white border border-slate-200 rounded-lg shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-3 text-xs text-slate-600 outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
-              title="Select course"
-            >
-              {!isParent && <option value="all">All Courses</option>}
-              {isParent && !courses.length && <option value="">Student Course</option>}
-              {courseOptions}
-            </select>
+            <div ref={courseMenuRef} className={`erp-course-picker ${courseMenuOpen ? 'is-open' : ''}`}>
+              <button
+                type="button"
+                onClick={toggleCourseMenu}
+                disabled={coursePickerDisabled}
+                className="erp-header-select erp-course-picker-button bg-white border border-slate-200 rounded-lg shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-3 text-xs text-slate-600 outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
+                title="Select course"
+                aria-haspopup="menu"
+                aria-expanded={courseMenuOpen}
+              >
+                <span>{selectedCourseLabel}</span>
+                <ChevronDown className="erp-course-picker-chevron" size={15} />
+              </button>
+              {courseMenuOpen && !coursePickerDisabled && (
+                <div className="erp-course-picker-menu" role="menu">
+                  {!isParent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedDepartment('');
+                        selectCourse('all');
+                      }}
+                      className={`erp-course-picker-all ${selectedCourseValue === 'all' ? 'is-selected' : ''}`}
+                      role="menuitem"
+                    >
+                      <span>All Courses</span>
+                      {selectedCourseValue === 'all' && <Check size={15} />}
+                    </button>
+                  )}
+                  {isParent && !courses.length && (
+                    <div className="erp-course-picker-empty">Student Course</div>
+                  )}
+                  {courseGroups.map((group) => {
+                    const expanded = expandedDepartment === group.name;
+                    return (
+                      <div key={group.name} className="erp-course-picker-group">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedDepartment(expanded ? '' : group.name)}
+                          className="erp-course-picker-department"
+                          aria-expanded={expanded}
+                        >
+                          <span>{group.name}</span>
+                          <span className="erp-course-picker-count">{group.courses.length}</span>
+                          <ChevronRight className={`erp-course-picker-group-chevron ${expanded ? 'is-expanded' : ''}`} size={15} />
+                        </button>
+                        {expanded && (
+                          <div className="erp-course-picker-courses">
+                            {group.courses.map((course) => {
+                              const selected = selectedCourseValue === course.courseCode;
+                              return (
+                                <button
+                                  type="button"
+                                  key={course.courseCode}
+                                  onClick={() => selectCourse(course.courseCode)}
+                                  className={`erp-course-picker-course ${selected ? 'is-selected' : ''}`}
+                                  role="menuitem"
+                                >
+                                  <span>{getCourseLabel(course)}</span>
+                                  {selected && <Check size={14} />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </label>
           {!isParent && (
           <label className="text-xs font-semibold text-slate-500">
