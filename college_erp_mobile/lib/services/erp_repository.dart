@@ -179,6 +179,18 @@ class ErpRepository {
             'studentAdmissions',
             academicYear: academicYear,
           ),
+          'promotions': await listCollection(
+            'studentPromotions',
+            academicYear: academicYear,
+          ),
+          'transfers': await listCollection(
+            'studentTransfers',
+            academicYear: academicYear,
+          ),
+          'admissionBatches': await listCollection(
+            'admissionBatches',
+            academicYear: academicYear,
+          ),
           'attendance': await listCollection(
             'studentAttendanceRecords',
             academicYear: academicYear,
@@ -195,8 +207,12 @@ class ErpRepository {
             'feeAssignments',
             academicYear: academicYear,
           ),
+          'collections': await listCollection(
+            'feeCollections',
+            academicYear: academicYear,
+          ),
           'documents': await listCollection(
-            'managedDocuments',
+            'studentDocuments',
             academicYear: academicYear,
           ),
           'health': await listCollection(
@@ -541,16 +557,40 @@ class ErpRepository {
     );
   }
 
-  Future<void> createDocument(
+  Future<String> createDocument(
     String collectionName,
     Map<String, dynamic> data,
   ) async {
     if (!isReady) throw StateError('Firebase is not configured.');
-    await _db.collection(collectionName).add({
+    final ref = await _db.collection(collectionName).add({
       ...data,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    return ref.id;
+  }
+
+  Future<void> updateDocument(
+    String collectionName,
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    if (!isReady) throw StateError('Firebase is not configured.');
+    if (id.trim().isEmpty || id.startsWith('sample-')) {
+      throw ArgumentError('A live $collectionName record id is required.');
+    }
+    await _db.collection(collectionName).doc(id).update({
+      ...data,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> deleteDocument(String collectionName, String id) async {
+    if (!isReady) throw StateError('Firebase is not configured.');
+    if (id.trim().isEmpty || id.startsWith('sample-')) {
+      throw ArgumentError('A live $collectionName record id is required.');
+    }
+    await _db.collection(collectionName).doc(id).delete();
   }
 
   Future<String> uploadManagedDocument({

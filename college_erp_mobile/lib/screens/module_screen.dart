@@ -35,8 +35,15 @@ class ModuleScreen extends StatefulWidget {
 }
 
 class _ModuleScreenState extends State<ModuleScreen> {
+  static const _pendingAdmissionStatus = 'Pending Approval';
+  static const _approvedAdmissionStatus = 'Approved';
+  static const _activeStudentStatus = 'Active';
+  static const _defaultAcademicYear = '2025-2026';
+
   var _query = '';
   var _academicYear = '';
+  var _studentStatusFilter = 'active';
+  var _studentCourseCode = 'all';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -180,25 +187,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('students.create'))
             _ModuleAction(
-              label: 'Add Student',
+              label: 'New Admission',
               icon: Icons.person_add_alt_1_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Student',
-                collectionName: 'students',
-                fields: const [
-                  _FieldSpec('name', 'Student name', isRequired: true),
-                  _FieldSpec('studentId', 'Student ID', isRequired: true),
-                  _FieldSpec('className', 'Class / Standard'),
-                  _FieldSpec('courseName', 'Course'),
-                  _FieldSpec('phone', 'Phone'),
-                  _FieldSpec('email', 'Email'),
-                ],
-                defaults: {'status': 'Active'},
-              ),
+              onTap: () => _showStudentAdmissionSheet(data),
             ),
           if (_can('students.documents'))
             _ModuleAction(
-              label: 'Student Doc',
+              label: 'Student Document',
               icon: Icons.note_add_rounded,
               onTap: () => _showCreateRecordSheet(
                 title: 'Add Student Document',
@@ -446,60 +441,322 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _students(Map<String, List<Map<String, dynamic>>> data) {
-    final students = _items(data, 'students')
-        .where(
-          (item) => containsQuery(item, _query, const [
-            'name',
-            'studentId',
-            'admissionNo',
-            'className',
-            'courseName',
-            'phone',
-          ]),
-        )
+    final allStudents = _items(data, 'students');
+    final activeStudents = allStudents
+        .where((student) => !_isArchivedStudent(student))
         .toList();
+    final archivedStudents = allStudents.where(_isArchivedStudent).toList();
+    final courseOptions = _studentCourseOptions(data);
+    final course = _selectedStudentCourse(courseOptions);
+    final visibleStudents =
+        (_studentStatusFilter == 'archived' ? archivedStudents : activeStudents)
+            .where((student) => _studentMatchesCourse(student, course))
+            .where(
+              (item) => containsQuery(item, _query, const [
+                'name',
+                'studentId',
+                'admissionNo',
+                'className',
+                'section',
+                'program',
+                'courseCode',
+                'courseName',
+                'phone',
+                'mobileNo',
+              ]),
+            )
+            .toList();
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.school_rounded,
+                  color: AppColors.accent,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Students',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      course == null ? 'All Students' : course.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Browse active and archived records.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (courseOptions.length > 1)
+          DropdownButtonFormField<String>(
+            initialValue:
+                courseOptions.any(
+                  (option) => option.courseCode == _studentCourseCode,
+                )
+                ? _studentCourseCode
+                : 'all',
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.account_tree_rounded, size: 18),
+              labelText: 'Course',
+            ),
+            items: courseOptions
+                .map(
+                  (option) => DropdownMenuItem(
+                    value: option.courseCode,
+                    child: Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _studentCourseCode = value);
+            },
+          ),
+        const SizedBox(height: 12),
+        _SegmentedFilter(
+          value: _studentStatusFilter,
+          options: const {'active': 'Active & Pending', 'archived': 'Archived'},
+          onChanged: (value) => setState(() => _studentStatusFilter = value),
+        ),
         _SummaryRow(
           stats: [
             _Stat(
               'Students',
-              students.length.toString(),
+              allStudents.length.toString(),
               Icons.school_rounded,
               AppColors.accent,
             ),
             _Stat(
-              'Admissions',
-              _items(data, 'admissions').length.toString(),
-              Icons.how_to_reg_rounded,
+              'Active',
+              activeStudents.length.toString(),
+              Icons.verified_user_rounded,
               AppColors.primary,
             ),
             _Stat(
-              'Documents',
-              _items(data, 'documents').length.toString(),
-              Icons.folder_rounded,
-              const Color(0xFF12A6A6),
+              'Archived',
+              archivedStudents.length.toString(),
+              Icons.archive_rounded,
+              AppColors.danger,
             ),
           ],
         ),
-        const SectionTitle('Student Profiles'),
-        if (students.isEmpty)
-          const EmptyState(
-            title: 'No students found',
-            message: 'Try a different search or academic year.',
+        const SectionTitle('Student Information Management'),
+        if (visibleStudents.isEmpty)
+          EmptyState(
+            title:
+                'No ${_studentStatusFilter == 'archived' ? 'archived' : 'active'} student records found',
+            message: 'Try a different search, course, or academic year.',
           )
         else
-          ...students.map(
+          ...visibleStudents.map(
             (student) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _StudentCard(
+              child: _StudentParityCard(
                 student: student,
                 onTap: () => _showStudentSheet(student, data),
+                canEdit: _can('students.edit'),
+                canArchive: _can('students.archive'),
+                showApprove: _canApproveStudent(student, data),
+                onEdit: () => _showStudentProfileSheet(student),
+                onApprove: () => _approveStudentAdmission(student, data),
+                onArchive: () => _archiveStudent(student),
+                onRestore: () => _restoreStudent(student),
               ),
             ),
           ),
+        const SizedBox(height: 4),
+        _StudentCollectionSummary(
+          admissions: _items(data, 'admissions').length,
+          documents: _items(data, 'documents').length,
+          health: _items(data, 'health').length,
+        ),
       ],
     );
+  }
+
+  List<_StudentCourseOption> _studentCourseOptions(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final byCode = <String, _StudentCourseOption>{
+      'all': const _StudentCourseOption('all', 'All Students'),
+    };
+    for (final record in [
+      ..._items(data, 'admissionBatches'),
+      ..._items(data, 'admissions'),
+      ..._items(data, 'students'),
+    ]) {
+      final code = readText(record, const [
+        'courseCode',
+        'program',
+        'courseName',
+        'className',
+      ], fallback: '');
+      if (code.isEmpty || byCode.containsKey(code)) continue;
+      final name = readText(record, const [
+        'courseName',
+        'program',
+        'className',
+      ], fallback: code);
+      final type = readText(record, const [
+        'admissionType',
+        'courseYear',
+        'section',
+      ], fallback: '');
+      byCode[code] = _StudentCourseOption(
+        code,
+        type.isEmpty ? name : '$name - $type',
+      );
+    }
+    return byCode.values.toList();
+  }
+
+  _StudentCourseOption? _selectedStudentCourse(
+    List<_StudentCourseOption> options,
+  ) {
+    if (_studentCourseCode == 'all') return null;
+    for (final option in options) {
+      if (option.courseCode == _studentCourseCode) return option;
+    }
+    return null;
+  }
+
+  bool _studentMatchesCourse(
+    Map<String, dynamic> student,
+    _StudentCourseOption? selectedCourse,
+  ) {
+    if (selectedCourse == null) return true;
+    final selected = selectedCourse.courseCode.toLowerCase();
+    final values = [
+      readText(student, const ['courseCode'], fallback: ''),
+      readText(student, const ['courseName'], fallback: ''),
+      readText(student, const ['program'], fallback: ''),
+      readText(student, const ['className'], fallback: ''),
+    ].map((value) => value.toLowerCase()).where((value) => value.isNotEmpty);
+    return values.any(
+      (value) =>
+          value == selected ||
+          value.contains(selected) ||
+          selected.contains(value),
+    );
+  }
+
+  bool _isArchivedStudent(Map<String, dynamic> student) =>
+      readText(student, const ['status'], fallback: '').toLowerCase() ==
+      'archived';
+
+  bool _isAdmittedStatus(String status) {
+    final normalized = status.toLowerCase();
+    return normalized.contains('active') ||
+        normalized.contains('approved') ||
+        normalized.contains('admitted');
+  }
+
+  bool _canApproveStudent(
+    Map<String, dynamic> student,
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    if (widget.user.roleId != 'super-admin' || _isArchivedStudent(student)) {
+      return false;
+    }
+    final studentStatus = readText(student, const ['status'], fallback: '');
+    final latestAdmission = _latestRelatedRecord(
+      _items(data, 'admissions'),
+      student,
+    );
+    final admissionStatus = latestAdmission == null
+        ? ''
+        : readText(latestAdmission, const ['status'], fallback: '');
+    return !_isAdmittedStatus(studentStatus) &&
+        !_isAdmittedStatus(admissionStatus);
+  }
+
+  Map<String, dynamic>? _latestRelatedRecord(
+    List<Map<String, dynamic>> records,
+    Map<String, dynamic> student,
+  ) {
+    final related = _relatedRecords(records, student);
+    return related.isEmpty ? null : related.last;
+  }
+
+  List<Map<String, dynamic>> _relatedRecords(
+    List<Map<String, dynamic>> records,
+    Map<String, dynamic> student,
+  ) {
+    final studentId = readText(student, const ['studentId'], fallback: '');
+    final recordId = readText(student, const ['id'], fallback: '');
+    return records.where((record) {
+      final values = [
+        readText(record, const ['studentRecordId'], fallback: ''),
+        readText(record, const ['entityRecordId'], fallback: ''),
+        readText(record, const ['ownerRecordId'], fallback: ''),
+        readText(record, const ['studentId'], fallback: ''),
+        readText(record, const ['entityId'], fallback: ''),
+        readText(record, const ['ownerId'], fallback: ''),
+      ];
+      return values.contains(recordId) || values.contains(studentId);
+    }).toList();
+  }
+
+  String _displayDateNow() => DateFormat('dd MMM yyyy').format(DateTime.now());
+
+  int _nextStudentNumber(Map<String, List<Map<String, dynamic>>> data) {
+    final candidates = _items(data, 'students')
+        .where(
+          (student) => readText(student, const [
+            'studentId',
+            'admissionNo',
+          ], fallback: '').isNotEmpty,
+        )
+        .map((student) {
+          final text = readText(student, const [
+            'studentId',
+            'admissionNo',
+          ], fallback: '');
+          final match = RegExp(r'(\d+)$').firstMatch(text);
+          return int.tryParse(match?.group(1) ?? '') ?? 0;
+        })
+        .toList();
+    final highest = candidates.isEmpty
+        ? _items(data, 'students').length
+        : candidates.reduce((first, second) => first > second ? first : second);
+    return highest + 1;
   }
 
   Widget _staff(Map<String, List<Map<String, dynamic>>> data) {
@@ -1621,6 +1878,429 @@ class _ModuleScreenState extends State<ModuleScreen> {
     }
   }
 
+  Future<void> _showStudentAdmissionSheet(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    final courses = _studentCourseOptions(
+      data,
+    ).where((course) => course.courseCode != 'all').toList();
+    _StudentCourseOption? selectedCourse;
+    for (final course in courses) {
+      if (course.courseCode == _studentCourseCode) {
+        selectedCourse = course;
+        break;
+      }
+    }
+    var savedAcademicYear = '';
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: 'New Student Admission',
+        helper:
+            'New admissions are saved as Pending Approval until a Super Admin approves them.',
+        saveLabel: 'Save Admission',
+        initialValues: {
+          'academicYear': _academicYear.trim().isNotEmpty
+              ? _academicYear.trim()
+              : _defaultAcademicYear,
+          if (selectedCourse != null) 'courseCode': selectedCourse.courseCode,
+        },
+        fields: _studentProfileFields(includeStatus: false),
+        onSave: (values) async {
+          final selectedAcademicYear = (values['academicYear'] ?? '')
+              .toString()
+              .trim();
+          if (selectedAcademicYear.isEmpty) {
+            throw StateError('Academic year is required.');
+          }
+          savedAcademicYear = selectedAcademicYear;
+          final nextNumber = _nextStudentNumber(
+            data,
+          ).toString().padLeft(5, '0');
+          final createdAtText = _displayDateNow();
+          final yearToken =
+              selectedAcademicYear.replaceAll(RegExp(r'\D'), '').isEmpty
+              ? DateTime.now().year.toString()
+              : selectedAcademicYear.replaceAll(RegExp(r'\D'), '');
+          final normalized = _normalizedStudentProfile(values);
+          final studentPayload = {
+            ...normalized,
+            'admissionNo': 'ADM-$yearToken-$nextNumber',
+            'studentId': 'STU-$nextNumber',
+            'academicYear': selectedAcademicYear,
+            'status': _pendingAdmissionStatus,
+            'admissionApprovalStatus': _pendingAdmissionStatus,
+            'createdAtText': createdAtText,
+            'createdBy': widget.user.uid,
+          };
+
+          final studentRecordId = await widget.repository.createDocument(
+            'students',
+            studentPayload,
+          );
+          final admissionPayload = {
+            'studentRecordId': studentRecordId,
+            'studentId': studentPayload['studentId'],
+            'admissionNo': studentPayload['admissionNo'],
+            'academicYear': selectedAcademicYear,
+            'idHolder': studentPayload['idHolder'],
+            'courseCode': studentPayload['courseCode'],
+            'courseName': studentPayload['courseName'],
+            'courseYear': studentPayload['courseYear'],
+            'admissionType': studentPayload['admissionType'],
+            'collegeName': studentPayload['collegeName'],
+            'collegeCode': studentPayload['collegeCode'],
+            'admissionDate': studentPayload['admissionDate'],
+            'seatType': studentPayload['seatType'],
+            'actualCategory': studentPayload['actualCategory'],
+            'status': _pendingAdmissionStatus,
+            'submittedAtText': createdAtText,
+            'createdBy': widget.user.uid,
+          };
+          final admissionFormPayload = {
+            'studentRecordId': studentRecordId,
+            'studentId': studentPayload['studentId'],
+            'documentType': 'Admission Form',
+            'academicYear': selectedAcademicYear,
+            'uploadedBy': widget.user.name.isEmpty
+                ? widget.user.email
+                : widget.user.name,
+            'fileName': '${studentPayload['admissionNo']}-admission-form.pdf',
+            'verificationStatus': 'Pending Review',
+            'uploadedAtText': createdAtText,
+            'createdBy': widget.user.uid,
+          };
+          await Future.wait([
+            widget.repository.createDocument(
+              'studentAdmissions',
+              admissionPayload,
+            ),
+            widget.repository.createDocument(
+              'studentDocuments',
+              admissionFormPayload,
+            ),
+          ]);
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student admission sent for Super Admin approval'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      if (savedAcademicYear.isNotEmpty) {
+        setState(() => _academicYear = savedAcademicYear);
+      }
+      await _refresh();
+    }
+  }
+
+  Future<void> _showStudentProfileSheet(Map<String, dynamic> student) async {
+    final studentId = readText(student, const ['id'], fallback: '');
+    if (studentId.isEmpty) return;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: 'Edit Student Profile',
+        helper: 'Updates student profile and academic details.',
+        saveLabel: 'Save Changes',
+        initialValues: student,
+        fields: _studentProfileFields(includeStatus: true),
+        onSave: (values) async {
+          final previousStatus = readText(student, const [
+            'status',
+          ], fallback: _pendingAdmissionStatus);
+          final requestedStatus = (values['status'] ?? previousStatus)
+              .toString()
+              .trim();
+          if (requestedStatus != previousStatus &&
+              widget.user.roleId != 'super-admin' &&
+              _isAdmittedStatus(requestedStatus)) {
+            throw StateError(
+              'Only Super Admin can approve or admit a student.',
+            );
+          }
+          final updates = {
+            ..._normalizedStudentProfile(values),
+            'status': requestedStatus.isEmpty
+                ? _pendingAdmissionStatus
+                : requestedStatus,
+            'updatedAtText': _displayDateNow(),
+          };
+          await widget.repository.updateDocument(
+            'students',
+            studentId,
+            updates,
+          );
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student profile updated'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  List<_FieldSpec> _studentProfileFields({required bool includeStatus}) {
+    return [
+      const _FieldSpec('courseCode', 'Course code'),
+      const _FieldSpec('courseName', 'Course name'),
+      const _FieldSpec('courseYear', 'Course year / Class'),
+      const _FieldSpec('admissionType', 'Admission type / Section'),
+      const _FieldSpec('academicYear', 'Academic year', isRequired: true),
+      const _FieldSpec('name', 'Student name', isRequired: true),
+      const _FieldSpec('nameAsInAadhaar', 'Name as in Aadhaar'),
+      const _FieldSpec('fatherName', 'Father name', isRequired: true),
+      const _FieldSpec('motherName', 'Mother name'),
+      const _FieldSpec('dob', 'Date of birth'),
+      const _FieldSpec('gender', 'Gender'),
+      const _FieldSpec('bloodGroup', 'Blood group'),
+      const _FieldSpec('mobileNo', 'Mobile no', isRequired: true),
+      const _FieldSpec('alternatePhoneNo', 'Phone no'),
+      const _FieldSpec('email', 'Email'),
+      const _FieldSpec('address', 'Address'),
+      const _FieldSpec('nationality', 'Nationality'),
+      const _FieldSpec('state', 'State'),
+      const _FieldSpec('ruralUrban', 'Rural / Urban'),
+      const _FieldSpec('religion', 'Religion'),
+      const _FieldSpec('seatType', 'Admission seat type'),
+      const _FieldSpec('govtSeatType', 'Govt seat type'),
+      const _FieldSpec('actualCategory', 'Actual category'),
+      const _FieldSpec('seatSelectCategory', 'Seat select category'),
+      const _FieldSpec('admissionDate', 'Date of admission'),
+      const _FieldSpec('keaCetNumber', 'KEA CET Number'),
+      const _FieldSpec('sspId', 'SSP ID'),
+      const _FieldSpec('neetRegNo', 'NEET Reg No'),
+      const _FieldSpec('neetRank', 'NEET Rank'),
+      const _FieldSpec('cetRegNo', 'CET Reg No'),
+      const _FieldSpec('cetRank', 'CET Rank'),
+      const _FieldSpec('qualifyingExamName', 'Qualifying Exam'),
+      const _FieldSpec('qualifyingExamRegNo', 'Qualifying Exam Reg No'),
+      const _FieldSpec('qualifyingMaxMarks', 'Qualifying Max Marks'),
+      const _FieldSpec('qualifyingSecuredMarks', 'Qualifying Secured Marks'),
+      const _FieldSpec('qualifyingPassDate', 'Qualifying Pass Date'),
+      const _FieldSpec('qualifyingBoard', 'University / Board'),
+      const _FieldSpec('optionalSubject', 'Optional Subject'),
+      const _FieldSpec('optionalMaxMarks', 'Optional Max Marks'),
+      const _FieldSpec('optionalSecuredMarks', 'Optional Secured Marks'),
+      const _FieldSpec('diplomaCourse', 'Diploma Course'),
+      const _FieldSpec('diplomaCourseDuration', 'Diploma Duration'),
+      const _FieldSpec('diplomaPassedDate', 'Diploma Passed Date'),
+      const _FieldSpec('diplomaBoard', 'Diploma University / Board'),
+      const _FieldSpec('diplomaMaxMarks', 'Diploma Max Marks'),
+      const _FieldSpec('diplomaSecuredMarks', 'Diploma Secured Marks'),
+      const _FieldSpec('casteRdNumber', 'Caste RD Number'),
+      const _FieldSpec('casteCategory', 'Caste Category'),
+      const _FieldSpec('casteName', 'Caste Name'),
+      const _FieldSpec(
+        'casteCertificateStudentName',
+        'Student Name in Caste Certificate',
+      ),
+      const _FieldSpec(
+        'casteCertificateFatherName',
+        'Father Name in Caste Certificate',
+      ),
+      const _FieldSpec('incomeRdNumber', 'Income RD Number'),
+      const _FieldSpec('incomeCategory', 'Income Category'),
+      const _FieldSpec('incomeCasteName', 'Caste Name in Income Certificate'),
+      const _FieldSpec('annualIncome', 'Annual Income'),
+      const _FieldSpec(
+        'incomeCertificateStudentName',
+        'Student Name in Income Certificate',
+      ),
+      const _FieldSpec(
+        'incomeCertificateFatherName',
+        'Father Name in Income Certificate',
+      ),
+      if (includeStatus) const _FieldSpec('status', 'Status', isRequired: true),
+    ];
+  }
+
+  Map<String, dynamic> _normalizedStudentProfile(Map<String, dynamic> values) {
+    final name = (values['name'] ?? '').toString().trim();
+    final fatherName = (values['fatherName'] ?? '').toString().trim();
+    final aadhaarName = (values['nameAsInAadhaar'] ?? '').toString().trim();
+    final mobileNo = (values['mobileNo'] ?? values['phone'] ?? '')
+        .toString()
+        .trim();
+    final courseYear = (values['courseYear'] ?? values['className'] ?? '')
+        .toString()
+        .trim();
+    final courseName = (values['courseName'] ?? values['program'] ?? '')
+        .toString()
+        .trim();
+    final admissionType = (values['admissionType'] ?? values['section'] ?? '')
+        .toString()
+        .trim();
+    return {
+      ...values,
+      'name': name,
+      'nameAsInAadhaar': aadhaarName,
+      'fatherName': fatherName,
+      'guardianName': fatherName,
+      'idHolder': aadhaarName.isEmpty ? name : aadhaarName,
+      'phone': mobileNo,
+      'mobileNo': mobileNo,
+      'className': courseYear,
+      'courseYear': courseYear,
+      'program': courseName,
+      'courseName': courseName,
+      'section': admissionType,
+      'admissionType': admissionType,
+    };
+  }
+
+  Future<void> _approveStudentAdmission(
+    Map<String, dynamic> student,
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (widget.user.roleId != 'super-admin') return;
+    final confirmed = await _confirmStudentAction(
+      title: 'Approve admission?',
+      message:
+          'This will move the student to Active and mark the latest admission as Approved.',
+      actionLabel: 'Approve',
+    );
+    if (!confirmed) return;
+
+    final approvedAtText = _displayDateNow();
+    final studentId = readText(student, const ['id'], fallback: '');
+    final admission = _latestRelatedRecord(_items(data, 'admissions'), student);
+    try {
+      await Future.wait([
+        widget.repository.updateDocument('students', studentId, {
+          'status': _activeStudentStatus,
+          'admissionApprovalStatus': _approvedAdmissionStatus,
+          'approvedBy': widget.user.name.isEmpty
+              ? widget.user.email
+              : widget.user.name,
+          'approvedAtText': approvedAtText,
+        }),
+        if (admission != null)
+          widget.repository.updateDocument(
+            'studentAdmissions',
+            readText(admission, const ['id'], fallback: ''),
+            {
+              'status': _approvedAdmissionStatus,
+              'approvedBy': widget.user.name.isEmpty
+                  ? widget.user.email
+                  : widget.user.name,
+              'approvedAtText': approvedAtText,
+            },
+          ),
+      ]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student admission approved'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Student admission was not approved: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _archiveStudent(Map<String, dynamic> student) async {
+    final confirmed = await _confirmStudentAction(
+      title: 'Archive student?',
+      message: 'Archived records stay available from the Archived filter.',
+      actionLabel: 'Archive',
+    );
+    if (!confirmed) return;
+    await _updateStudentStatus(student, {
+      'status': 'Archived',
+      'archivedAt': FieldValue.serverTimestamp(),
+      'archivedAtText': _displayDateNow(),
+    }, 'Student archived');
+  }
+
+  Future<void> _restoreStudent(Map<String, dynamic> student) async {
+    final restoredStatus = widget.user.roleId == 'super-admin'
+        ? _activeStudentStatus
+        : _pendingAdmissionStatus;
+    await _updateStudentStatus(student, {
+      'status': restoredStatus,
+      'restoredAt': FieldValue.serverTimestamp(),
+      'restoredAtText': _displayDateNow(),
+    }, 'Student restored');
+    if (mounted) setState(() => _studentStatusFilter = 'active');
+  }
+
+  Future<void> _updateStudentStatus(
+    Map<String, dynamic> student,
+    Map<String, dynamic> updates,
+    String successMessage,
+  ) async {
+    final studentId = readText(student, const ['id'], fallback: '');
+    if (studentId.isEmpty) return;
+    try {
+      await widget.repository.updateDocument('students', studentId, updates);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(successMessage),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Student update failed: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<bool> _confirmStudentAction({
+    required String title,
+    required String message,
+    required String actionLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   Future<void> _showDocumentUploadSheet() async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -1861,6 +2541,25 @@ class _ModuleScreenState extends State<ModuleScreen> {
           student: student,
           data: data,
           controller: controller,
+          canEdit: _can('students.edit'),
+          canArchive: _can('students.archive'),
+          showApprove: _canApproveStudent(student, data),
+          onEdit: () {
+            Navigator.of(context).pop();
+            _showStudentProfileSheet(student);
+          },
+          onApprove: () {
+            Navigator.of(context).pop();
+            _approveStudentAdmission(student, data);
+          },
+          onArchive: () {
+            Navigator.of(context).pop();
+            _archiveStudent(student);
+          },
+          onRestore: () {
+            Navigator.of(context).pop();
+            _restoreStudent(student);
+          },
         ),
       ),
     );
@@ -2200,10 +2899,16 @@ class _RecordFormSheet extends StatefulWidget {
     required this.title,
     required this.fields,
     required this.onSave,
+    this.helper = '',
+    this.initialValues = const {},
+    this.saveLabel = 'Save',
   });
 
   final String title;
+  final String helper;
   final List<_FieldSpec> fields;
+  final Map<String, dynamic> initialValues;
+  final String saveLabel;
   final Future<void> Function(Map<String, dynamic> values) onSave;
 
   @override
@@ -2219,7 +2924,10 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
   void initState() {
     super.initState();
     _controllers = {
-      for (final field in widget.fields) field.key: TextEditingController(),
+      for (final field in widget.fields)
+        field.key: TextEditingController(
+          text: (widget.initialValues[field.key] ?? '').toString(),
+        ),
     };
   }
 
@@ -2239,7 +2947,9 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
         setState(() => _error = '${field.label} is required.');
         return;
       }
-      if (text.isEmpty) continue;
+      if (text.isEmpty && !widget.initialValues.containsKey(field.key)) {
+        continue;
+      }
       values[field.key] = field.numeric ? (num.tryParse(text) ?? text) : text;
     }
 
@@ -2293,6 +3003,13 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
                   fontWeight: FontWeight.w900,
                 ),
               ),
+              if (widget.helper.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  widget.helper,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
               const SizedBox(height: 14),
               ...widget.fields.map(
                 (field) => Padding(
@@ -2343,7 +3060,7 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
                             : Icons.save_rounded,
                         size: 18,
                       ),
-                      label: Text(_saving ? 'Saving...' : 'Save'),
+                      label: Text(_saving ? 'Saving...' : widget.saveLabel),
                     ),
                   ),
                 ],
@@ -2444,6 +3161,244 @@ class _Stat {
   final String value;
   final IconData icon;
   final Color color;
+}
+
+class _StudentCourseOption {
+  const _StudentCourseOption(this.courseCode, this.label);
+
+  final String courseCode;
+  final String label;
+}
+
+class _SegmentedFilter extends StatelessWidget {
+  const _SegmentedFilter({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String value;
+  final Map<String, String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = options.entries.toList();
+    return Row(
+      children: List.generate(entries.length, (index) {
+        final entry = entries[index];
+        final active = value == entry.key;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: index == entries.length - 1 ? 0 : 8,
+            ),
+            child: OutlinedButton(
+              onPressed: () => onChanged(entry.key),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: active ? AppColors.primaryDark : Colors.white,
+                foregroundColor: active ? Colors.white : AppColors.ink,
+                side: BorderSide(
+                  color: active ? AppColors.primaryDark : AppColors.line,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                entry.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _StudentCollectionSummary extends StatelessWidget {
+  const _StudentCollectionSummary({
+    required this.admissions,
+    required this.documents,
+    required this.health,
+  });
+
+  final int admissions;
+  final int documents;
+  final int health;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Row(
+        children: [
+          Expanded(
+            child: LabelValue(
+              label: 'Admissions',
+              value: admissions.toString(),
+            ),
+          ),
+          Expanded(
+            child: LabelValue(label: 'Documents', value: documents.toString()),
+          ),
+          Expanded(
+            child: LabelValue(label: 'Health', value: health.toString()),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _StudentCardAction { view, edit, approve, archive, restore }
+
+class _StudentParityCard extends StatelessWidget {
+  const _StudentParityCard({
+    required this.student,
+    required this.onTap,
+    required this.canEdit,
+    required this.canArchive,
+    required this.showApprove,
+    required this.onEdit,
+    required this.onApprove,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final Map<String, dynamic> student;
+  final VoidCallback onTap;
+  final bool canEdit;
+  final bool canArchive;
+  final bool showApprove;
+  final VoidCallback onEdit;
+  final VoidCallback onApprove;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final archived =
+        readText(student, const ['status'], fallback: '').toLowerCase() ==
+        'archived';
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          _Avatar(
+            label: readText(student, const ['name'], fallback: '?'),
+            color: AppColors.accent,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  readText(student, const ['name']),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${readText(student, const ['admissionNo'], fallback: 'Admission')} / ${readText(student, const ['studentId'], fallback: 'ID')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${readText(student, const ['className', 'courseYear'], fallback: '-')} - ${readText(student, const ['section', 'admissionType'], fallback: '-')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          StatusPill(
+            label: readText(student, const ['status'], fallback: 'Active'),
+          ),
+          PopupMenuButton<_StudentCardAction>(
+            tooltip: 'Student actions',
+            onSelected: (action) {
+              switch (action) {
+                case _StudentCardAction.view:
+                  onTap();
+                  break;
+                case _StudentCardAction.edit:
+                  onEdit();
+                  break;
+                case _StudentCardAction.approve:
+                  onApprove();
+                  break;
+                case _StudentCardAction.archive:
+                  onArchive();
+                  break;
+                case _StudentCardAction.restore:
+                  onRestore();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: _StudentCardAction.view,
+                child: ListTile(
+                  leading: Icon(Icons.visibility_rounded),
+                  title: Text('View'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              if (canEdit)
+                const PopupMenuItem(
+                  value: _StudentCardAction.edit,
+                  child: ListTile(
+                    leading: Icon(Icons.edit_rounded),
+                    title: Text('Edit profile'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              if (showApprove)
+                const PopupMenuItem(
+                  value: _StudentCardAction.approve,
+                  child: ListTile(
+                    leading: Icon(Icons.verified_rounded),
+                    title: Text('Approve admission'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              if (canArchive && !archived)
+                const PopupMenuItem(
+                  value: _StudentCardAction.archive,
+                  child: ListTile(
+                    leading: Icon(Icons.archive_rounded),
+                    title: Text('Archive student'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              if (canArchive && archived)
+                const PopupMenuItem(
+                  value: _StudentCardAction.restore,
+                  child: ListTile(
+                    leading: Icon(Icons.unarchive_rounded),
+                    title: Text('Restore student'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StudentCard extends StatelessWidget {
@@ -2945,11 +3900,25 @@ class _StudentDetailSheet extends StatefulWidget {
     required this.student,
     required this.data,
     required this.controller,
+    required this.canEdit,
+    required this.canArchive,
+    required this.showApprove,
+    required this.onEdit,
+    required this.onApprove,
+    required this.onArchive,
+    required this.onRestore,
   });
 
   final Map<String, dynamic> student;
   final Map<String, List<Map<String, dynamic>>> data;
   final ScrollController controller;
+  final bool canEdit;
+  final bool canArchive;
+  final bool showApprove;
+  final VoidCallback onEdit;
+  final VoidCallback onApprove;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
 
   @override
   State<_StudentDetailSheet> createState() => _StudentDetailSheetState();
@@ -2974,11 +3943,35 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
       recordId,
     );
     final fees = _related(widget.data['fees'] ?? const [], studentId, recordId);
+    final collections = _related(
+      widget.data['collections'] ?? const [],
+      studentId,
+      recordId,
+    );
+    final results = _related(
+      widget.data['results'] ?? const [],
+      studentId,
+      recordId,
+    );
     final documents = _related(
       widget.data['documents'] ?? const [],
       studentId,
       recordId,
     );
+    final health = _related(
+      widget.data['health'] ?? const [],
+      studentId,
+      recordId,
+    );
+    final admissions = _related(
+      widget.data['admissions'] ?? const [],
+      studentId,
+      recordId,
+    );
+    final latestAdmission = admissions.isEmpty ? null : admissions.last;
+    final archived =
+        readText(student, const ['status'], fallback: '').toLowerCase() ==
+        'archived';
 
     return Material(
       color: AppColors.page,
@@ -3029,6 +4022,37 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (widget.canEdit)
+                OutlinedButton.icon(
+                  onPressed: widget.onEdit,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                ),
+              if (widget.showApprove)
+                FilledButton.icon(
+                  onPressed: widget.onApprove,
+                  icon: const Icon(Icons.verified_rounded, size: 18),
+                  label: const Text('Approve'),
+                ),
+              if (widget.canArchive && !archived)
+                OutlinedButton.icon(
+                  onPressed: widget.onArchive,
+                  icon: const Icon(Icons.archive_rounded, size: 18),
+                  label: const Text('Archive'),
+                ),
+              if (widget.canArchive && archived)
+                OutlinedButton.icon(
+                  onPressed: widget.onRestore,
+                  icon: const Icon(Icons.unarchive_rounded, size: 18),
+                  label: const Text('Restore'),
+                ),
+            ],
+          ),
           const SizedBox(height: 16),
           InfoCard(
             child: Row(
@@ -3054,26 +4078,36 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
           ),
           const SizedBox(height: 14),
           _Tabs(
-            labels: const ['Information', 'Attendance', 'Result', 'Fees'],
+            labels: const [
+              'Profile',
+              'Attendance',
+              'Exams',
+              'Payment',
+              'Docs',
+              'Health',
+            ],
             selected: _tab,
             onChanged: (index) => setState(() => _tab = index),
           ),
           const SizedBox(height: 14),
-          if (_tab == 0) _StudentInfo(student: student, documents: documents),
-          if (_tab == 1)
-            _RelatedList(
-              items: attendance,
-              empty: 'No attendance for this student.',
+          if (_tab == 0)
+            _StudentInfo(
+              student: student,
+              documents: documents,
+              latestAdmission: latestAdmission,
             ),
-          if (_tab == 2)
-            _RelatedList(
-              items: marks,
-              empty: 'No marks or results for this student.',
-            ),
+          if (_tab == 1) _StudentAttendanceTab(records: attendance),
+          if (_tab == 2) _StudentExamTab(marks: marks, results: results),
           if (_tab == 3)
+            _StudentPaymentTab(assignments: fees, collections: collections),
+          if (_tab == 4)
             _RelatedList(
-              items: fees,
-              empty: 'No fee assignments for this student.',
+              items: documents,
+              empty: 'No student document records available.',
+            ),
+          if (_tab == 5)
+            _StudentHealthRecordView(
+              record: health.isEmpty ? null : health.last,
             ),
         ],
       ),
@@ -3112,13 +4146,15 @@ class _Tabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(labels.length, (index) {
-        final active = selected == index;
-        return Expanded(
-          child: InkWell(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(labels.length, (index) {
+          final active = selected == index;
+          return InkWell(
             onTap: () => onChanged(index),
             child: Container(
+              width: 92,
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 border: Border(
@@ -3140,18 +4176,23 @@ class _Tabs extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 }
 
 class _StudentInfo extends StatelessWidget {
-  const _StudentInfo({required this.student, required this.documents});
+  const _StudentInfo({
+    required this.student,
+    required this.documents,
+    required this.latestAdmission,
+  });
 
   final Map<String, dynamic> student;
   final List<Map<String, dynamic>> documents;
+  final Map<String, dynamic>? latestAdmission;
 
   @override
   Widget build(BuildContext context) {
@@ -3230,6 +4271,54 @@ class _StudentInfo extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 10),
+        InfoCard(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Guardian',
+                      value: readText(student, const ['guardianName']),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Course',
+                      value: readText(student, const ['courseName', 'program']),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Admission status',
+                      value: readText(latestAdmission ?? student, const [
+                        'status',
+                      ], fallback: 'Pending Approval'),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Created on',
+                      value: readText(
+                        student,
+                        const ['createdAtText'],
+                        fallback: readText(latestAdmission ?? const {}, const [
+                          'submittedAtText',
+                        ], fallback: 'today'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         if (documents.isNotEmpty) ...[
           const SectionTitle('Documents'),
           ...documents
@@ -3256,6 +4345,281 @@ class _StudentInfo extends StatelessWidget {
               ),
         ],
       ],
+    );
+  }
+}
+
+class _StudentAttendanceTab extends StatelessWidget {
+  const _StudentAttendanceTab({required this.records});
+
+  final List<Map<String, dynamic>> records;
+
+  @override
+  Widget build(BuildContext context) {
+    final general = records
+        .where(
+          (record) => readText(record, const [
+            'subjectName',
+            'subject',
+          ], fallback: '').isEmpty,
+        )
+        .toList();
+    final present = general
+        .where((record) => readText(record, const ['status']) == 'Present')
+        .length;
+    final absent = general
+        .where((record) => readText(record, const ['status']) == 'Absent')
+        .length;
+    final leave = general
+        .where(
+          (record) => [
+            'Leave',
+            'On Leave',
+          ].contains(readText(record, const ['status'], fallback: '')),
+        )
+        .length;
+    final percentage = general.isEmpty ? 0 : (present / general.length * 100);
+    return Column(
+      children: [
+        InfoCard(
+          child: Column(
+            children: [
+              LabelValue(
+                label: 'General Attendance',
+                value: '${percentage.round()}% Present',
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Present',
+                      value: present.toString(),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Absent',
+                      value: absent.toString(),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(label: 'Leave', value: leave.toString()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SectionTitle('Subject-wise Attendance'),
+        _RelatedList(
+          items: records
+              .where(
+                (record) => readText(record, const [
+                  'subjectName',
+                  'subject',
+                ], fallback: '').isNotEmpty,
+              )
+              .toList(),
+          empty: 'No subject-wise attendance records available.',
+        ),
+      ],
+    );
+  }
+}
+
+class _StudentExamTab extends StatelessWidget {
+  const _StudentExamTab({required this.marks, required this.results});
+
+  final List<Map<String, dynamic>> marks;
+  final List<Map<String, dynamic>> results;
+
+  @override
+  Widget build(BuildContext context) {
+    final allRows = [...marks, ...results];
+    final percentages = allRows
+        .map((item) => readNumber(item, const ['percentage']))
+        .where((value) => value > 0)
+        .toList();
+    final average = percentages.isEmpty
+        ? 0
+        : percentages.reduce((a, b) => a + b) / percentages.length;
+    return Column(
+      children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Marks Entries',
+                  value: marks.length.toString(),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Results',
+                  value: results.length.toString(),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Average',
+                  value: '${average.round()}%',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SectionTitle('Subject-wise Exam Performance'),
+        _RelatedList(
+          items: allRows,
+          empty: 'No exam marks or result records available.',
+        ),
+      ],
+    );
+  }
+}
+
+class _StudentPaymentTab extends StatelessWidget {
+  const _StudentPaymentTab({
+    required this.assignments,
+    required this.collections,
+  });
+
+  final List<Map<String, dynamic>> assignments;
+  final List<Map<String, dynamic>> collections;
+
+  @override
+  Widget build(BuildContext context) {
+    final assigned = assignments.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['totalAmount']),
+    );
+    final paid = assignments.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['paidAmount']),
+    );
+    final adjusted = assignments.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['adjustmentAmount']),
+    );
+    final due = assignments.fold<num>(
+      0,
+      (total, item) =>
+          total +
+          readNumber(item, const ['dueAmount', 'balanceAmount', 'amountDue']),
+    );
+    final collected = collections.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['amount', 'paidAmount']),
+    );
+    return Column(
+      children: [
+        InfoCard(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Assigned',
+                      value: formatMoney(assigned),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(label: 'Paid', value: formatMoney(paid)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Adjusted',
+                      value: formatMoney(adjusted),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Collected',
+                      value: formatMoney(collected),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(label: 'Due', value: formatMoney(due)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SectionTitle('Fee Assignments'),
+        _RelatedList(
+          items: assignments,
+          empty: 'No fee assignment records available.',
+        ),
+        const SectionTitle('Payment Records'),
+        _RelatedList(
+          items: collections,
+          empty: 'No payment records available.',
+        ),
+      ],
+    );
+  }
+}
+
+class _StudentHealthRecordView extends StatelessWidget {
+  const _StudentHealthRecordView({required this.record});
+
+  final Map<String, dynamic>? record;
+
+  @override
+  Widget build(BuildContext context) {
+    final health = record;
+    if (health == null) {
+      return const EmptyState(
+        title: 'No health record',
+        message: 'No student health record is uploaded yet.',
+      );
+    }
+    return InfoCard(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Blood group',
+                  value: readText(health, const ['bloodGroup']),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Height',
+                  value: readText(health, const ['height']),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Weight',
+                  value: readText(health, const ['weight']),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          LabelValue(
+            label: 'Allergies',
+            value: readText(health, const ['allergies']),
+          ),
+          const SizedBox(height: 14),
+          LabelValue(
+            label: 'Medical notes',
+            value: readText(health, const ['notes', 'medicalNotes']),
+          ),
+        ],
+      ),
     );
   }
 }
