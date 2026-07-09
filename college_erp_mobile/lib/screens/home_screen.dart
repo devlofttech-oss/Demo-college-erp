@@ -33,7 +33,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _searchController = TextEditingController();
   var _query = '';
+  var _loggingOut = false;
   late Future<DashboardSnapshot> _dashboardFuture;
 
   @override
@@ -42,18 +44,82 @@ class _HomeScreenState extends State<HomeScreen> {
     _dashboardFuture = widget.repository.dashboard();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _refresh() async {
     setState(() => _dashboardFuture = widget.repository.dashboard());
     await widget.onRefreshSession();
   }
 
+  Future<void> _logout() async {
+    setState(() => _loggingOut = true);
+    try {
+      await widget.onLogout();
+    } finally {
+      if (mounted) setState(() => _loggingOut = false);
+    }
+  }
+
+  Future<void> _refreshDashboardShortcut() async {
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Dashboard refreshed'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _query = '');
+  }
+
+  bool _canOpenModule(ErpModule module) {
+    return canAccess(widget.roles, widget.user.roleId, module.permission);
+  }
+
+  void _openModule(ErpModule module) {
+    if (module.id == 'dashboard') {
+      _refreshDashboardShortcut();
+      return;
+    }
+    if (!_canOpenModule(module)) {
+      _showModuleUnavailable(module);
+      return;
+    }
+    AppRoutes.openModule<void>(
+      context: context,
+      module: module,
+      user: widget.user,
+      roles: widget.roles,
+      repository: widget.repository,
+    );
+  }
+
+  void _openModuleById(String id) {
+    _openModule(moduleById(id));
+  }
+
+  void _showModuleUnavailable(ErpModule module) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${module.label} is not available for your role.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final modules = mobileModules
-        .where(
-          (module) =>
-              canAccess(widget.roles, widget.user.roleId, module.permission),
-        )
+    final accessibleModules = mobileModules.where(_canOpenModule).toList();
+    final hasSearch = _query.trim().isNotEmpty;
+    final modules = accessibleModules
         .where(
           (module) =>
               module.label.toLowerCase().contains(_query.toLowerCase()) ||
@@ -71,8 +137,10 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         IconButton(
           tooltip: 'Logout',
-          icon: const Icon(Icons.logout_rounded),
-          onPressed: () => widget.onLogout(),
+          icon: Icon(
+            _loggingOut ? Icons.hourglass_top_rounded : Icons.logout_rounded,
+          ),
+          onPressed: _loggingOut ? null : () => _logout(),
         ),
       ],
       onRefresh: _refresh,
@@ -112,15 +180,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.card,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppColors.primary,
+                child: IconButton(
+                  tooltip: 'Notices and events',
+                  onPressed: () => _openModuleById('communication'),
+                  icon: const Icon(
+                    Icons.notifications_none_rounded,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 18),
           SearchBox(
+            controller: _searchController,
             hint: 'Search modules',
             onChanged: (value) => setState(() => _query = value),
           ),
@@ -145,24 +218,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         value: data.students.toString(),
                         icon: Icons.school_rounded,
                         color: AppColors.accent,
+                        onTap: () => _openModuleById('students'),
                       ),
                       StatTile(
                         label: 'Staff',
                         value: data.staff.toString(),
                         icon: Icons.groups_rounded,
                         color: const Color(0xFFE5835A),
+                        onTap: () => _openModuleById('faculty-staff'),
                       ),
                       StatTile(
                         label: 'Collected',
                         value: formatMoney(data.feeCollected),
                         icon: Icons.payments_rounded,
                         color: const Color(0xFFF0A93B),
+                        onTap: () => _openModuleById('fees'),
                       ),
                       StatTile(
                         label: 'Documents',
                         value: data.documents.toString(),
                         icon: Icons.folder_rounded,
                         color: const Color(0xFF12A6A6),
+                        onTap: () => _openModuleById('document-management'),
                       ),
                     ],
                   ),
@@ -171,10 +248,15 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           if (grouped.isEmpty)
-            const EmptyState(
-              title: 'No modules',
-              message: 'No mobile modules are available for your current role.',
+            EmptyState(
+              title: hasSearch ? 'No matching modules' : 'No modules',
+              message: hasSearch
+                  ? 'No modules match your search.'
+                  : 'No mobile modules are available for your current role.',
               icon: Icons.apps_rounded,
+              actionLabel: hasSearch ? 'Clear search' : null,
+              actionIcon: Icons.close_rounded,
+              onAction: hasSearch ? _clearSearch : null,
             )
           else
             ...grouped.entries.expand((entry) {
@@ -192,13 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   itemBuilder: (context, index) => _ModuleTile(
                     module: entry.value[index],
-                    onTap: () => AppRoutes.openModule<void>(
-                      context: context,
-                      module: entry.value[index],
-                      user: widget.user,
-                      roles: widget.roles,
-                      repository: widget.repository,
-                    ),
+                    onTap: () => _openModule(entry.value[index]),
                   ),
                 ),
               ];

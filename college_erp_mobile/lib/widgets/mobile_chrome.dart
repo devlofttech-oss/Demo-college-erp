@@ -248,17 +248,20 @@ class StatTile extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return InfoCard(
       padding: const EdgeInsets.all(12),
+      onTap: onTap,
       child: Row(
         children: [
           Container(
@@ -294,6 +297,14 @@ class StatTile extends StatelessWidget {
               ],
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppColors.muted,
+            ),
+          ],
         ],
       ),
     );
