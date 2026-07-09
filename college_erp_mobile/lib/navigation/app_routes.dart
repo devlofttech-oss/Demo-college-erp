@@ -19,6 +19,7 @@ class AppRoutes {
     required AppUser user,
     required List<ErpRole> roles,
     required ErpRepository repository,
+    Map<String, String> initialState = const {},
   }) {
     return Navigator.of(context).push<T>(
       _SmoothPageRoute<T>(
@@ -28,6 +29,7 @@ class AppRoutes {
           user: user,
           roles: roles,
           repository: repository,
+          initialState: initialState,
         ),
       ),
     );

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/module_registry.dart';
 import '../data/role_permissions.dart';
 import '../models/app_user.dart';
 import '../models/erp_module.dart';
@@ -60,12 +61,14 @@ class ModuleScreen extends StatefulWidget {
     required this.user,
     required this.roles,
     required this.repository,
+    this.initialState = const {},
   });
 
   final ErpModule module;
   final AppUser user;
   final List<ErpRole> roles;
   final ErpRepository repository;
+  final Map<String, String> initialState;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -113,7 +116,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
   @override
   void initState() {
     super.initState();
+    _applyInitialState();
     _future = _load();
+  }
+
+  void _applyInitialState() {
+    if (widget.module.id != 'fees') return;
+
+    const branchesByTask = {
+      'collections': {'collect-fee'},
+      'structures': {'create-structure', 'manage-structures'},
+      'adjustments': {'approve-adjustment', 'adjustment-history'},
+      'due-tracking': {'due-list'},
+    };
+    final task = widget.initialState['feeTask'];
+    if (task == null || !branchesByTask.containsKey(task)) return;
+
+    _feeTask = task;
+    final branch = widget.initialState['feeBranch'];
+    if (branch != null && branchesByTask[task]!.contains(branch)) {
+      _feeBranch = branch;
+    }
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _load() {
@@ -131,6 +154,34 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   bool _can(String permission) =>
       canAccess(widget.roles, widget.user.roleId, permission);
+
+  void _openModuleById(
+    String id, {
+    Map<String, String> initialState = const {},
+  }) {
+    final module = moduleById(id);
+    if (!_can(module.permission)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${module.label} is not available for your role.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (module.id == widget.module.id && initialState.isEmpty) {
+      _refresh();
+      return;
+    }
+    AppRoutes.openModule<void>(
+      context: context,
+      module: module,
+      user: widget.user,
+      roles: widget.roles,
+      repository: widget.repository,
+      initialState: initialState,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -229,8 +280,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return _usersAndRoles(data);
       case 'settings':
         return _settings(data);
-      case 'reports':
       case 'dashboard':
+        return _dashboard(data);
+      case 'reports':
       default:
         return _reports(data);
     }
@@ -407,8 +459,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ),
             ),
         ];
-      case 'reports':
       case 'dashboard':
+        return const [];
+      case 'reports':
         return [
           if (_can('financialReports.snapshots'))
             _ModuleAction(
@@ -6758,6 +6811,637 @@ class _ModuleScreenState extends State<ModuleScreen> {
         ),
       ],
     );
+  }
+
+  Widget _dashboard(Map<String, List<Map<String, dynamic>>> data) {
+    final students = _items(data, 'students');
+    final admissions = _items(data, 'admissions');
+    final staff = _items(data, 'staff');
+    final documents = _items(data, 'documents')
+        .where(
+          (item) =>
+              readText(item, const [
+                'verificationStatus',
+                'status',
+              ], fallback: '').toLowerCase() !=
+              'archived',
+        )
+        .toList();
+    final activeStudents = students
+        .where((student) => !_isArchivedStudent(student))
+        .toList();
+    final facultyCount = staff
+        .where(
+          (member) =>
+              !_isArchivedStaff(member) &&
+              readText(member, const [
+                    'staffType',
+                  ], fallback: '').toLowerCase() ==
+                  'faculty',
+        )
+        .length;
+    final feeStudents = _feeStudents(data);
+    final feeStructures = _feeStructures(data);
+    final feeAssignments = _feeAssignments(data, feeStudents);
+    final feeCollections = _feeCollections(data, feeAssignments, feeStudents);
+    final feeAdjustments = _feeAdjustments(data, feeAssignments, feeStudents);
+    final feeRows = feeAssignments
+        .map(
+          (assignment) => _feeSnapshot(
+            assignment,
+            feeCollections,
+            feeAdjustments,
+            feeStructures,
+          ),
+        )
+        .toList();
+    final payableRows = feeRows.where((row) => row.due > 0).toList();
+    final totalAssigned = feeRows.fold<num>(
+      0,
+      (total, row) => total + row.total,
+    );
+    final totalCollected = feeRows.fold<num>(
+      0,
+      (total, row) => total + row.paid,
+    );
+    final totalAdjusted = feeRows.fold<num>(
+      0,
+      (total, row) => total + row.adjusted,
+    );
+    final totalOutstanding = feeRows.fold<num>(
+      0,
+      (total, row) => total + row.due,
+    );
+    final collectionRate = totalAssigned <= 0
+        ? 0
+        : ((totalCollected / totalAssigned) * 100).clamp(0, 100).round();
+    final pendingDocuments = documents
+        .where(
+          (item) =>
+              readText(item, const [
+                'verificationStatus',
+                'status',
+              ], fallback: '') ==
+              'Pending Review',
+        )
+        .toList();
+    final verifiedDocuments = documents.where((item) {
+      final status = readText(item, const [
+        'verificationStatus',
+        'status',
+      ], fallback: '');
+      return status == 'Verified' || status == 'Source PDF';
+    }).length;
+    final documentReadiness = documents.isEmpty
+        ? 0
+        : ((verifiedDocuments / documents.length) * 100).round();
+    final upcomingExams = [..._items(data, 'exams')]
+      ..removeWhere(
+        (item) =>
+            readText(item, const ['status'], fallback: '').toLowerCase() ==
+            'archived',
+      )
+      ..sort(
+        (first, second) => readText(
+          first,
+          const ['examDate', 'date'],
+          fallback: '',
+        ).compareTo(readText(second, const ['examDate', 'date'], fallback: '')),
+      );
+    final collectionTrend = _dashboardCollectionTrend(feeCollections);
+    final courseStrength = _dashboardCourseStrength(activeStudents);
+    final query = _query.trim().toLowerCase();
+    final visibleExams = upcomingExams
+        .where(
+          (exam) =>
+              query.isEmpty ||
+              containsQuery(exam, query, const [
+                'examName',
+                'name',
+                'subject',
+                'classKey',
+                'className',
+                'program',
+                'status',
+              ]),
+        )
+        .take(6)
+        .toList();
+    final applicationSource = admissions.isEmpty ? students : admissions;
+    final reviewStatuses = RegExp(
+      'review|pending|submitted|draft',
+      caseSensitive: false,
+    );
+    final admittedStatuses = RegExp(
+      'active|approved|admitted',
+      caseSensitive: false,
+    );
+    final admissionStages = [
+      _DashboardValueShare(
+        label: 'Applications',
+        value: applicationSource.length,
+        color: AppColors.festival,
+      ),
+      _DashboardValueShare(
+        label: 'In Review',
+        value: applicationSource
+            .where(
+              (item) => reviewStatuses.hasMatch(
+                readText(item, const ['status'], fallback: ''),
+              ),
+            )
+            .length,
+        color: AppColors.warning,
+      ),
+      _DashboardValueShare(
+        label: 'Admitted',
+        value: activeStudents
+            .where(
+              (student) => admittedStatuses.hasMatch(
+                readText(student, const ['status'], fallback: ''),
+              ),
+            )
+            .length,
+        color: AppColors.accent,
+      ),
+      _DashboardValueShare(
+        label: 'Archived',
+        value: students.where(_isArchivedStudent).length,
+        color: const Color(0xFF8357C5),
+      ),
+    ];
+    final paymentSplit = [
+      _DashboardValueShare(
+        label: 'Collected',
+        value: totalCollected,
+        color: AppColors.accent,
+      ),
+      _DashboardValueShare(
+        label: 'Pending',
+        value: totalOutstanding,
+        color: AppColors.warning,
+      ),
+      _DashboardValueShare(
+        label: 'Adjusted',
+        value: totalAdjusted,
+        color: AppColors.danger,
+      ),
+    ];
+    final splitTotal = paymentSplit.fold<num>(
+      0,
+      (total, item) => total + item.value,
+    );
+    final hasCards =
+        _can('students.view') ||
+        _can('staff.view') ||
+        _can('fees.view') ||
+        _can('documents.view') ||
+        _can('exams.view');
+
+    return Column(
+      key: ValueKey('dashboard-$_query'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.dashboard_rounded,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Dashboard',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _academicYear.trim().isEmpty
+                          ? 'Today college overview'
+                          : 'Today college overview for $_academicYear',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (hasCards) ...[
+          const SectionTitle('Overview'),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.42,
+            children: [
+              if (_can('students.view'))
+                _DashboardMetricCard(
+                  label: 'Students',
+                  value: activeStudents.length.toString(),
+                  helper: 'Active records',
+                  icon: Icons.groups_rounded,
+                  color: AppColors.festival,
+                  onTap: () => _openModuleById('students'),
+                ),
+              if (_can('staff.view'))
+                _DashboardMetricCard(
+                  label: 'Faculty',
+                  value: facultyCount.toString(),
+                  helper: 'Teaching staff',
+                  icon: Icons.school_rounded,
+                  color: AppColors.accent,
+                  onTap: () => _openModuleById('faculty-staff'),
+                ),
+              if (_can('fees.view'))
+                _DashboardMetricCard(
+                  label: 'Collection',
+                  value: formatMoney(totalCollected),
+                  helper: '${payableRows.length} due students',
+                  icon: Icons.account_balance_wallet_rounded,
+                  color: AppColors.warning,
+                  onTap: () => _openModuleById('fees'),
+                ),
+              if (_can('documents.view'))
+                _DashboardMetricCard(
+                  label: 'Documents',
+                  value: pendingDocuments.length.toString(),
+                  helper: 'Pending review',
+                  icon: Icons.folder_copy_rounded,
+                  color: const Color(0xFF8B5CF6),
+                  onTap: () => _openModuleById('document-management'),
+                ),
+              if (_can('exams.view'))
+                _DashboardMetricCard(
+                  label: 'Exams',
+                  value: upcomingExams.length.toString(),
+                  helper: 'Upcoming exams',
+                  icon: Icons.trending_up_rounded,
+                  color: AppColors.danger,
+                  onTap: () => _openModuleById('examination-results'),
+                ),
+            ],
+          ),
+        ],
+        if (_can('financialReports.view')) ...[
+          const SectionTitle('Payment Trend'),
+          InfoCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Smooth monthly collection movement.',
+                        style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      ),
+                    ),
+                    StatusPill(
+                      label: _academicYear.trim().isEmpty
+                          ? 'All Years'
+                          : _academicYear,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _DashboardTrendChart(months: collectionTrend),
+              ],
+            ),
+          ),
+        ],
+        const SectionTitle('Pending Work'),
+        if (_can('documents.view') &&
+            _can('documents.verify') &&
+            pendingDocuments.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _DashboardWorkCard(
+              title: '${pendingDocuments.length} documents need review',
+              helper: 'Open verification queue',
+              icon: Icons.fact_check_rounded,
+              color: const Color(0xFF8B5CF6),
+              onTap: () => _openModuleById('document-management'),
+            ),
+          ),
+        if (_can('exams.view') && upcomingExams.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _DashboardWorkCard(
+              title: '${upcomingExams.length} upcoming exams',
+              helper: 'View exam schedule',
+              icon: Icons.assignment_turned_in_rounded,
+              color: AppColors.danger,
+              onTap: () => _openModuleById('examination-results'),
+            ),
+          ),
+        if (_can('fees.view') && payableRows.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _DashboardWorkCard(
+              title: '${payableRows.length} students have pending dues',
+              helper: 'Open payment due list',
+              icon: Icons.receipt_long_rounded,
+              color: AppColors.warning,
+              onTap: () => _openModuleById(
+                'fees',
+                initialState: const {
+                  'feeTask': 'due-tracking',
+                  'feeBranch': 'due-list',
+                },
+              ),
+            ),
+          ),
+        if (!((_can('documents.view') &&
+                _can('documents.verify') &&
+                pendingDocuments.isNotEmpty) ||
+            (_can('exams.view') && upcomingExams.isNotEmpty) ||
+            (_can('fees.view') && payableRows.isNotEmpty)))
+          const InfoCard(
+            child: Text(
+              'No pending items available for your role.',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
+          ),
+        if (_can('students.view')) ...[
+          const SectionTitle('Admissions'),
+          InfoCard(
+            child: Column(
+              children: admissionStages
+                  .map(
+                    (stage) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _DashboardProgressRow(
+                        label: stage.label,
+                        value: stage.value.toString(),
+                        percent: applicationSource.isEmpty
+                            ? 0
+                            : stage.value / applicationSource.length,
+                        color: stage.color,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          const SectionTitle('Course Strength'),
+          InfoCard(
+            child: courseStrength.isEmpty
+                ? const EmptyState(
+                    title: 'No active student distribution',
+                    message: 'Active student distribution will appear here.',
+                    icon: Icons.school_rounded,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${activeStudents.length} active students',
+                              style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          StatusPill(
+                            label: '$documentReadiness% docs ready',
+                            color: documentReadiness >= 75
+                                ? AppColors.accent
+                                : AppColors.warning,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      ...courseStrength.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _DashboardProgressRow(
+                            label: item.key,
+                            value: item.value.toString(),
+                            percent: activeStudents.isEmpty
+                                ? 0
+                                : item.value / activeStudents.length,
+                            color: AppColors.festival,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+        if (_can('fees.view')) ...[
+          const SectionTitle('Fee Collection'),
+          InfoCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Collection Rate',
+                        value: '$collectionRate%',
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Assigned',
+                        value: formatMoney(totalAssigned),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ...paymentSplit.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _DashboardProgressRow(
+                      label: item.label,
+                      value: formatMoney(item.value),
+                      percent: splitTotal <= 0 ? 0 : item.value / splitTotal,
+                      color: item.color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (_can('exams.view')) ...[
+          const SectionTitle('Upcoming Exams'),
+          if (visibleExams.isEmpty)
+            EmptyState(
+              title: query.isEmpty ? 'No upcoming exams' : 'No matching exams',
+              message: query.isEmpty
+                  ? 'Exam schedules will appear here when available.'
+                  : 'Try a different dashboard search.',
+              icon: Icons.assignment_turned_in_rounded,
+            )
+          else
+            ...visibleExams.map(
+              (exam) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: InfoCard(
+                  onTap: () => _openModuleById('examination-results'),
+                  child: Row(
+                    children: [
+                      Container(
+                        height: 42,
+                        width: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.trending_up_rounded,
+                          color: AppColors.danger,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              readText(exam, const ['examName', 'name']),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${readText(exam, const ['classKey', 'className', 'program'], fallback: 'Class')} - ${readText(exam, const ['subject'], fallback: 'Subject')}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      StatusPill(
+                        label: formatDateValue(
+                          exam['examDate'] ?? exam['date'],
+                        ),
+                        color: AppColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  List<_DashboardTrendMonth> _dashboardCollectionTrend(
+    List<Map<String, dynamic>> collections,
+  ) {
+    final datedCollections = collections
+        .map(
+          (item) => MapEntry(
+            _dashboardDate(
+              item['paymentDate'] ?? item['createdAtText'] ?? item['createdAt'],
+            ),
+            _feeCollectionAmount(item),
+          ),
+        )
+        .where((entry) => entry.key != null)
+        .toList();
+    final referenceDate =
+        datedCollections.fold<DateTime?>(
+          null,
+          (latest, entry) =>
+              latest == null || entry.key!.isAfter(latest) ? entry.key : latest,
+        ) ??
+        DateTime.now();
+    final months = <_DashboardTrendMonth>[];
+    for (var offset = 5; offset >= 0; offset -= 1) {
+      final date = DateTime(referenceDate.year, referenceDate.month - offset);
+      months.add(
+        _DashboardTrendMonth(
+          key: '${date.year}-${date.month}',
+          label: DateFormat('MMM').format(date),
+          value: 0,
+          year: date.year,
+          month: date.month,
+        ),
+      );
+    }
+    for (final entry in datedCollections) {
+      final date = entry.key!;
+      final index = months.indexWhere(
+        (month) => month.year == date.year && month.month == date.month,
+      );
+      if (index < 0) continue;
+      months[index] = months[index].copyWith(
+        value: months[index].value + entry.value,
+      );
+    }
+    return months;
+  }
+
+  DateTime? _dashboardDate(Object? value) {
+    final parsed = readDate(value);
+    if (parsed != null) return parsed;
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+    for (final pattern in const ['d MMM yyyy', 'dd MMM yyyy', 'MMM d, yyyy']) {
+      try {
+        return DateFormat(pattern).parseStrict(text);
+      } catch (_) {
+        // Try the next dashboard date pattern.
+      }
+    }
+    return null;
+  }
+
+  List<MapEntry<String, int>> _dashboardCourseStrength(
+    List<Map<String, dynamic>> students,
+  ) {
+    final grouped = <String, int>{};
+    for (final student in students) {
+      final label = readText(student, const [
+        'courseName',
+        'program',
+        'courseCode',
+        'className',
+      ], fallback: 'Unassigned');
+      grouped[label] = (grouped[label] ?? 0) + 1;
+    }
+    final items = grouped.entries.toList()
+      ..sort((first, second) => second.value.compareTo(first.value));
+    return items.take(5).toList();
   }
 
   Widget _reports(Map<String, List<Map<String, dynamic>>> data) {
@@ -13435,6 +14119,304 @@ class _Stat {
   final String label;
   final String value;
   final IconData icon;
+  final Color color;
+}
+
+class _DashboardMetricCard extends StatelessWidget {
+  const _DashboardMetricCard({
+    required this.label,
+    required this.value,
+    required this.helper,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final String helper;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      padding: const EdgeInsets.all(12),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 21),
+              ),
+              const Spacer(),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.muted,
+              ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            helper,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardWorkCard extends StatelessWidget {
+  const _DashboardWorkCard({
+    required this.title,
+    required this.helper,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final String helper;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            height: 42,
+            width: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  helper,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTrendChart extends StatelessWidget {
+  const _DashboardTrendChart({required this.months});
+
+  final List<_DashboardTrendMonth> months;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = months.fold<num>(
+      0,
+      (total, month) => month.value > total ? month.value : total,
+    );
+    if (maxValue <= 0) {
+      return Container(
+        height: 148,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.page,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text(
+          'No payment collections yet.',
+          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 172,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: months
+            .map(
+              (month) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Tooltip(
+                            message: formatMoney(month.value),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 260),
+                              curve: Curves.easeOutCubic,
+                              height: 22 + ((month.value / maxValue) * 104),
+                              width: 24,
+                              decoration: BoxDecoration(
+                                color: AppColors.early,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        month.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _DashboardProgressRow extends StatelessWidget {
+  const _DashboardProgressRow({
+    required this.label,
+    required this.value,
+    required this.percent,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final num percent;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = percent.isNaN ? 0.0 : percent.clamp(0, 1).toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: normalized,
+            minHeight: 8,
+            backgroundColor: AppColors.page,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardTrendMonth {
+  const _DashboardTrendMonth({
+    required this.key,
+    required this.label,
+    required this.value,
+    required this.year,
+    required this.month,
+  });
+
+  final String key;
+  final String label;
+  final num value;
+  final int year;
+  final int month;
+
+  _DashboardTrendMonth copyWith({num? value}) {
+    return _DashboardTrendMonth(
+      key: key,
+      label: label,
+      value: value ?? this.value,
+      year: year,
+      month: month,
+    );
+  }
+}
+
+class _DashboardValueShare {
+  const _DashboardValueShare({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final num value;
   final Color color;
 }
 

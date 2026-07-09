@@ -41,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _dashboardFuture = widget.repository.dashboard();
+    _dashboardFuture = widget.repository.dashboard(user: widget.user);
   }
 
   @override
@@ -51,7 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _dashboardFuture = widget.repository.dashboard());
+    setState(
+      () => _dashboardFuture = widget.repository.dashboard(user: widget.user),
+    );
     await widget.onRefreshSession();
   }
 
@@ -64,17 +66,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _refreshDashboardShortcut() async {
-    await _refresh();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Dashboard refreshed'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _clearSearch() {
     _searchController.clear();
     setState(() => _query = '');
@@ -85,10 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openModule(ErpModule module) {
-    if (module.id == 'dashboard') {
-      _refreshDashboardShortcut();
-      return;
-    }
     if (!_canOpenModule(module)) {
       _showModuleUnavailable(module);
       return;
@@ -202,6 +189,49 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (context, snapshot) {
               final data = snapshot.data;
               if (data == null) return const SizedBox(height: 18);
+              final quickStats = <Widget>[
+                if (_canOpenModule(moduleById('students')))
+                  StatTile(
+                    label: 'Students',
+                    value: data.students.toString(),
+                    icon: Icons.school_rounded,
+                    color: AppColors.accent,
+                    onTap: () => _openModuleById('students'),
+                  ),
+                if (_canOpenModule(moduleById('faculty-staff')))
+                  StatTile(
+                    label: 'Faculty',
+                    value: data.staff.toString(),
+                    icon: Icons.groups_rounded,
+                    color: const Color(0xFFE5835A),
+                    onTap: () => _openModuleById('faculty-staff'),
+                  ),
+                if (_canOpenModule(moduleById('fees')))
+                  StatTile(
+                    label: 'Collection',
+                    value: formatMoney(data.feeCollected),
+                    icon: Icons.payments_rounded,
+                    color: const Color(0xFFF0A93B),
+                    onTap: () => _openModuleById('fees'),
+                  ),
+                if (_canOpenModule(moduleById('examination-results')))
+                  StatTile(
+                    label: 'Exams',
+                    value: data.exams.toString(),
+                    icon: Icons.assignment_turned_in_rounded,
+                    color: const Color(0xFF8357C5),
+                    onTap: () => _openModuleById('examination-results'),
+                  ),
+                if (_canOpenModule(moduleById('document-management')))
+                  StatTile(
+                    label: 'Documents',
+                    value: data.documents.toString(),
+                    icon: Icons.folder_rounded,
+                    color: const Color(0xFF12A6A6),
+                    onTap: () => _openModuleById('document-management'),
+                  ),
+              ];
+              if (quickStats.isEmpty) return const SizedBox(height: 18);
               return Column(
                 children: [
                   const SectionTitle('Today'),
@@ -212,43 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
                     childAspectRatio: 2.1,
-                    children: [
-                      StatTile(
-                        label: 'Students',
-                        value: data.students.toString(),
-                        icon: Icons.school_rounded,
-                        color: AppColors.accent,
-                        onTap: () => _openModuleById('students'),
-                      ),
-                      StatTile(
-                        label: 'Faculty',
-                        value: data.staff.toString(),
-                        icon: Icons.groups_rounded,
-                        color: const Color(0xFFE5835A),
-                        onTap: () => _openModuleById('faculty-staff'),
-                      ),
-                      StatTile(
-                        label: 'Collection',
-                        value: formatMoney(data.feeCollected),
-                        icon: Icons.payments_rounded,
-                        color: const Color(0xFFF0A93B),
-                        onTap: () => _openModuleById('fees'),
-                      ),
-                      StatTile(
-                        label: 'Exams',
-                        value: data.exams.toString(),
-                        icon: Icons.assignment_turned_in_rounded,
-                        color: const Color(0xFF8357C5),
-                        onTap: () => _openModuleById('examination-results'),
-                      ),
-                      StatTile(
-                        label: 'Documents',
-                        value: data.documents.toString(),
-                        icon: Icons.folder_rounded,
-                        color: const Color(0xFF12A6A6),
-                        onTap: () => _openModuleById('document-management'),
-                      ),
-                    ],
+                    children: quickStats,
                   ),
                 ],
               );

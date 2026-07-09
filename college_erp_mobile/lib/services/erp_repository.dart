@@ -488,18 +488,34 @@ class ErpRepository {
       case 'reports':
       case 'dashboard':
       default:
+        final students = user.isParent
+            ? await linkedParentStudents(user, academicYear: academicYear)
+            : await listCollection('students', academicYear: academicYear);
+        final feeAssignments = await listCollection(
+          'feeAssignments',
+          academicYear: academicYear,
+        );
         return {
-          'students': await listCollection(
-            'students',
+          'students': students,
+          'admissions': await listCollection(
+            'studentAdmissions',
             academicYear: academicYear,
           ),
-          'staff': await listCollection('staffMembers'),
-          'fees': await listCollection(
-            'feeAssignments',
+          'staff': user.isParent
+              ? const <Map<String, dynamic>>[]
+              : await listCollection('staffMembers'),
+          'structures': await listCollection(
+            'feeStructures',
             academicYear: academicYear,
           ),
+          'assignments': feeAssignments,
+          'fees': feeAssignments,
           'collections': await listCollection(
             'feeCollections',
+            academicYear: academicYear,
+          ),
+          'adjustments': await listCollection(
+            'feeAdjustments',
             academicYear: academicYear,
           ),
           'documents': await listCollection(
@@ -522,21 +538,26 @@ class ErpRepository {
     }
   }
 
-  Future<DashboardSnapshot> dashboard({String academicYear = ''}) async {
+  Future<DashboardSnapshot> dashboard({
+    String academicYear = '',
+    AppUser? user,
+  }) async {
     final data = await moduleData(
       'dashboard',
-      user: const AppUser(
-        uid: '',
-        name: '',
-        email: '',
-        roleId: 'admin',
-        status: 'Active',
-        permissions: [],
-        displayId: '',
-        collegeIds: ['main-campus'],
-        linkedStudentIds: [],
-        linkedStudentRecordIds: [],
-      ),
+      user:
+          user ??
+          const AppUser(
+            uid: '',
+            name: '',
+            email: '',
+            roleId: 'admin',
+            status: 'Active',
+            permissions: [],
+            displayId: '',
+            collegeIds: ['main-campus'],
+            linkedStudentIds: [],
+            linkedStudentRecordIds: [],
+          ),
       academicYear: academicYear,
     );
     final fees = data['fees'] ?? const [];
