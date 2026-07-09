@@ -4,18 +4,47 @@ import '../models/app_user.dart';
 import '../theme/app_theme.dart';
 import '../widgets/mobile_chrome.dart';
 
-class AccessPendingScreen extends StatelessWidget {
+class AccessPendingScreen extends StatefulWidget {
   const AccessPendingScreen({
     super.key,
     required this.user,
     required this.onLogout,
+    required this.onRefresh,
   });
 
   final AppUser user;
   final Future<void> Function() onLogout;
+  final Future<void> Function() onRefresh;
+
+  @override
+  State<AccessPendingScreen> createState() => _AccessPendingScreenState();
+}
+
+class _AccessPendingScreenState extends State<AccessPendingScreen> {
+  var _refreshing = false;
+  var _loggingOut = false;
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
+    try {
+      await widget.onRefresh();
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    setState(() => _loggingOut = true);
+    try {
+      await widget.onLogout();
+    } finally {
+      if (mounted) setState(() => _loggingOut = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final user = widget.user;
     return MobileScaffold(
       title: 'Access',
       showBack: false,
@@ -49,15 +78,26 @@ class AccessPendingScreen extends StatelessWidget {
                   value: user.email.isEmpty ? '-' : user.email,
                 ),
                 const SizedBox(height: 14),
+                LabelValue(
+                  label: 'Role',
+                  value: user.roleId.isEmpty ? 'pending' : user.roleId,
+                ),
+                const SizedBox(height: 14),
                 LabelValue(label: 'Status', value: user.status),
               ],
             ),
           ),
           const SizedBox(height: 20),
           PrimaryActionButton(
-            label: 'Logout',
+            label: _refreshing ? 'Checking...' : 'Refresh status',
+            icon: Icons.refresh_rounded,
+            onPressed: _refreshing || _loggingOut ? null : _refresh,
+          ),
+          const SizedBox(height: 10),
+          PrimaryActionButton(
+            label: _loggingOut ? 'Logging out...' : 'Logout',
             icon: Icons.logout_rounded,
-            onPressed: () => onLogout(),
+            onPressed: _refreshing || _loggingOut ? null : _logout,
           ),
         ],
       ),

@@ -26,7 +26,8 @@ class _AuthScreenState extends State<AuthScreen> {
   final _passwordController = TextEditingController();
   var _roleId = 'parent';
   var _showPassword = false;
-  var _submitting = false;
+  var _signingIn = false;
+  var _resetting = false;
   var _message = '';
 
   @override
@@ -37,8 +38,14 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _signIn() async {
+    final validation = _validateSignIn();
+    if (validation != null) {
+      setState(() => _message = validation);
+      return;
+    }
+    FocusScope.of(context).unfocus();
     setState(() {
-      _submitting = true;
+      _signingIn = true;
       _message = '';
     });
     try {
@@ -49,27 +56,50 @@ class _AuthScreenState extends State<AuthScreen> {
       );
       widget.onSignedIn(user);
     } catch (error) {
-      setState(() => _message = _friendlyError(error));
+      if (mounted) setState(() => _message = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _signingIn = false);
     }
   }
 
   Future<void> _resetPassword() async {
+    final validation = _validateIdentifier();
+    if (validation != null) {
+      setState(() => _message = validation);
+      return;
+    }
+    FocusScope.of(context).unfocus();
     setState(() {
-      _submitting = true;
+      _resetting = true;
       _message = '';
     });
     try {
       await widget.authRepository.sendPasswordReset(
         _identifierController.text.trim(),
       );
-      setState(() => _message = 'Password reset email sent.');
+      if (mounted) setState(() => _message = 'Password reset email sent.');
     } catch (error) {
-      setState(() => _message = _friendlyError(error));
+      if (mounted) setState(() => _message = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _resetting = false);
     }
+  }
+
+  String? _validateIdentifier() {
+    if (_identifierController.text.trim().isEmpty) {
+      return 'Enter your email or phone first.';
+    }
+    return null;
+  }
+
+  String? _validateSignIn() {
+    final identifierError = _validateIdentifier();
+    if (identifierError != null) return identifierError;
+    if (_passwordController.text.isEmpty) return 'Enter your password.';
+    if (_passwordController.text.length < 6) {
+      return 'Password should be at least 6 characters.';
+    }
+    return null;
   }
 
   String _friendlyError(Object error) {
@@ -85,6 +115,9 @@ class _AuthScreenState extends State<AuthScreen> {
     }
     if (text.contains('user-not-found')) {
       return 'No account exists for that email or phone.';
+    }
+    if (text.contains('weak-password')) {
+      return 'Password should be at least 6 characters.';
     }
     return text.replaceFirst('Exception: ', '').replaceFirst('Bad state: ', '');
   }
@@ -137,12 +170,25 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   _RolePicker(
                     value: _roleId,
-                    onChanged: (value) => setState(() => _roleId = value),
+                    enabled: !_signingIn && !_resetting,
+                    onChanged: (value) => setState(() {
+                      _roleId = value;
+                      _message = '';
+                    }),
                   ),
                   const SizedBox(height: 18),
                   TextField(
                     controller: _identifierController,
+                    enabled: !_signingIn && !_resetting,
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [
+                      AutofillHints.email,
+                      AutofillHints.telephoneNumber,
+                    ],
+                    onChanged: (_) {
+                      if (_message.isNotEmpty) setState(() => _message = '');
+                    },
                     decoration: const InputDecoration(
                       prefixIcon: Icon(
                         Icons.mail_outline_rounded,
@@ -154,7 +200,18 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _passwordController,
+                    enabled: !_signingIn && !_resetting,
                     obscureText: !_showPassword,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onChanged: (_) {
+                      if (_message.isNotEmpty) setState(() => _message = '');
+                    },
+                    onSubmitted: (_) {
+                      if (widget.firebaseReady && !_signingIn && !_resetting) {
+                        _signIn();
+                      }
+                    },
                     decoration: InputDecoration(
                       prefixIcon: const Icon(
                         Icons.lock_outline_rounded,
@@ -170,8 +227,11 @@ class _AuthScreenState extends State<AuthScreen> {
                               ? Icons.visibility_off_rounded
                               : Icons.visibility_rounded,
                         ),
-                        onPressed: () =>
-                            setState(() => _showPassword = !_showPassword),
+                        onPressed: _signingIn || _resetting
+                            ? null
+                            : () => setState(
+                                () => _showPassword = !_showPassword,
+                              ),
                       ),
                     ),
                   ),
@@ -203,19 +263,21 @@ class _AuthScreenState extends State<AuthScreen> {
                   ],
                   const SizedBox(height: 18),
                   PrimaryActionButton(
-                    label: _submitting ? 'Please wait...' : 'Login',
+                    label: _signingIn ? 'Please wait...' : 'Login',
                     icon: Icons.login_rounded,
-                    onPressed: widget.firebaseReady && !_submitting
+                    onPressed:
+                        widget.firebaseReady && !_signingIn && !_resetting
                         ? _signIn
                         : null,
                   ),
                   const SizedBox(height: 6),
                   TextButton.icon(
-                    onPressed: widget.firebaseReady && !_submitting
+                    onPressed:
+                        widget.firebaseReady && !_signingIn && !_resetting
                         ? _resetPassword
                         : null,
                     icon: const Icon(Icons.mark_email_read_rounded, size: 18),
-                    label: const Text('Forgot password?'),
+                    label: Text(_resetting ? 'Sending...' : 'Forgot password?'),
                   ),
                 ],
               ),
@@ -228,9 +290,14 @@ class _AuthScreenState extends State<AuthScreen> {
 }
 
 class _RolePicker extends StatelessWidget {
-  const _RolePicker({required this.value, required this.onChanged});
+  const _RolePicker({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
 
   final String value;
+  final bool enabled;
   final ValueChanged<String> onChanged;
 
   @override
@@ -249,7 +316,7 @@ class _RolePicker extends StatelessWidget {
             padding: EdgeInsets.only(right: role.$1 == 'admin' ? 0 : 8),
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: () => onChanged(role.$1),
+              onTap: enabled ? () => onChanged(role.$1) : null,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 height: 44,
@@ -266,13 +333,21 @@ class _RolePicker extends StatelessWidget {
                     Icon(
                       role.$3,
                       size: 16,
-                      color: selected ? Colors.white : AppColors.primary,
+                      color: !enabled
+                          ? AppColors.muted
+                          : selected
+                          ? Colors.white
+                          : AppColors.primary,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       role.$2,
                       style: TextStyle(
-                        color: selected ? Colors.white : AppColors.ink,
+                        color: !enabled
+                            ? AppColors.muted
+                            : selected
+                            ? Colors.white
+                            : AppColors.ink,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),

@@ -91,7 +91,10 @@ class _CollegeErpMobileAppState extends State<CollegeErpMobileApp> {
   Future<void> _logout() async {
     await _authRepository.signOut();
     if (!mounted) return;
-    setState(() => _user = null);
+    setState(() {
+      _user = null;
+      _roles = const [];
+    });
   }
 
   @override
@@ -122,7 +125,11 @@ class _CollegeErpMobileAppState extends State<CollegeErpMobileApp> {
 
     final user = _user!;
     if (!user.hasActiveProfile) {
-      return AccessPendingScreen(user: user, onLogout: _logout);
+      return AccessPendingScreen(
+        user: user,
+        onLogout: _logout,
+        onRefresh: _loadSession,
+      );
     }
 
     return HomeScreen(

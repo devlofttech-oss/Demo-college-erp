@@ -43,6 +43,15 @@ class AuthRepository {
     if (auth == null || !_erpRepository.isReady) {
       throw StateError('Firebase is not configured for the mobile app.');
     }
+    if (identifier.trim().isEmpty) {
+      throw StateError('Enter your email or phone first.');
+    }
+    if (password.isEmpty) {
+      throw StateError('Enter your password.');
+    }
+    if (password.length < 6) {
+      throw StateError('Password should be at least 6 characters.');
+    }
     if (!_aliases.canResolve(identifier)) {
       throw StateError('No account exists for that email or phone.');
     }
@@ -72,6 +81,9 @@ class AuthRepository {
     final auth = _auth;
     if (auth == null) {
       throw StateError('Firebase is not configured for the mobile app.');
+    }
+    if (identifier.trim().isEmpty) {
+      throw StateError('Enter your email or phone first.');
     }
     if (!_aliases.canResolve(identifier)) {
       throw StateError('No account exists for that email or phone.');
