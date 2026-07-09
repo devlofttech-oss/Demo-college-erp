@@ -16,6 +16,43 @@ import '../theme/app_theme.dart';
 import '../utils/field_reader.dart';
 import '../widgets/mobile_chrome.dart';
 
+String _attendanceDisplayDate(DateTime date) =>
+    DateFormat('dd MMM yyyy').format(date);
+
+DateTime? _parseAttendanceDisplayDate(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return null;
+  final isoDate = DateTime.tryParse(trimmed);
+  if (isoDate != null) return isoDate;
+  for (final pattern in const ['dd MMM yyyy', 'd MMM yyyy']) {
+    try {
+      return DateFormat(pattern).parseStrict(trimmed);
+    } catch (_) {
+      // Try the next known attendance display pattern.
+    }
+  }
+  return null;
+}
+
+String _attendanceRecordDateText(Map<String, dynamic> record) {
+  final explicit = readText(record, const ['dateText'], fallback: '');
+  if (explicit.isNotEmpty) return explicit;
+  final date = readDate(
+    record['date'] ?? record['attendanceDate'] ?? record['createdAt'],
+  );
+  return date == null ? '' : _attendanceDisplayDate(date);
+}
+
+DateTime? _attendanceRecordDate(Map<String, dynamic> record) {
+  final explicit = _parseAttendanceDisplayDate(
+    readText(record, const ['dateText'], fallback: ''),
+  );
+  if (explicit != null) return explicit;
+  return readDate(
+    record['date'] ?? record['attendanceDate'] ?? record['createdAt'],
+  );
+}
+
 class ModuleScreen extends StatefulWidget {
   const ModuleScreen({
     super.key,
@@ -46,6 +83,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _studentCourseCode = 'all';
   var _staffTypeFilter = 'All';
   var _staffStatusFilter = 'active';
+  var _attendanceTask = '';
+  var _attendanceBranch = '';
+  var _attendanceMode = 'students';
+  var _attendanceScope = 'subject';
+  var _attendanceSubjectCode = '';
+  var _attendanceSelectedEntityId = '';
+  DateTime _attendanceSelectedDate = DateTime.now();
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -1240,88 +1284,734 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _attendance(Map<String, List<Map<String, dynamic>>> data) {
-    final records = _items(data, 'studentAttendance')
+    final students = _attendanceStudents(data)
         .where(
           (item) => containsQuery(item, _query, const [
-            'entityName',
-            'entityId',
-            'status',
+            'name',
+            'studentId',
             'className',
+            'section',
+            'courseCode',
+            'courseName',
           ]),
         )
         .toList();
+    final staff = _attendanceStaff(data)
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'name',
+            'employeeId',
+            'department',
+            'designation',
+            'staffType',
+          ]),
+        )
+        .toList();
+    final studentRecords = _items(data, 'studentAttendance');
     final staffRecords = _items(data, 'staffAttendance');
+    final dateText = _attendanceDisplayDate(_attendanceSelectedDate);
+    final subjectOptions = _attendanceSubjectOptions(data);
+    final selectedSubject = _selectedAttendanceSubject(subjectOptions);
+    final subjectName =
+        _attendanceMode == 'students' && _attendanceScope == 'subject'
+        ? selectedSubject?.name ?? ''
+        : '';
+    final activeRecords = _attendanceMode == 'students'
+        ? studentRecords
+        : staffRecords;
+    final scopedRecords = _attendanceScopedRecords(
+      activeRecords,
+      subjectName: subjectName,
+    );
+    final selectedDateRecords = scopedRecords
+        .where((record) => _attendanceRecordDateText(record) == dateText)
+        .toList();
+    final homeDateRecords = [
+      ...studentRecords,
+      ...staffRecords,
+    ].where((record) => _attendanceRecordDateText(record) == dateText).toList();
+    final summary = _summarizeAttendance(
+      _attendanceBranch.isEmpty ? homeDateRecords : selectedDateRecords,
+    );
+    final canMarkStudents = _can('attendance.markStudents');
+    final canMarkStaff = _can('attendance.markStaff');
+    final canMark = _attendanceMode == 'students'
+        ? canMarkStudents
+        : canMarkStaff;
+    final roster = _attendanceMode == 'students' ? students : staff;
+    final activeTaskTitle = _attendanceTask == 'staff'
+        ? 'Staff Attendance'
+        : 'Student Attendance';
+    final activeBranchTitle = _attendanceBranch == 'mark-general-students'
+        ? 'Mark General Attendance'
+        : _attendanceBranch == 'mark-staff'
+        ? 'Mark Staff Attendance'
+        : 'Mark Subject Attendance';
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.fact_check_rounded,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Academics / Attendance Management',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _attendanceTask.isEmpty
+                          ? 'Attendance Management'
+                          : activeBranchTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _attendanceTask.isEmpty
+                          ? 'Student and faculty attendance tracking.'
+                          : '$activeTaskTitle / $dateText',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _AttendanceDateButton(label: dateText, onPressed: _pickAttendanceDate),
         _SummaryRow(
           stats: [
             _Stat(
-              'Students',
-              _items(data, 'students').length.toString(),
-              Icons.school_rounded,
+              'Present',
+              summary.present.toString(),
+              Icons.check_circle_rounded,
               AppColors.accent,
             ),
             _Stat(
-              'Student Logs',
-              records.length.toString(),
-              Icons.fact_check_rounded,
-              AppColors.primary,
+              'Absent',
+              summary.absent.toString(),
+              Icons.cancel_rounded,
+              AppColors.danger,
             ),
             _Stat(
-              'Staff Logs',
-              staffRecords.length.toString(),
-              Icons.badge_rounded,
-              const Color(0xFFE5835A),
+              'Attendance %',
+              '${summary.percentage}%',
+              Icons.calendar_month_rounded,
+              AppColors.primary,
             ),
           ],
         ),
-        if (_can('attendance.markStudents') ||
-            _can('attendance.markStaff')) ...[
-          const SizedBox(height: 12),
-          PrimaryActionButton(
-            label: 'Mark Attendance',
-            icon: Icons.add_task_rounded,
-            onPressed: () => _showAttendanceSheet(data),
-          ),
-        ],
-        const SectionTitle('Month View'),
-        _AttendanceCalendar(records: records),
-        const SectionTitle('Recent Attendance'),
-        if (records.isEmpty)
-          const EmptyState(
-            title: 'No attendance records',
-            message: 'Attendance records from Firestore will appear here.',
-          )
-        else
-          ...records
-              .take(30)
-              .map(
-                (record) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _CompactRow(
-                    title: readText(
-                      record,
-                      const ['entityName', 'studentName', 'name'],
-                      fallback: readText(record, const [
-                        'entityId',
-                        'studentId',
-                      ]),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: _attendanceTask.isEmpty
+              ? Column(
+                  key: const ValueKey('attendance-tasks'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SectionTitle('Attendance Management'),
+                    _AttendanceTaskCard(
+                      title: 'Student Attendance',
+                      description: 'Mark students and follow up absentees.',
+                      icon: Icons.school_rounded,
+                      meta: '${students.length} students',
+                      enabled: true,
+                      onTap: () => _openAttendanceTask(
+                        task: 'students',
+                        mode: 'students',
+                      ),
                     ),
-                    subtitle: formatDateValue(
-                      record['date'] ??
-                          record['attendanceDate'] ??
-                          record['createdAt'],
+                    const SizedBox(height: 10),
+                    _AttendanceTaskCard(
+                      title: 'Staff Attendance',
+                      description: 'Mark faculty and staff attendance.',
+                      icon: Icons.badge_rounded,
+                      meta: '${staff.length} staff',
+                      enabled: canMarkStaff || _can('attendance.view'),
+                      onTap: () =>
+                          _openAttendanceTask(task: 'staff', mode: 'staff'),
                     ),
-                    trailing: StatusPill(
-                      label: readText(record, const [
-                        'status',
-                      ], fallback: 'Present'),
+                    const SectionTitle('Month View'),
+                    _AttendanceCalendar(
+                      records: [...studentRecords, ...staffRecords],
                     ),
-                  ),
+                  ],
+                )
+              : _attendanceBranch.isEmpty
+              ? Column(
+                  key: const ValueKey('attendance-branches'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _BackActionButton(onPressed: _backAttendanceStep),
+                    const SectionTitle('Choose Next Step'),
+                    if (_attendanceTask == 'students') ...[
+                      _AttendanceTaskCard(
+                        title: 'Mark General Attendance',
+                        description:
+                            'Mark daily student attendance without a subject.',
+                        icon: Icons.calendar_today_rounded,
+                        meta: canMarkStudents ? 'Mark enabled' : 'View only',
+                        enabled: true,
+                        onTap: () => _openAttendanceBranch(
+                          branch: 'mark-general-students',
+                          mode: 'students',
+                          scope: 'general',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _AttendanceTaskCard(
+                        title: 'Mark Subject Attendance',
+                        description: 'Select a subject, then mark students.',
+                        icon: Icons.check_circle_outline_rounded,
+                        meta: '${subjectOptions.length} subjects',
+                        enabled: true,
+                        onTap: () => _openAttendanceBranch(
+                          branch: 'mark-students',
+                          mode: 'students',
+                          scope: 'subject',
+                        ),
+                      ),
+                    ] else
+                      _AttendanceTaskCard(
+                        title: 'Mark Staff Attendance',
+                        description: 'Select a staff member, then mark status.',
+                        icon: Icons.assignment_ind_rounded,
+                        meta: canMarkStaff ? 'Mark enabled' : 'View only',
+                        enabled: true,
+                        onTap: () => _openAttendanceBranch(
+                          branch: 'mark-staff',
+                          mode: 'staff',
+                          scope: 'staff',
+                        ),
+                      ),
+                  ],
+                )
+              : Column(
+                  key: ValueKey('attendance-roster-$_attendanceBranch'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _BackActionButton(onPressed: _backAttendanceStep),
+                    if (_attendanceMode == 'students' &&
+                        _attendanceScope == 'subject') ...[
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            subjectOptions.any(
+                              (option) => option.code == _attendanceSubjectCode,
+                            )
+                            ? _attendanceSubjectCode
+                            : null,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.menu_book_rounded, size: 18),
+                          labelText: 'Subject',
+                        ),
+                        items: subjectOptions
+                            .map(
+                              (option) => DropdownMenuItem(
+                                value: option.code,
+                                child: Text(
+                                  option.name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setState(
+                          () => _attendanceSubjectCode = value ?? '',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (!canMark)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: InfoCard(
+                          child: Text(
+                            'You can view attendance but cannot mark it.',
+                            style: TextStyle(
+                              color: AppColors.muted,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_attendanceMode == 'students' &&
+                        _attendanceScope == 'subject' &&
+                        subjectOptions.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: EmptyState(
+                          title: 'No live subjects found',
+                          message:
+                              'Create academic subjects on the web ERP before marking subject attendance.',
+                        ),
+                      ),
+                    const SectionTitle('Attendance Roster'),
+                    if (roster.isEmpty)
+                      EmptyState(
+                        title: _attendanceMode == 'students'
+                            ? 'No students found'
+                            : 'No faculty or staff found',
+                        message:
+                            'Try a different search or academic year filter.',
+                      )
+                    else
+                      ...roster.map((entity) {
+                        final record = _attendanceRecordForEntity(
+                          scopedRecords,
+                          entity,
+                          dateText: dateText,
+                          subjectName: subjectName,
+                        );
+                        final editable = _isAttendanceRecordEditable(record);
+                        final subjectReady =
+                            _attendanceMode != 'students' ||
+                            _attendanceScope != 'subject' ||
+                            selectedSubject != null;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _AttendanceRosterCard(
+                            entity: entity,
+                            mode: _attendanceMode,
+                            record: record,
+                            selected:
+                                readText(entity, const ['id'], fallback: '') ==
+                                _attendanceSelectedEntityId,
+                            canMark: canMark && subjectReady,
+                            editable: editable,
+                            onTap: () => setState(
+                              () => _attendanceSelectedEntityId = readText(
+                                entity,
+                                const ['id'],
+                                fallback: '',
+                              ),
+                            ),
+                            onMark: (status) =>
+                                _markAttendanceEntity(data, entity, status),
+                          ),
+                        );
+                      }),
+                    const SectionTitle('Recent Attendance'),
+                    if (scopedRecords.isEmpty)
+                      const EmptyState(
+                        title: 'No attendance records',
+                        message:
+                            'Attendance records from Firestore appear here.',
+                      )
+                    else
+                      ...scopedRecords
+                          .take(12)
+                          .map(
+                            (record) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _CompactRow(
+                                title: readText(
+                                  record,
+                                  const ['entityName', 'studentName', 'name'],
+                                  fallback: readText(record, const [
+                                    'entityId',
+                                    'studentId',
+                                    'employeeId',
+                                  ]),
+                                ),
+                                subtitle:
+                                    '${_attendanceRecordDateText(record)} / ${readText(record, const ['subjectName', 'attendanceScope'], fallback: _attendanceMode == 'students' ? 'General' : 'Staff')}',
+                                trailing: StatusPill(
+                                  label: readText(record, const [
+                                    'status',
+                                  ], fallback: 'Present'),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ],
                 ),
-              ),
+        ),
       ],
     );
+  }
+
+  List<Map<String, dynamic>> _attendanceStudents(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'students')
+        .where(
+          (student) =>
+              readText(student, const ['status'], fallback: '').toLowerCase() !=
+              'archived',
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _attendanceStaff(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'staff')
+        .where(
+          (member) =>
+              readText(member, const ['status'], fallback: '').toLowerCase() !=
+              'archived',
+        )
+        .toList();
+  }
+
+  List<_AttendanceSubjectOption> _attendanceSubjectOptions(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final byCode = <String, _AttendanceSubjectOption>{};
+    for (final subject in _items(data, 'academicSubjects')) {
+      final name = readText(subject, const [
+        'subjectName',
+        'name',
+        'subject',
+      ], fallback: '');
+      if (name.isEmpty) continue;
+      final code = readText(subject, const [
+        'subjectCode',
+        'code',
+        'id',
+      ], fallback: name);
+      byCode[code] = _AttendanceSubjectOption(code, name);
+    }
+    return byCode.values.toList();
+  }
+
+  _AttendanceSubjectOption? _selectedAttendanceSubject(
+    List<_AttendanceSubjectOption> options,
+  ) {
+    for (final option in options) {
+      if (option.code == _attendanceSubjectCode) return option;
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _attendanceScopedRecords(
+    List<Map<String, dynamic>> records, {
+    required String subjectName,
+  }) {
+    if (_attendanceMode == 'staff') return records;
+    return records.where((record) {
+      final recordSubject = readText(record, const [
+        'subjectName',
+        'subject',
+      ], fallback: '');
+      if (_attendanceScope == 'general') return recordSubject.isEmpty;
+      if (subjectName.isEmpty) return recordSubject.isNotEmpty;
+      return recordSubject == subjectName;
+    }).toList();
+  }
+
+  _AttendanceSummary _summarizeAttendance(List<Map<String, dynamic>> records) {
+    final present = records
+        .where((record) => readText(record, const ['status']) == 'Present')
+        .length;
+    final absent = records
+        .where((record) => readText(record, const ['status']) == 'Absent')
+        .length;
+    final leave = records
+        .where((record) => readText(record, const ['status']) == 'Leave')
+        .length;
+    final percentage = records.isEmpty ? 0 : (present / records.length * 100);
+    return _AttendanceSummary(
+      total: records.length,
+      present: present,
+      absent: absent,
+      leave: leave,
+      percentage: percentage.round(),
+    );
+  }
+
+  Map<String, dynamic>? _attendanceRecordForEntity(
+    List<Map<String, dynamic>> records,
+    Map<String, dynamic> entity, {
+    required String dateText,
+    required String subjectName,
+  }) {
+    final entityRecordId = readText(entity, const ['id'], fallback: '');
+    final entityId = readText(entity, const [
+      'studentId',
+      'employeeId',
+    ], fallback: entityRecordId);
+    for (final record in records) {
+      final recordEntityRecordId = readText(record, const [
+        'entityRecordId',
+        'studentRecordId',
+        'staffRecordId',
+      ], fallback: '');
+      final recordEntityId = readText(record, const [
+        'entityId',
+        'studentId',
+        'employeeId',
+      ], fallback: '');
+      final recordSubject = readText(record, const [
+        'subjectName',
+        'subject',
+      ], fallback: '');
+      final sameEntity =
+          recordEntityRecordId == entityRecordId || recordEntityId == entityId;
+      final sameSubject =
+          _attendanceMode == 'staff' || _attendanceScope == 'general'
+          ? recordSubject.isEmpty
+          : recordSubject == subjectName;
+      if (sameEntity &&
+          sameSubject &&
+          _attendanceRecordDateText(record) == dateText) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  bool _isAttendanceRecordEditable(Map<String, dynamic>? record) {
+    if (record == null) return true;
+    final markedAt = _attendanceMarkedAt(record);
+    if (markedAt == null) return true;
+    final elapsed = DateTime.now().difference(markedAt);
+    return !elapsed.isNegative && elapsed.inMinutes <= 24 * 60;
+  }
+
+  DateTime? _attendanceMarkedAt(Map<String, dynamic> record) {
+    final markedAtIso = readText(record, const [
+      'markedAtIso',
+      'createdAtIso',
+      'editedAtIso',
+    ], fallback: '');
+    final iso = DateTime.tryParse(markedAtIso);
+    if (iso != null) return iso;
+    final timestamp = readDate(record['markedAt'] ?? record['createdAt']);
+    if (timestamp != null) return timestamp;
+    return _parseAttendanceDisplayDate(
+      readText(record, const ['markedAtText', 'dateText'], fallback: ''),
+    );
+  }
+
+  void _openAttendanceTask({required String task, required String mode}) {
+    setState(() {
+      _attendanceTask = task;
+      _attendanceBranch = '';
+      _attendanceMode = mode;
+      _attendanceScope = mode == 'students' ? 'subject' : 'staff';
+      _attendanceSelectedEntityId = '';
+    });
+  }
+
+  void _openAttendanceBranch({
+    required String branch,
+    required String mode,
+    required String scope,
+  }) {
+    setState(() {
+      _attendanceTask = mode == 'staff' ? 'staff' : 'students';
+      _attendanceBranch = branch;
+      _attendanceMode = mode;
+      _attendanceScope = scope;
+      _attendanceSelectedEntityId = '';
+    });
+  }
+
+  void _backAttendanceStep() {
+    setState(() {
+      if (_attendanceBranch.isNotEmpty) {
+        _attendanceBranch = '';
+        _attendanceSelectedEntityId = '';
+      } else {
+        _attendanceTask = '';
+        _attendanceMode = 'students';
+        _attendanceScope = 'subject';
+        _attendanceSelectedEntityId = '';
+      }
+    });
+  }
+
+  Future<void> _pickAttendanceDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _attendanceSelectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(DateTime.now().year + 5, 12, 31),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _attendanceSelectedDate = picked);
+  }
+
+  Future<void> _markAttendanceEntity(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> entity,
+    String status,
+  ) async {
+    final isStudentMode = _attendanceMode == 'students';
+    final canMark = isStudentMode
+        ? _can('attendance.markStudents')
+        : _can('attendance.markStaff');
+    if (!canMark) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to mark attendance.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final subjectOptions = _attendanceSubjectOptions(data);
+    final selectedSubject = _selectedAttendanceSubject(subjectOptions);
+    if (isStudentMode &&
+        _attendanceScope == 'subject' &&
+        selectedSubject == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select a live subject before marking attendance.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final dateText = _attendanceDisplayDate(_attendanceSelectedDate);
+    final subjectName = isStudentMode && _attendanceScope == 'subject'
+        ? selectedSubject?.name ?? ''
+        : '';
+    final sourceRecords = isStudentMode
+        ? _items(data, 'studentAttendance')
+        : _items(data, 'staffAttendance');
+    final existing = _attendanceRecordForEntity(
+      sourceRecords,
+      entity,
+      dateText: dateText,
+      subjectName: subjectName,
+    );
+    final entityRecordId = readText(entity, const ['id'], fallback: '');
+    final entityId = readText(entity, const [
+      'studentId',
+      'employeeId',
+    ], fallback: entityRecordId);
+    final entityName = readText(entity, const [
+      'name',
+      'studentName',
+    ], fallback: entityId);
+
+    try {
+      if (existing != null) {
+        if (readText(existing, const ['status'], fallback: '') == status) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$entityName is already marked $status.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+        if (!_isAttendanceRecordEditable(existing)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Attendance can only be edited within 24 hours.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+        await widget.repository.updateDocument(
+          isStudentMode ? 'studentAttendanceRecords' : 'staffAttendanceRecords',
+          readText(existing, const ['id'], fallback: ''),
+          {
+            'status': status,
+            'editedAtText': _attendanceDisplayDate(DateTime.now()),
+            'editedAtIso': DateTime.now().toIso8601String(),
+            'editedBy': widget.user.uid,
+          },
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$entityName updated to $status.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        await _refresh();
+        return;
+      }
+
+      await widget.repository.createDocument(
+        isStudentMode ? 'studentAttendanceRecords' : 'staffAttendanceRecords',
+        {
+          'entityType': isStudentMode ? 'Student' : 'Staff',
+          'entityRecordId': entityRecordId,
+          'entityId': entityId,
+          'entityName': entityName,
+          if (!isStudentMode) 'staffRecordId': entityRecordId,
+          if (!isStudentMode) 'employeeId': entityId,
+          if (isStudentMode) 'studentRecordId': entityRecordId,
+          if (isStudentMode) 'studentId': entityId,
+          if (_academicYear.trim().isNotEmpty)
+            'academicYear': _academicYear.trim(),
+          'className': readText(entity, const ['className'], fallback: ''),
+          'section': readText(entity, const ['section'], fallback: ''),
+          'department': readText(entity, const ['department'], fallback: ''),
+          'courseCode': readText(entity, const ['courseCode'], fallback: ''),
+          'courseName': readText(entity, const [
+            'courseName',
+            'program',
+          ], fallback: ''),
+          'attendanceScope': isStudentMode ? _attendanceScope : 'staff',
+          'subjectCode': isStudentMode && _attendanceScope == 'subject'
+              ? selectedSubject?.code ?? ''
+              : '',
+          'subjectName': subjectName,
+          'dateText': dateText,
+          'status': status,
+          'markedAtText': _attendanceDisplayDate(DateTime.now()),
+          'markedAtIso': DateTime.now().toIso8601String(),
+          'parentNotified': false,
+          'createdBy': widget.user.uid,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$entityName marked $status.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Attendance was not saved: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _timetable(Map<String, List<Map<String, dynamic>>> data) {
@@ -2856,89 +3546,103 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Future<void> _showAttendanceSheet(
     Map<String, List<Map<String, dynamic>>> data,
   ) async {
-    final people = _items(data, 'students');
-    final entityController = TextEditingController(
-      text: people.isNotEmpty
-          ? readText(people.first, const ['studentId', 'id'], fallback: '')
-          : '',
-    );
-    final nameController = TextEditingController(
-      text: people.isNotEmpty
-          ? readText(people.first, const ['name'], fallback: '')
-          : '',
-    );
-    var status = 'Present';
-    final saved = await showModalBottomSheet<bool>(
+    final choice = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              MediaQuery.of(context).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Mark Attendance',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: entityController,
-                  decoration: const InputDecoration(
-                    labelText: 'Student ID / Employee ID',
+      builder: (context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          18,
+          20,
+          MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Mark Attendance',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Choose the same attendance flow used in the web ERP.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              if (_can('attendance.markStudents')) ...[
+                _AttendanceSheetChoice(
+                  icon: Icons.calendar_today_rounded,
+                  title: 'Mark General Attendance',
+                  subtitle:
+                      '${_attendanceStudents(data).length} active students',
+                  onTap: () => Navigator.of(context).pop('student-general'),
                 ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: status,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: const ['Present', 'Absent', 'Late', 'Early Off']
-                      .map(
-                        (item) =>
-                            DropdownMenuItem(value: item, child: Text(item)),
-                      )
-                      .toList(),
-                  onChanged: (value) =>
-                      setSheetState(() => status = value ?? 'Present'),
+                const SizedBox(height: 8),
+                _AttendanceSheetChoice(
+                  icon: Icons.menu_book_rounded,
+                  title: 'Mark Subject Attendance',
+                  subtitle:
+                      '${_attendanceSubjectOptions(data).length} live subjects',
+                  onTap: () => Navigator.of(context).pop('student-subject'),
                 ),
-                const SizedBox(height: 16),
-                PrimaryActionButton(
-                  label: 'Save',
-                  icon: Icons.save_rounded,
-                  onPressed: () async {
-                    await widget.repository
-                        .createDocument('studentAttendanceRecords', {
-                          'entityId': entityController.text.trim(),
-                          'entityName': nameController.text.trim(),
-                          'status': status,
-                          'date': Timestamp.now(),
-                          'academicYear': _academicYear,
-                          'markedBy': widget.user.uid,
-                        });
-                    if (context.mounted) Navigator.of(context).pop(true);
-                  },
-                ),
+                const SizedBox(height: 8),
               ],
-            ),
-          );
-        },
+              if (_can('attendance.markStaff'))
+                _AttendanceSheetChoice(
+                  icon: Icons.assignment_ind_rounded,
+                  title: 'Mark Staff Attendance',
+                  subtitle: '${_attendanceStaff(data).length} active staff',
+                  onTap: () => Navigator.of(context).pop('staff'),
+                ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                label: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
-    entityController.dispose();
-    nameController.dispose();
-    if (saved == true) await _refresh();
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'student-general':
+        _openAttendanceBranch(
+          branch: 'mark-general-students',
+          mode: 'students',
+          scope: 'general',
+        );
+        break;
+      case 'student-subject':
+        _openAttendanceBranch(
+          branch: 'mark-students',
+          mode: 'students',
+          scope: 'subject',
+        );
+        break;
+      case 'staff':
+        _openAttendanceBranch(
+          branch: 'mark-staff',
+          mode: 'staff',
+          scope: 'staff',
+        );
+        break;
+    }
   }
 
   Future<void> _showNoticeSheet() async {
@@ -4742,6 +5446,29 @@ class _StudentCourseOption {
   final String label;
 }
 
+class _AttendanceSubjectOption {
+  const _AttendanceSubjectOption(this.code, this.name);
+
+  final String code;
+  final String name;
+}
+
+class _AttendanceSummary {
+  const _AttendanceSummary({
+    required this.total,
+    required this.present,
+    required this.absent,
+    required this.leave,
+    required this.percentage,
+  });
+
+  final int total;
+  final int present;
+  final int absent;
+  final int leave;
+  final int percentage;
+}
+
 class _SegmentedFilter extends StatelessWidget {
   const _SegmentedFilter({
     required this.value,
@@ -4786,6 +5513,303 @@ class _SegmentedFilter extends StatelessWidget {
           ),
         );
       }),
+    );
+  }
+}
+
+class _AttendanceDateButton extends StatelessWidget {
+  const _AttendanceDateButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.event_rounded, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+}
+
+class _BackActionButton extends StatelessWidget {
+  const _BackActionButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.arrow_back_rounded, size: 18),
+        label: const Text('Back'),
+      ),
+    );
+  }
+}
+
+class _AttendanceTaskCard extends StatelessWidget {
+  const _AttendanceTaskCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.meta,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final String meta;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.58,
+      child: InfoCard(
+        onTap: enabled ? onTap : null,
+        child: Row(
+          children: [
+            Container(
+              height: 46,
+              width: 46,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    meta,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 15,
+              color: AppColors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceSheetChoice extends StatelessWidget {
+  const _AttendanceSheetChoice({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.arrow_forward_ios_rounded,
+            size: 15,
+            color: AppColors.muted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendanceRosterCard extends StatelessWidget {
+  const _AttendanceRosterCard({
+    required this.entity,
+    required this.mode,
+    required this.record,
+    required this.selected,
+    required this.canMark,
+    required this.editable,
+    required this.onTap,
+    required this.onMark,
+  });
+
+  final Map<String, dynamic> entity;
+  final String mode;
+  final Map<String, dynamic>? record;
+  final bool selected;
+  final bool canMark;
+  final bool editable;
+  final VoidCallback onTap;
+  final ValueChanged<String> onMark;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = readText(record ?? const {}, const ['status'], fallback: '');
+    final canEditStatus = canMark && editable;
+    final entityId = readText(entity, const [
+      'studentId',
+      'employeeId',
+    ], fallback: readText(entity, const ['id'], fallback: '-'));
+    final subtitle = mode == 'students'
+        ? '${readText(entity, const ['className', 'courseName'], fallback: 'Class')} / ${readText(entity, const ['section', 'courseCode'], fallback: entityId)}'
+        : '${readText(entity, const ['department'], fallback: 'Department')} / ${readText(entity, const ['designation'], fallback: 'Designation')}';
+
+    Widget statusButton(String label, IconData icon, Color color) {
+      final active = status == label;
+      return Expanded(
+        child: OutlinedButton.icon(
+          onPressed: canEditStatus ? () => onMark(label) : null,
+          icon: Icon(icon, size: 17),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: active ? color : Colors.white,
+            foregroundColor: active ? Colors.white : AppColors.ink,
+            side: BorderSide(color: active ? color : AppColors.line),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: selected ? AppColors.primary : Colors.transparent,
+          width: selected ? 1.5 : 0,
+        ),
+      ),
+      child: InfoCard(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                _Avatar(
+                  label: readText(entity, const ['name'], fallback: '?'),
+                  color: mode == 'students'
+                      ? AppColors.accent
+                      : const Color(0xFFE5835A),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        readText(entity, const ['name'], fallback: entityId),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$entityId / $subtitle',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusPill(label: status.isEmpty ? 'Not Marked' : status),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                statusButton(
+                  'Present',
+                  Icons.check_circle_rounded,
+                  AppColors.accent,
+                ),
+                const SizedBox(width: 8),
+                statusButton('Absent', Icons.cancel_rounded, AppColors.danger),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Text(
+              status.isEmpty
+                  ? 'Not marked'
+                  : editable
+                  ? 'Marked record can still be updated.'
+                  : 'Edit window closed',
+              style: const TextStyle(color: AppColors.muted, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -5256,9 +6280,7 @@ class _AttendanceCalendar extends StatelessWidget {
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final statuses = <int, String>{};
     for (final record in records) {
-      final date = readDate(
-        record['date'] ?? record['attendanceDate'] ?? record['createdAt'],
-      );
+      final date = _attendanceRecordDate(record);
       if (date != null && date.year == now.year && date.month == now.month) {
         statuses[date.day] = readText(record, const [
           'status',
