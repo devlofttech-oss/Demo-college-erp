@@ -44,6 +44,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _academicYear = '';
   var _studentStatusFilter = 'active';
   var _studentCourseCode = 'all';
+  var _staffTypeFilter = 'All';
+  var _staffStatusFilter = 'active';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -141,7 +143,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       case 'students':
         return _students(data);
       case 'faculty-staff':
-        return _staff(data);
+        return _staffParity(data);
       case 'attendance':
         return _attendance(data);
       case 'timetable':
@@ -212,22 +214,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('staff.create'))
             _ModuleAction(
-              label: 'Add Staff',
+              label: 'New Faculty / Staff',
               icon: Icons.group_add_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Faculty / Staff',
-                collectionName: 'staffMembers',
-                fields: const [
-                  _FieldSpec('name', 'Staff name', isRequired: true),
-                  _FieldSpec('employeeId', 'Employee ID', isRequired: true),
-                  _FieldSpec('staffType', 'Staff type'),
-                  _FieldSpec('department', 'Department'),
-                  _FieldSpec('designation', 'Designation'),
-                  _FieldSpec('phone', 'Phone'),
-                  _FieldSpec('email', 'Email'),
-                ],
-                defaults: {'status': 'Active'},
-              ),
+              onTap: () => _showStaffSheet(data: data),
             ),
         ];
       case 'attendance':
@@ -759,6 +748,408 @@ class _ModuleScreenState extends State<ModuleScreen> {
     return highest + 1;
   }
 
+  Widget _staffParity(Map<String, List<Map<String, dynamic>>> data) {
+    final allStaff = _items(data, 'staff');
+    final activeStaff = allStaff
+        .where((member) => !_isArchivedStaff(member))
+        .toList();
+    final archivedStaff = allStaff.where(_isArchivedStaff).toList();
+    final statusScoped = _staffStatusFilter == 'archived'
+        ? archivedStaff
+        : activeStaff;
+    final typeScoped = _staffTypeFilter == 'All'
+        ? statusScoped
+        : statusScoped
+              .where(
+                (member) =>
+                    readText(member, const ['staffType'], fallback: '') ==
+                    _staffTypeFilter,
+              )
+              .toList();
+    final staff = typeScoped
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'name',
+            'employeeId',
+            'department',
+            'designation',
+            'staffType',
+            'phone',
+            'email',
+          ]),
+        )
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5835A).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.groups_rounded,
+                  color: Color(0xFFE5835A),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Faculty & Staff',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'All Faculty & Staff',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Browse active and archived records.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SegmentedFilter(
+          value: _staffTypeFilter,
+          options: const {'All': 'All', 'Faculty': 'Faculty', 'Staff': 'Staff'},
+          onChanged: (value) => setState(() => _staffTypeFilter = value),
+        ),
+        const SizedBox(height: 12),
+        _SegmentedFilter(
+          value: _staffStatusFilter,
+          options: const {'active': 'Active Records', 'archived': 'Archived'},
+          onChanged: (value) => setState(() => _staffStatusFilter = value),
+        ),
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Faculty',
+              allStaff
+                  .where(
+                    (member) =>
+                        readText(member, const ['staffType'], fallback: '') ==
+                        'Faculty',
+                  )
+                  .length
+                  .toString(),
+              Icons.groups_rounded,
+              AppColors.primary,
+            ),
+            _Stat(
+              'Departments',
+              _items(data, 'departments').length.toString(),
+              Icons.apartment_rounded,
+              const Color(0xFFE5835A),
+            ),
+            _Stat(
+              'Leave',
+              _items(data, 'leave').length.toString(),
+              Icons.beach_access_rounded,
+              AppColors.warning,
+            ),
+          ],
+        ),
+        const SectionTitle('Faculty & Staff Management'),
+        if (staff.isEmpty)
+          EmptyState(
+            title:
+                'No ${_staffStatusFilter == 'archived' ? 'archived' : 'active'} faculty or staff records found',
+            message: 'Try a different search, type, or academic year.',
+          )
+        else
+          ...staff.map(
+            (member) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _StaffCard(
+                member: member,
+                onTap: () => _showStaffDetailSheet(member, data),
+                canEdit: _can('staff.edit'),
+                canManageLeave: _can('staff.leave'),
+                canArchive: _can('staff.archive'),
+                onEdit: () => _showStaffSheet(data: data, member: member),
+                onLeave: () => _showStaffLeaveSheet(member),
+                onArchive: () => _archiveStaff(member),
+                onRestore: () => _restoreStaff(member),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  bool _isArchivedStaff(Map<String, dynamic> member) =>
+      readText(member, const ['status'], fallback: '').toLowerCase() ==
+      'archived';
+
+  String _staffDisplayDateNow() =>
+      DateFormat('dd MMM yyyy').format(DateTime.now());
+
+  Future<void> _showStaffSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? member,
+  }) async {
+    final isEdit = member != null;
+    final defaultDepartment = _items(data, 'departments').isEmpty
+        ? 'Science'
+        : readText(_items(data, 'departments').first, const [
+            'name',
+          ], fallback: 'Science');
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: isEdit ? 'Edit Staff Record' : 'New Faculty / Staff',
+        helper: isEdit
+            ? 'Update employment and department details.'
+            : 'Create a faculty or staff master record.',
+        saveLabel: isEdit ? 'Save Changes' : 'Save Record',
+        initialValues: {
+          'staffType': 'Faculty',
+          'department': defaultDepartment,
+          'status': 'Active',
+          ...?member,
+        },
+        fields: [
+          const _FieldSpec('name', 'Name', isRequired: true),
+          const _FieldSpec('employeeId', 'Employee ID', isRequired: true),
+          const _FieldSpec('designation', 'Designation', isRequired: true),
+          const _FieldSpec('phone', 'Phone', isRequired: true),
+          const _FieldSpec('email', 'Email'),
+          const _FieldSpec('qualification', 'Qualification'),
+          const _FieldSpec('staffType', 'Staff Type', isRequired: true),
+          const _FieldSpec('department', 'Department', isRequired: true),
+          const _FieldSpec('institution', 'Institution'),
+          const _FieldSpec('specialization', 'Specialization'),
+          const _FieldSpec('city', 'City'),
+          const _FieldSpec('dateOfBirth', 'Date of Birth'),
+          const _FieldSpec('joiningDate', 'Joining Date'),
+          const _FieldSpec('appointmentType', 'Appointment'),
+          const _FieldSpec('address', 'Address'),
+          const _FieldSpec('previousExperience', 'Previous Experience'),
+          const _FieldSpec('publications', 'Publications'),
+          const _FieldSpec('researchProjects', 'Research Projects'),
+          if (isEdit) const _FieldSpec('status', 'Status', isRequired: true),
+        ],
+        onSave: (values) async {
+          final payload = {
+            ...values,
+            'name': (values['name'] ?? '').toString().trim(),
+            'employeeId': (values['employeeId'] ?? '').toString().trim(),
+            'designation': (values['designation'] ?? '').toString().trim(),
+            'phone': (values['phone'] ?? '').toString().trim(),
+            'email': (values['email'] ?? '').toString().trim(),
+            'qualification': (values['qualification'] ?? '').toString().trim(),
+          };
+          final id = readText(member ?? const {}, const ['id'], fallback: '');
+          if (id.isEmpty) {
+            await widget.repository.createDocument('staffMembers', {
+              ...payload,
+              'status': 'Active',
+              'createdAtText': _staffDisplayDateNow(),
+              'createdBy': widget.user.uid,
+            });
+          } else {
+            await widget.repository.updateDocument('staffMembers', id, {
+              ...payload,
+              'updatedAtText': _staffDisplayDateNow(),
+            });
+          }
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isEdit ? 'Staff record updated' : 'Staff record saved'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  Future<void> _showStaffLeaveSheet(Map<String, dynamic> member) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: 'Leave Request',
+        helper:
+            '${readText(member, const ['name'])} / ${readText(member, const ['employeeId'])}',
+        saveLabel: 'Save Leave',
+        initialValues: const {'leaveType': 'Casual Leave'},
+        fields: const [
+          _FieldSpec('leaveType', 'Leave Type', isRequired: true),
+          _FieldSpec('fromDate', 'From Date', isRequired: true),
+          _FieldSpec('toDate', 'To Date', isRequired: true),
+          _FieldSpec('reason', 'Reason', isRequired: true),
+        ],
+        onSave: (values) async {
+          await widget.repository.createDocument('staffLeaveRecords', {
+            'staffRecordId': readText(member, const ['id'], fallback: ''),
+            'employeeId': readText(member, const ['employeeId'], fallback: ''),
+            ...values,
+            'reason': (values['reason'] ?? '').toString().trim(),
+            'status': 'Pending Review',
+            'requestedAtText': _staffDisplayDateNow(),
+            if (_academicYear.trim().isNotEmpty)
+              'academicYear': _academicYear.trim(),
+            'createdBy': widget.user.uid,
+          });
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Leave request saved'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  Future<void> _archiveStaff(Map<String, dynamic> member) async {
+    final confirmed = await _confirmStudentAction(
+      title: 'Archive staff record?',
+      message: 'Archived records stay available from the Archived filter.',
+      actionLabel: 'Archive',
+    );
+    if (!confirmed) return;
+    await _updateStaff(member, {
+      'status': 'Archived',
+      'archivedAt': FieldValue.serverTimestamp(),
+      'archivedAtText': _staffDisplayDateNow(),
+    }, 'Staff record archived');
+  }
+
+  Future<void> _restoreStaff(Map<String, dynamic> member) async {
+    await _updateStaff(member, {
+      'status': 'Active',
+      'restoredAt': FieldValue.serverTimestamp(),
+      'restoredAtText': _staffDisplayDateNow(),
+    }, 'Staff record restored');
+    if (mounted) setState(() => _staffStatusFilter = 'active');
+  }
+
+  Future<void> _updateStaff(
+    Map<String, dynamic> member,
+    Map<String, dynamic> updates,
+    String successMessage,
+  ) async {
+    final id = readText(member, const ['id'], fallback: '');
+    if (id.isEmpty) return;
+    try {
+      await widget.repository.updateDocument('staffMembers', id, updates);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(successMessage),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Staff update failed: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _markStaffAttendance(
+    Map<String, dynamic> member,
+    Map<String, List<Map<String, dynamic>>> data,
+    String status,
+  ) async {
+    final dateText = _staffDisplayDateNow();
+    final employeeId = readText(member, const ['employeeId'], fallback: '');
+    final duplicate = _items(data, 'attendance').any(
+      (record) =>
+          readText(record, const ['employeeId'], fallback: '') == employeeId &&
+          readText(record, const ['dateText'], fallback: '') == dateText,
+    );
+    if (duplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Attendance already marked for today.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    await widget.repository.createDocument('staffAttendanceRecords', {
+      'staffRecordId': readText(member, const ['id'], fallback: ''),
+      'employeeId': employeeId,
+      if (_academicYear.trim().isNotEmpty) 'academicYear': _academicYear.trim(),
+      'dateText': dateText,
+      'status': status,
+      'markedAtText': dateText,
+      'createdBy': widget.user.uid,
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Attendance marked ${status.toLowerCase()}'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _decideStaffLeave(
+    Map<String, dynamic> leaveRecord,
+    String status,
+  ) async {
+    final id = readText(leaveRecord, const ['id'], fallback: '');
+    if (id.isEmpty) return;
+    await widget.repository.updateDocument('staffLeaveRecords', id, {
+      'status': status,
+      'decidedAtText': _staffDisplayDateNow(),
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Leave ${status.toLowerCase()}'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  // ignore: unused_element
   Widget _staff(Map<String, List<Map<String, dynamic>>> data) {
     final staff = _items(data, 'staff')
         .where(
@@ -2669,6 +3060,46 @@ class _ModuleScreenState extends State<ModuleScreen> {
           onDeleteHealthRecord: (record) {
             Navigator.of(context).pop();
             _deleteHealthRecord(record);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showStaffDetailSheet(
+    Map<String, dynamic> member,
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.86,
+        maxChildSize: 0.94,
+        minChildSize: 0.5,
+        builder: (context, controller) => _StaffDetailSheet(
+          member: member,
+          data: data,
+          controller: controller,
+          canEdit: _can('staff.edit'),
+          canManageLeave: _can('staff.leave'),
+          canMarkAttendance: _can('staff.attendance'),
+          onEdit: () {
+            Navigator.of(context).pop();
+            _showStaffSheet(data: data, member: member);
+          },
+          onLeave: () {
+            Navigator.of(context).pop();
+            _showStaffLeaveSheet(member);
+          },
+          onAttendance: (status) {
+            Navigator.of(context).pop();
+            _markStaffAttendance(member, data, status);
+          },
+          onLeaveDecision: (leave, status) {
+            Navigator.of(context).pop();
+            _decideStaffLeave(leave, status);
           },
         ),
       ),
@@ -4586,6 +5017,155 @@ class _StudentCard extends StatelessWidget {
   }
 }
 
+enum _StaffCardAction { view, edit, leave, archive, restore }
+
+class _StaffCard extends StatelessWidget {
+  const _StaffCard({
+    required this.member,
+    required this.onTap,
+    required this.canEdit,
+    required this.canManageLeave,
+    required this.canArchive,
+    required this.onEdit,
+    required this.onLeave,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final Map<String, dynamic> member;
+  final VoidCallback onTap;
+  final bool canEdit;
+  final bool canManageLeave;
+  final bool canArchive;
+  final VoidCallback onEdit;
+  final VoidCallback onLeave;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final archived =
+        readText(member, const ['status'], fallback: '').toLowerCase() ==
+        'archived';
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          _Avatar(
+            label: readText(member, const ['name'], fallback: '?'),
+            color: const Color(0xFFE5835A),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  readText(member, const ['name']),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${readText(member, const ['employeeId'], fallback: 'Employee ID')} / ${readText(member, const ['staffType'], fallback: 'Staff')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${readText(member, const ['department'], fallback: 'Department')} - ${readText(member, const ['designation'], fallback: 'Designation')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          StatusPill(
+            label: readText(member, const ['status'], fallback: 'Active'),
+          ),
+          PopupMenuButton<_StaffCardAction>(
+            tooltip: 'Staff actions',
+            onSelected: (action) {
+              switch (action) {
+                case _StaffCardAction.view:
+                  onTap();
+                  break;
+                case _StaffCardAction.edit:
+                  onEdit();
+                  break;
+                case _StaffCardAction.leave:
+                  onLeave();
+                  break;
+                case _StaffCardAction.archive:
+                  onArchive();
+                  break;
+                case _StaffCardAction.restore:
+                  onRestore();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: _StaffCardAction.view,
+                child: ListTile(
+                  leading: Icon(Icons.visibility_rounded),
+                  title: Text('View'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              if (canEdit)
+                const PopupMenuItem(
+                  value: _StaffCardAction.edit,
+                  child: ListTile(
+                    leading: Icon(Icons.edit_rounded),
+                    title: Text('Edit record'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              if (canManageLeave)
+                const PopupMenuItem(
+                  value: _StaffCardAction.leave,
+                  child: ListTile(
+                    leading: Icon(Icons.event_busy_rounded),
+                    title: Text('Leave request'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              if (canArchive && !archived)
+                const PopupMenuItem(
+                  value: _StaffCardAction.archive,
+                  child: ListTile(
+                    leading: Icon(Icons.archive_rounded),
+                    title: Text('Archive record'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              if (canArchive && archived)
+                const PopupMenuItem(
+                  value: _StaffCardAction.restore,
+                  child: ListTile(
+                    leading: Icon(Icons.unarchive_rounded),
+                    title: Text('Restore record'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.label, required this.color});
 
@@ -5033,6 +5613,410 @@ class _MonthStrip extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _StaffDetailSheet extends StatelessWidget {
+  const _StaffDetailSheet({
+    required this.member,
+    required this.data,
+    required this.controller,
+    required this.canEdit,
+    required this.canManageLeave,
+    required this.canMarkAttendance,
+    required this.onEdit,
+    required this.onLeave,
+    required this.onAttendance,
+    required this.onLeaveDecision,
+  });
+
+  final Map<String, dynamic> member;
+  final Map<String, List<Map<String, dynamic>>> data;
+  final ScrollController controller;
+  final bool canEdit;
+  final bool canManageLeave;
+  final bool canMarkAttendance;
+  final VoidCallback onEdit;
+  final VoidCallback onLeave;
+  final ValueChanged<String> onAttendance;
+  final void Function(Map<String, dynamic> leave, String status)
+  onLeaveDecision;
+
+  @override
+  Widget build(BuildContext context) {
+    final attendance = _relatedStaff(data['attendance'] ?? const []);
+    final leave = _relatedStaff(data['leave'] ?? const []);
+    final timetable = _relatedTimetable(data['timetable'] ?? const []);
+    final present = attendance
+        .where((item) => readText(item, const ['status']) == 'Present')
+        .length;
+    final absent = attendance
+        .where((item) => readText(item, const ['status']) == 'Absent')
+        .length;
+    final rate = attendance.isEmpty ? 0 : (present / attendance.length * 100);
+
+    return Material(
+      color: AppColors.page,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+      child: ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        children: [
+          Center(
+            child: Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.line,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _Avatar(
+                label: readText(member, const ['name'], fallback: '?'),
+                color: const Color(0xFFE5835A),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      readText(member, const ['name']),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${readText(member, const ['employeeId'], fallback: '-')} / ${readText(member, const ['staffType'], fallback: '-')}',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(
+                label: readText(member, const ['status'], fallback: 'Active'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (canEdit)
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                ),
+              if (canManageLeave)
+                OutlinedButton.icon(
+                  onPressed: onLeave,
+                  icon: const Icon(Icons.event_busy_rounded, size: 18),
+                  label: const Text('Leave'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          InfoCard(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Department',
+                        value: readText(member, const ['department']),
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Designation',
+                        value: readText(member, const ['designation']),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Phone',
+                        value: readText(member, const ['phone']),
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Email',
+                        value: readText(member, const ['email']),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                LabelValue(
+                  label: 'Qualification',
+                  value: readText(member, const ['qualification']),
+                ),
+              ],
+            ),
+          ),
+          if (canMarkAttendance) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => onAttendance('Present'),
+                    icon: const Icon(Icons.check_circle_rounded, size: 18),
+                    label: const Text('Mark Present'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => onAttendance('Absent'),
+                    icon: const Icon(Icons.cancel_rounded, size: 18),
+                    label: const Text('Mark Absent'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SectionTitle('Extracted Information'),
+          InfoCard(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Institution',
+                        value: readText(member, const ['institution']),
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Specialization',
+                        value: readText(member, const ['specialization']),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Joining Date',
+                        value: readText(member, const ['joiningDate']),
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Appointment',
+                        value: readText(member, const ['appointmentType']),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                LabelValue(
+                  label: 'Previous Experience',
+                  value: readText(member, const ['previousExperience']),
+                ),
+              ],
+            ),
+          ),
+          const SectionTitle('Attendance Graph'),
+          InfoCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LabelValue(label: 'Attendance Rate', value: '${rate.round()}%'),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(
+                  value: attendance.isEmpty ? 0 : rate / 100,
+                  backgroundColor: AppColors.line,
+                  color: AppColors.accent,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Present',
+                        value: present.toString(),
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Absent',
+                        value: absent.toString(),
+                      ),
+                    ),
+                    Expanded(
+                      child: LabelValue(
+                        label: 'Records',
+                        value: attendance.length.toString(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SectionTitle('Timetable'),
+          if (timetable.isEmpty)
+            const EmptyState(
+              title: 'No timetable entries',
+              message: 'No timetable entries assigned.',
+            )
+          else
+            ...timetable
+                .take(8)
+                .map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _CompactRow(
+                      title: readText(entry, const [
+                        'subject',
+                        'subjectName',
+                      ], fallback: 'Class'),
+                      subtitle:
+                          '${readText(entry, const ['day'], fallback: '-')} | ${readText(entry, const ['timeSlot', 'time'], fallback: '-')} | ${readText(entry, const ['classKey', 'className'], fallback: '-')}',
+                      trailing: const Icon(
+                        Icons.calendar_month_rounded,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+          const SectionTitle('Leave Management'),
+          if (leave.isEmpty)
+            const EmptyState(
+              title: 'No leave records',
+              message: 'No leave records.',
+            )
+          else
+            ...leave
+                .take(8)
+                .map(
+                  (record) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InfoCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  readText(record, const ['leaveType']),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              StatusPill(
+                                label: readText(record, const ['status']),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${readText(record, const ['fromDate'])} to ${readText(record, const ['toDate'])}',
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(readText(record, const ['reason'])),
+                          if (canManageLeave &&
+                              readText(record, const ['status']) ==
+                                  'Pending Review') ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        onLeaveDecision(record, 'Approved'),
+                                    icon: const Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Approve'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        onLeaveDecision(record, 'Rejected'),
+                                    icon: const Icon(
+                                      Icons.cancel_rounded,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Reject'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+          const SectionTitle('Attendance'),
+          _RelatedList(items: attendance, empty: 'No attendance marked.'),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _relatedStaff(List<Map<String, dynamic>> records) {
+    final recordId = readText(member, const ['id'], fallback: '');
+    final employeeId = readText(member, const ['employeeId'], fallback: '');
+    return records.where((record) {
+      return readText(record, const ['staffRecordId'], fallback: '') ==
+              recordId ||
+          readText(record, const ['employeeId'], fallback: '') == employeeId;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _relatedTimetable(
+    List<Map<String, dynamic>> records,
+  ) {
+    final recordId = readText(member, const ['id'], fallback: '');
+    final name = readText(member, const ['name'], fallback: '');
+    return records.where((entry) {
+      return readText(entry, const [
+                'facultyId',
+                'staffRecordId',
+              ], fallback: '') ==
+              recordId ||
+          readText(entry, const [
+                'facultyName',
+                'teacherName',
+                'staffName',
+              ], fallback: '') ==
+              name;
+    }).toList();
   }
 }
 

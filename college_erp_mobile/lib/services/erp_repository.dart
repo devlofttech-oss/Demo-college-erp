@@ -232,6 +232,10 @@ class ErpRepository {
             'staffAttendanceRecords',
             academicYear: academicYear,
           ),
+          'timetable': await listCollection(
+            'timetableEntries',
+            academicYear: academicYear,
+          ),
         };
       case 'attendance':
         return {
