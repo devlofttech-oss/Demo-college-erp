@@ -1,8 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,6 +18,16 @@ import '../widgets/mobile_chrome.dart';
 
 String _attendanceDisplayDate(DateTime date) =>
     DateFormat('dd MMM yyyy').format(date);
+
+const _curriculumEventTypes = [
+  'Academic',
+  'Exam',
+  'Holiday',
+  'Admission',
+  'Activity',
+];
+const _curriculumAudiences = ['All', 'Students', 'Faculty', 'Parents'];
+const _curriculumStatuses = ['Draft', 'Active', 'Published'];
 
 DateTime? _parseAttendanceDisplayDate(String text) {
   final trimmed = text.trim();
@@ -111,6 +120,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _documentOwnerTypeFilter = '';
   var _documentCategoryFilter = '';
   var _documentStatusFilter = '';
+  var _curriculumSelectedEventId = '';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -273,8 +283,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return _hostel(data);
       case 'parent-portal':
         return _parentPortal(data);
-      case 'academics':
       case 'calendar':
+        return _curriculum(data);
+      case 'academics':
         return _academics(data);
       case 'user-roles':
         return _usersAndRoles(data);
@@ -424,8 +435,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
               onTap: () => _showHostelEntrySheet(data),
             ),
         ];
-      case 'academics':
       case 'calendar':
+        return [
+          if (_can('academics.manage'))
+            _ModuleAction(
+              label: 'Add Event',
+              icon: Icons.add_rounded,
+              onTap: () => _showCurriculumEventSheet(data: data),
+            ),
+          if (_can('academics.manage'))
+            _ModuleAction(
+              label: 'Publish',
+              icon: Icons.send_rounded,
+              onTap: () => _publishCurriculum(data),
+            ),
+          _ModuleAction(
+            label: 'Download',
+            icon: Icons.download_rounded,
+            onTap: () => _downloadCurriculum(data),
+          ),
+        ];
+      case 'academics':
         return [
           if (_can('academics.manage'))
             _ModuleAction(
@@ -6581,6 +6611,306 @@ class _ModuleScreenState extends State<ModuleScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _curriculum(Map<String, List<Map<String, dynamic>>> data) {
+    final allEvents = [..._items(data, 'events')]
+      ..sort(
+        (first, second) => _curriculumEventDateText(
+          first,
+        ).compareTo(_curriculumEventDateText(second)),
+      );
+    final events = allEvents
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'title',
+            'eventName',
+            'eventType',
+            'audience',
+            'status',
+          ]),
+        )
+        .toList();
+    final published = allEvents
+        .where(
+          (event) =>
+              readText(event, const ['status'], fallback: '') == 'Published',
+        )
+        .length;
+    final drafts = allEvents
+        .where(
+          (event) => readText(event, const ['status'], fallback: '') == 'Draft',
+        )
+        .length;
+    final selectedEvent = _curriculumSelectedEventId.isEmpty
+        ? (events.isEmpty ? null : events.first)
+        : events.cast<Map<String, dynamic>?>().firstWhere(
+            (event) =>
+                readText(event ?? const {}, const ['id'], fallback: '') ==
+                _curriculumSelectedEventId,
+            orElse: () => events.isEmpty ? null : events.first,
+          );
+
+    return Column(
+      key: ValueKey('curriculum-$_query-$_curriculumSelectedEventId'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6E8FC7).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.menu_book_rounded,
+                  color: Color(0xFF6E8FC7),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Academics / Curriculum',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Curriculum',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Calendar view for classes, tests, holidays, admissions, and academic events.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Events',
+              allEvents.length.toString(),
+              Icons.event_available_rounded,
+              const Color(0xFF6E8FC7),
+            ),
+            _Stat(
+              'Published',
+              published.toString(),
+              Icons.send_rounded,
+              AppColors.accent,
+            ),
+            _Stat(
+              'Drafts',
+              drafts.toString(),
+              Icons.edit_calendar_rounded,
+              AppColors.warning,
+            ),
+          ],
+        ),
+        const SectionTitle('Curriculum Events'),
+        if (events.isEmpty)
+          EmptyState(
+            title: _query.trim().isEmpty
+                ? 'No curriculum events'
+                : 'No matching curriculum events',
+            message: _query.trim().isEmpty
+                ? 'Add class, test, holiday, admission, or activity events.'
+                : 'Try another search term.',
+            icon: Icons.event_busy_rounded,
+          )
+        else
+          ...events.map((event) {
+            final selected =
+                readText(event, const ['id'], fallback: '') ==
+                readText(selectedEvent ?? const {}, const ['id'], fallback: '');
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _CurriculumEventCard(
+                event: event,
+                selected: selected,
+                onTap: () => setState(
+                  () => _curriculumSelectedEventId = readText(event, const [
+                    'id',
+                  ], fallback: ''),
+                ),
+              ),
+            );
+          }),
+        const SectionTitle('Event Details'),
+        _CurriculumEventDetails(event: selectedEvent),
+      ],
+    );
+  }
+
+  String _curriculumEventDateText(Map<String, dynamic> event) {
+    return readText(event, const [
+      'eventDate',
+      'date',
+      'startsOn',
+    ], fallback: '');
+  }
+
+  String _curriculumCsvValue(Object? value) {
+    return '"${(value ?? '').toString().replaceAll('"', '""')}"';
+  }
+
+  Future<void> _showCurriculumEventSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+  }) async {
+    if (!_can('academics.manage')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to manage curriculum.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _CurriculumEventSheet(
+        academicYear: _academicYear,
+        onSave: (values) async {
+          final title = readText(values, const ['title'], fallback: '').trim();
+          final eventDate = readText(values, const [
+            'eventDate',
+          ], fallback: '').trim();
+          if (title.isEmpty) {
+            throw StateError('Event title is required.');
+          }
+          if (eventDate.isEmpty) {
+            throw StateError('Event date is required.');
+          }
+          final id = await widget.repository
+              .createDocument('academicCalendarEvents', {
+                ...values,
+                'title': title,
+                'eventDate': eventDate,
+                if (_academicYear.trim().isNotEmpty)
+                  'academicYear': _academicYear.trim(),
+                'createdBy': widget.user.uid,
+                'createdAtText': _displayDateNow(),
+              });
+          if (mounted) {
+            setState(() => _curriculumSelectedEventId = id);
+          }
+        },
+      ),
+    );
+    if (saved == true) {
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Curriculum event added'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _publishCurriculum(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('academics.manage')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to publish curriculum.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final publishable = _items(data, 'events')
+        .where(
+          (event) =>
+              readText(event, const ['status'], fallback: '') != 'Published' &&
+              readText(event, const ['id'], fallback: '').isNotEmpty,
+        )
+        .toList();
+    if (publishable.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Curriculum is already published'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final updates = {
+      'status': 'Published',
+      'publishedAtText': _displayDateNow(),
+      'updatedBy': widget.user.uid,
+    };
+    for (final event in publishable) {
+      await widget.repository.updateDocument(
+        'academicCalendarEvents',
+        readText(event, const ['id'], fallback: ''),
+        updates,
+      );
+    }
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${publishable.length} curriculum events published'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _downloadCurriculum(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    final events = [..._items(data, 'events')]
+      ..sort(
+        (first, second) => _curriculumEventDateText(
+          first,
+        ).compareTo(_curriculumEventDateText(second)),
+      );
+    final rows = [
+      ['Title', 'Type', 'Date', 'Audience', 'Status'],
+      ...events.map(
+        (event) => [
+          readText(event, const ['title', 'eventName'], fallback: ''),
+          readText(event, const ['eventType'], fallback: ''),
+          _curriculumEventDateText(event),
+          readText(event, const ['audience'], fallback: ''),
+          readText(event, const ['status'], fallback: ''),
+        ],
+      ),
+    ];
+    final csv = rows
+        .map((row) => row.map(_curriculumCsvValue).join(','))
+        .join('\n');
+    await Clipboard.setData(ClipboardData(text: csv));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          events.isEmpty
+              ? 'Curriculum CSV copied with headers only'
+              : 'Curriculum CSV copied for ${events.length} events',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -14120,6 +14450,465 @@ class _Stat {
   final String value;
   final IconData icon;
   final Color color;
+}
+
+class _CurriculumEventCard extends StatelessWidget {
+  const _CurriculumEventCard({
+    required this.event,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> event;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = readText(event, const ['eventType'], fallback: 'Academic');
+    final color = _curriculumColor(type);
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? color : AppColors.line),
+          boxShadow: [
+            BoxShadow(
+              color: (selected ? color : AppColors.primaryDark).withValues(
+                alpha: selected ? 0.13 : 0.04,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(_curriculumIcon(type), color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    readText(event, const ['title', 'eventName']),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    [
+                      type,
+                      readText(event, const ['audience'], fallback: 'All'),
+                      formatDateValue(
+                        event['eventDate'] ??
+                            event['date'] ??
+                            event['startsOn'],
+                      ),
+                    ].join(' / '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            StatusPill(
+              label: readText(event, const ['status'], fallback: 'Draft'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CurriculumEventDetails extends StatelessWidget {
+  const _CurriculumEventDetails({required this.event});
+
+  final Map<String, dynamic>? event;
+
+  @override
+  Widget build(BuildContext context) {
+    if (event == null) {
+      return const InfoCard(
+        child: Text(
+          'Select an event to inspect it.',
+          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+      );
+    }
+    final item = event!;
+    final type = readText(item, const ['eventType'], fallback: 'Academic');
+    final color = _curriculumColor(type);
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  type,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  readText(item, const ['title', 'eventName']),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Date',
+                  value: formatDateValue(
+                    item['eventDate'] ?? item['date'] ?? item['startsOn'],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Audience',
+                  value: readText(item, const ['audience'], fallback: 'All'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Created',
+                  value: readText(item, const [
+                    'createdAtText',
+                  ], fallback: formatDateValue(item['createdAt'])),
+                ),
+              ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: StatusPill(
+                    label: readText(item, const ['status'], fallback: 'Draft'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CurriculumEventSheet extends StatefulWidget {
+  const _CurriculumEventSheet({
+    required this.academicYear,
+    required this.onSave,
+  });
+
+  final String academicYear;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_CurriculumEventSheet> createState() => _CurriculumEventSheetState();
+}
+
+class _CurriculumEventSheetState extends State<_CurriculumEventSheet> {
+  final _titleController = TextEditingController();
+  var _eventType = _curriculumEventTypes.first;
+  var _audience = _curriculumAudiences.first;
+  var _status = 'Draft';
+  late var _eventDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final initialDate = DateTime.tryParse(_eventDate) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked == null) return;
+    setState(() => _eventDate = DateFormat('yyyy-MM-dd').format(picked));
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      setState(() => _error = 'Event title is required.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'title': title,
+        'eventType': _eventType,
+        'eventDate': _eventDate,
+        'audience': _audience,
+        'status': _status,
+        if (widget.academicYear.trim().isNotEmpty)
+          'academicYear': widget.academicYear.trim(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 18,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add Curriculum Event',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Create a calendar item for this academic year.',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _titleController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  prefixIcon: Icon(Icons.title_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetDropdown(
+                      label: 'Type',
+                      value: _eventType,
+                      values: _curriculumEventTypes,
+                      icon: Icons.category_rounded,
+                      onChanged: (value) => setState(() => _eventType = value),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SheetDropdown(
+                      label: 'Audience',
+                      value: _audience,
+                      values: _curriculumAudiences,
+                      icon: Icons.groups_rounded,
+                      onChanged: (value) => setState(() => _audience = value),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetDropdown(
+                      label: 'Status',
+                      value: _status,
+                      values: _curriculumStatuses,
+                      icon: Icons.verified_rounded,
+                      onChanged: (value) => setState(() => _status = value),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _saving ? null : _pickDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Date',
+                          prefixIcon: Icon(Icons.calendar_today_rounded),
+                        ),
+                        child: Text(
+                          _eventDate,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: Icon(
+                  _saving ? Icons.hourglass_top_rounded : Icons.save_rounded,
+                  size: 18,
+                ),
+                label: Text(_saving ? 'Saving...' : 'Save Event'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetDropdown extends StatelessWidget {
+  const _SheetDropdown({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<String> values;
+  final IconData icon;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      items: values
+          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+          .toList(),
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+    );
+  }
+}
+
+IconData _curriculumIcon(String type) {
+  switch (type.toLowerCase()) {
+    case 'exam':
+      return Icons.assignment_turned_in_rounded;
+    case 'holiday':
+      return Icons.beach_access_rounded;
+    case 'admission':
+      return Icons.person_add_alt_1_rounded;
+    case 'activity':
+      return Icons.emoji_events_rounded;
+    default:
+      return Icons.menu_book_rounded;
+  }
+}
+
+Color _curriculumColor(String type) {
+  switch (type.toLowerCase()) {
+    case 'exam':
+      return AppColors.danger;
+    case 'holiday':
+      return AppColors.accent;
+    case 'admission':
+      return AppColors.warning;
+    case 'activity':
+      return AppColors.early;
+    default:
+      return const Color(0xFF6E8FC7);
+  }
 }
 
 class _DashboardMetricCard extends StatelessWidget {
