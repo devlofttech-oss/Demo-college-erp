@@ -103,6 +103,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _communicationTypeFilter = '';
   var _communicationAudienceFilter = '';
   var _communicationStatusFilter = '';
+  var _documentSelectedId = '';
+  var _documentOwnerTypeFilter = '';
+  var _documentCategoryFilter = '';
+  var _documentStatusFilter = '';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -355,7 +359,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
             _ModuleAction(
               label: 'Upload',
               icon: Icons.upload_file_rounded,
-              onTap: _showDocumentUploadSheet,
+              onTap: () => _showDocumentUploadSheet(data: data),
             ),
         ];
       case 'hostel-management':
@@ -5734,74 +5738,453 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _documents(Map<String, List<Map<String, dynamic>>> data) {
-    final documents =
-        [..._items(data, 'documents'), ..._items(data, 'studentDocuments')]
-            .where(
-              (item) => containsQuery(item, _query, const [
-                'title',
-                'documentType',
-                'ownerName',
-                'fileName',
-                'verificationStatus',
-              ]),
-            )
-            .toList();
+    final students = _documentStudents(data);
+    final staff = _documentStaff(data);
+    final sourceDocuments = _documentRoleScopedDocuments(
+      _items(data, 'documents'),
+      students,
+    );
+    final documents = sourceDocuments
+        .map((document) => _normalizedDocument(document, students, staff))
+        .where(_documentMatchesFilters)
+        .toList();
+    final selectedDocument = _selectedDocument(documents);
+    final summary = _documentSummary(sourceDocuments);
+    final canModerate =
+        !widget.user.isParent && widget.user.roleId != 'faculty';
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF12A6A6).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.folder_rounded,
+                  color: Color(0xFF12A6A6),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Administration / Document Management',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Document Management',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Search documents, inspect metadata, verify records, and open uploaded files.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         _SummaryRow(
           stats: [
             _Stat(
               'Documents',
-              documents.length.toString(),
+              summary.total.toString(),
               Icons.folder_rounded,
               const Color(0xFF12A6A6),
             ),
             _Stat(
-              'Students',
-              _items(data, 'students').length.toString(),
-              Icons.school_rounded,
+              'Verified',
+              summary.verified.toString(),
+              Icons.verified_rounded,
               AppColors.accent,
             ),
             _Stat(
-              'Staff',
-              _items(data, 'staff').length.toString(),
-              Icons.groups_rounded,
-              AppColors.primary,
+              'Pending',
+              summary.pending.toString(),
+              Icons.pending_actions_rounded,
+              AppColors.warning,
             ),
           ],
+        ),
+        if (_can('documents.upload')) ...[
+          const SizedBox(height: 12),
+          PrimaryActionButton(
+            label: 'Upload Document',
+            icon: Icons.upload_file_rounded,
+            onPressed: () => _showDocumentUploadSheet(data: data),
+          ),
+        ],
+        const SectionTitle('Filters'),
+        _DocumentFilterPanel(
+          ownerTypeFilter: _documentOwnerTypeFilter,
+          categoryFilter: _documentCategoryFilter,
+          statusFilter: _documentStatusFilter,
+          hideOwnerFilter:
+              widget.user.isParent || widget.user.roleId == 'faculty',
+          onOwnerTypeChanged: (value) =>
+              setState(() => _documentOwnerTypeFilter = value),
+          onCategoryChanged: (value) =>
+              setState(() => _documentCategoryFilter = value),
+          onStatusChanged: (value) =>
+              setState(() => _documentStatusFilter = value),
         ),
         const SectionTitle('Documents'),
         if (documents.isEmpty)
           const EmptyState(
             title: 'No documents',
-            message: 'Uploaded ERP documents will appear here.',
+            message:
+                'Uploaded ERP documents matching your filters will appear here.',
           )
         else
           ...documents.map(
             (doc) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _CompactRow(
-                title: readText(doc, const [
-                  'title',
-                  'documentType',
-                  'fileName',
-                  'documentFileName',
-                ]),
-                subtitle: readText(doc, const [
-                  'ownerName',
-                  'studentName',
-                  'staffName',
-                  'ownerId',
-                ], fallback: 'ERP document'),
-                trailing: _DocumentTrailing(
-                  document: doc,
-                  onOpen: () => _openDocument(doc),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _DocumentCard(
+                document: doc,
+                selected:
+                    readText(doc, const ['id'], fallback: '') ==
+                    _documentSelectedId,
+                showActions: canModerate,
+                canVerify: _can('documents.verify'),
+                canArchive: _can('documents.archive'),
+                onTap: () => setState(
+                  () => _documentSelectedId = readText(doc, const [
+                    'id',
+                  ], fallback: ''),
                 ),
+                onOpen: () => _openDocument(doc),
+                onVerify: (status) => _verifyDocument(doc, status),
+                onArchive: () => _archiveDocument(doc),
               ),
             ),
           ),
+        const SectionTitle('Document Details'),
+        _DocumentPreviewCard(
+          document: selectedDocument,
+          showActions: canModerate,
+          canVerify: _can('documents.verify'),
+          canArchive: _can('documents.archive'),
+          onOpen: selectedDocument == null
+              ? null
+              : () => _openDocument(selectedDocument),
+          onVerify: selectedDocument == null
+              ? null
+              : (status) => _verifyDocument(selectedDocument, status),
+          onArchive: selectedDocument == null
+              ? null
+              : () => _archiveDocument(selectedDocument),
+        ),
+        const SectionTitle('Academic Records Archive'),
+        _DocumentArchiveList(
+          documents: sourceDocuments
+              .map((document) => _normalizedDocument(document, students, staff))
+              .where(
+                (document) =>
+                    readText(document, const ['ownerType'], fallback: '') ==
+                        'Academic Archive' ||
+                    readText(document, const [
+                          'verificationStatus',
+                        ], fallback: '') ==
+                        'Archived',
+              )
+              .take(5)
+              .toList(),
+        ),
       ],
     );
+  }
+
+  List<Map<String, dynamic>> _documentStudents(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(
+      data,
+      'students',
+    ).where((student) => !_isArchivedStudent(student)).toList();
+  }
+
+  List<Map<String, dynamic>> _documentStaff(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'staff')
+        .where(
+          (member) =>
+              readText(member, const ['status'], fallback: '').toLowerCase() !=
+              'archived',
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _documentRoleScopedDocuments(
+    List<Map<String, dynamic>> documents,
+    List<Map<String, dynamic>> students,
+  ) {
+    if (widget.user.isParent) {
+      final studentKeys = _feeStudentKeys(students);
+      return documents
+          .where(
+            (document) =>
+                readText(document, const ['ownerType'], fallback: '') ==
+                    'Student' &&
+                _documentMatchesOwnerKeys(document, studentKeys),
+          )
+          .toList();
+    }
+    if (widget.user.roleId == 'faculty') {
+      final tokens = _documentCurrentUserTokens();
+      return documents
+          .where((document) => _documentMatchesCurrentStaff(document, tokens))
+          .toList();
+    }
+    return documents;
+  }
+
+  Set<String> _documentCurrentUserTokens() {
+    return {
+          widget.user.uid,
+          widget.user.email,
+          widget.user.displayId,
+          widget.user.name,
+        }
+        .map((value) => value.trim().toLowerCase())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
+  bool _documentMatchesCurrentStaff(
+    Map<String, dynamic> document,
+    Set<String> tokens,
+  ) {
+    if (tokens.isEmpty) return false;
+    final uploadFields = [
+      'uploadedByUid',
+      'createdByUid',
+      'uploadedById',
+      'createdById',
+      'userId',
+      'staffId',
+      'uploadedByEmail',
+      'createdByEmail',
+      'uploadedBy',
+      'createdByName',
+    ].map((key) => readText(document, [key], fallback: '').toLowerCase());
+    if (uploadFields.any(tokens.contains)) return true;
+    if (readText(document, const ['ownerType'], fallback: '') != 'Staff') {
+      return false;
+    }
+    return ['ownerRecordId', 'ownerId', 'ownerName', 'employeeId', 'email']
+        .map((key) => readText(document, [key], fallback: '').toLowerCase())
+        .any(tokens.contains);
+  }
+
+  bool _documentMatchesOwnerKeys(
+    Map<String, dynamic> document,
+    Set<String> keys,
+  ) {
+    if (keys.isEmpty) return false;
+    return [
+      readText(document, const ['ownerRecordId'], fallback: ''),
+      readText(document, const ['ownerId'], fallback: ''),
+      readText(document, const ['studentRecordId'], fallback: ''),
+      readText(document, const ['studentId'], fallback: ''),
+    ].any(keys.contains);
+  }
+
+  Map<String, dynamic> _normalizedDocument(
+    Map<String, dynamic> document,
+    List<Map<String, dynamic>> students,
+    List<Map<String, dynamic>> staff,
+  ) {
+    final ownerName = readText(document, const ['ownerName'], fallback: '');
+    if (ownerName.isNotEmpty) return document;
+    final ownerType = readText(document, const ['ownerType'], fallback: '');
+    final ownerRecordId = readText(document, const [
+      'ownerRecordId',
+    ], fallback: '');
+    final ownerId = readText(document, const ['ownerId'], fallback: '');
+    if (ownerType == 'Student') {
+      Map<String, dynamic>? student;
+      for (final item in students) {
+        if (readText(item, const ['id'], fallback: '') == ownerRecordId ||
+            readText(item, const ['studentId'], fallback: '') == ownerId) {
+          student = item;
+          break;
+        }
+      }
+      return {
+        ...document,
+        'ownerName': readText(
+          student ?? const <String, dynamic>{},
+          const ['name', 'studentName'],
+          fallback: ownerId.isEmpty ? 'Student' : ownerId,
+        ),
+      };
+    }
+    if (ownerType == 'Staff') {
+      Map<String, dynamic>? member;
+      for (final item in staff) {
+        if (readText(item, const ['id'], fallback: '') == ownerRecordId ||
+            readText(item, const ['employeeId'], fallback: '') == ownerId) {
+          member = item;
+          break;
+        }
+      }
+      return {
+        ...document,
+        'ownerName': readText(
+          member ?? const <String, dynamic>{},
+          const ['name'],
+          fallback: ownerId.isEmpty ? 'Staff' : ownerId,
+        ),
+      };
+    }
+    return {
+      ...document,
+      'ownerName': readText(document, const [
+        'archiveTitle',
+      ], fallback: 'Other'),
+    };
+  }
+
+  bool _documentMatchesFilters(Map<String, dynamic> document) {
+    final ownerMatches =
+        _documentOwnerTypeFilter.isEmpty ||
+        readText(document, const ['ownerType'], fallback: '') ==
+            _documentOwnerTypeFilter;
+    final categoryMatches =
+        _documentCategoryFilter.isEmpty ||
+        readText(document, const ['category'], fallback: '') ==
+            _documentCategoryFilter;
+    final statusMatches =
+        _documentStatusFilter.isEmpty ||
+        _documentStatus(document) == _documentStatusFilter;
+    final queryMatches = containsQuery(document, _query, const [
+      'title',
+      'documentType',
+      'ownerName',
+      'ownerId',
+      'fileName',
+      'archiveTitle',
+      'note',
+      'notes',
+      'tags',
+      'verificationStatus',
+      'category',
+    ]);
+    return ownerMatches && categoryMatches && statusMatches && queryMatches;
+  }
+
+  Map<String, dynamic>? _selectedDocument(
+    List<Map<String, dynamic>> documents,
+  ) {
+    if (_documentSelectedId.isNotEmpty) {
+      for (final document in documents) {
+        if (readText(document, const ['id'], fallback: '') ==
+            _documentSelectedId) {
+          return document;
+        }
+      }
+    }
+    if (documents.isEmpty) return null;
+    return documents.first;
+  }
+
+  _DocumentSummary _documentSummary(List<Map<String, dynamic>> documents) {
+    return documents.fold(const _DocumentSummary(), (summary, document) {
+      final status = _documentStatus(document);
+      return _DocumentSummary(
+        total: summary.total + 1,
+        verified: summary.verified + (status == 'Verified' ? 1 : 0),
+        pending: summary.pending + (status == 'Pending Review' ? 1 : 0),
+        rejected: summary.rejected + (status == 'Rejected' ? 1 : 0),
+        archived: summary.archived + (status == 'Archived' ? 1 : 0),
+      );
+    });
+  }
+
+  String _documentStatus(Map<String, dynamic> document) {
+    final status = readText(document, const [
+      'verificationStatus',
+      'documentStatus',
+      'status',
+    ], fallback: '');
+    if (status.isEmpty || status == 'Uploaded') return 'Pending Review';
+    return status;
+  }
+
+  String _documentDisplayDateNow() =>
+      DateFormat('dd MMM yyyy').format(DateTime.now());
+
+  Future<void> _verifyDocument(
+    Map<String, dynamic> document,
+    String status,
+  ) async {
+    if (!_can('documents.verify')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot verify documents.')),
+      );
+      return;
+    }
+    await widget.repository.updateDocument(
+      'managedDocuments',
+      readText(document, const ['id'], fallback: ''),
+      {
+        'verificationStatus': status,
+        'verifiedAtText': _documentDisplayDateNow(),
+      },
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Document marked ${status.toLowerCase()}'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _archiveDocument(Map<String, dynamic> document) async {
+    if (!_can('documents.archive')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot archive documents.')),
+      );
+      return;
+    }
+    await widget.repository.updateDocument(
+      'managedDocuments',
+      readText(document, const ['id'], fallback: ''),
+      {
+        'verificationStatus': 'Archived',
+        'archivedAtText': _documentDisplayDateNow(),
+      },
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Document archived'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
   }
 
   Widget _hostel(Map<String, List<Map<String, dynamic>>> data) {
@@ -6828,21 +7211,45 @@ class _ModuleScreenState extends State<ModuleScreen> {
     return result == true;
   }
 
-  Future<void> _showDocumentUploadSheet() async {
+  Future<void> _showDocumentUploadSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+  }) async {
+    final students = _documentStudents(data);
+    final staff = _documentStaff(data);
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (context) => _DocumentUploadSheet(
-        onSave: ({required bytes, required fileName, required metadata}) {
-          return widget.repository.uploadManagedDocument(
+        students: students,
+        staff: staff,
+        onSave: ({required bytes, required fileName, required metadata}) async {
+          final payload = {
+            ...metadata,
+            if (_academicYear.trim().isNotEmpty)
+              'academicYear': _academicYear.trim(),
+            'uploadedAtText': _documentDisplayDateNow(),
+            'uploadedByUid': widget.user.uid,
+            'uploadedByEmail': widget.user.email,
+            'uploadedById': widget.user.displayId,
+            'uploadedByName': widget.user.name,
+            'createdBy': widget.user.uid,
+          };
+          if (bytes == null || fileName.trim().isEmpty) {
+            await widget.repository.createDocument('managedDocuments', {
+              ...payload,
+              'fileName': '',
+              'fileSize': 0,
+              'fileUrl': '',
+              'downloadUrl': '',
+              'storagePath': '',
+            });
+            return;
+          }
+          await widget.repository.uploadManagedDocument(
             bytes: bytes,
             fileName: fileName,
             uploadedBy: widget.user.uid,
-            metadata: {
-              ...metadata,
-              if (_academicYear.trim().isNotEmpty)
-                'academicYear': _academicYear.trim(),
-            },
+            metadata: payload,
           );
         },
       ),
@@ -7130,34 +7537,761 @@ class _ModuleAction {
   final VoidCallback onTap;
 }
 
-class _DocumentTrailing extends StatelessWidget {
-  const _DocumentTrailing({required this.document, required this.onOpen});
+const _documentOwnerTypes = ['Student', 'Staff', 'Other'];
 
-  final Map<String, dynamic> document;
-  final VoidCallback onOpen;
+const _documentTypes = [
+  'Aadhaar',
+  'PAN Card',
+  'Marks Card',
+  'Transfer Certificate',
+  'Other',
+];
+
+const _documentCategories = [
+  'Identity',
+  'Admission',
+  'Academic',
+  'Finance',
+  'Other',
+];
+
+const _documentStatuses = [
+  'Pending Review',
+  'Verified',
+  'Rejected',
+  'Archived',
+];
+
+class _DocumentSummary {
+  const _DocumentSummary({
+    this.total = 0,
+    this.verified = 0,
+    this.pending = 0,
+    this.rejected = 0,
+    this.archived = 0,
+  });
+
+  final int total;
+  final int verified;
+  final int pending;
+  final int rejected;
+  final int archived;
+}
+
+class _DocumentFilterPanel extends StatelessWidget {
+  const _DocumentFilterPanel({
+    required this.ownerTypeFilter,
+    required this.categoryFilter,
+    required this.statusFilter,
+    required this.hideOwnerFilter,
+    required this.onOwnerTypeChanged,
+    required this.onCategoryChanged,
+    required this.onStatusChanged,
+  });
+
+  final String ownerTypeFilter;
+  final String categoryFilter;
+  final String statusFilter;
+  final bool hideOwnerFilter;
+  final ValueChanged<String> onOwnerTypeChanged;
+  final ValueChanged<String> onCategoryChanged;
+  final ValueChanged<String> onStatusChanged;
 
   @override
   Widget build(BuildContext context) {
-    final hasUrl = readText(document, const [
-      'downloadUrl',
-      'fileUrl',
-      'url',
-    ], fallback: '').isNotEmpty;
-    if (hasUrl) {
-      return IconButton(
-        tooltip: 'Open document',
-        onPressed: onOpen,
-        icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
-      );
-    }
-    return StatusPill(
-      label: readText(document, const [
-        'verificationStatus',
-        'documentStatus',
-        'status',
-      ], fallback: 'Uploaded'),
+    return InfoCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          if (hideOwnerFilter)
+            const Row(
+              children: [
+                Expanded(
+                  child: LabelValue(
+                    label: 'Owner Type',
+                    value: 'Scoped to your account',
+                  ),
+                ),
+                Icon(Icons.lock_rounded, size: 18, color: AppColors.muted),
+              ],
+            )
+          else
+            _DocumentDropdown(
+              value: ownerTypeFilter,
+              label: 'Owner Type',
+              allLabel: 'All Owners',
+              options: _documentOwnerTypes,
+              onChanged: onOwnerTypeChanged,
+            ),
+          const SizedBox(height: 10),
+          _DocumentDropdown(
+            value: categoryFilter,
+            label: 'Category',
+            allLabel: 'All Categories',
+            options: _documentCategories,
+            onChanged: onCategoryChanged,
+          ),
+          const SizedBox(height: 10),
+          _DocumentDropdown(
+            value: statusFilter,
+            label: 'Status',
+            allLabel: 'All Statuses',
+            options: _documentStatuses,
+            onChanged: onStatusChanged,
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _DocumentDropdown extends StatelessWidget {
+  const _DocumentDropdown({
+    required this.value,
+    required this.label,
+    required this.allLabel,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String value;
+  final String label;
+  final String allLabel;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: options.contains(value) ? value : '',
+        isExpanded: true,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        items: [
+          DropdownMenuItem(value: '', child: Text(allLabel)),
+          ...options.map(
+            (item) => DropdownMenuItem(value: item, child: Text(item)),
+          ),
+        ],
+        onChanged: (next) => onChanged(next ?? ''),
+        hint: Text(label),
+      ),
+    );
+  }
+}
+
+enum _DocumentAction { open, verify, reject, archive }
+
+class _DocumentCard extends StatelessWidget {
+  const _DocumentCard({
+    required this.document,
+    required this.selected,
+    required this.showActions,
+    required this.canVerify,
+    required this.canArchive,
+    required this.onTap,
+    required this.onOpen,
+    required this.onVerify,
+    required this.onArchive,
+  });
+
+  final Map<String, dynamic> document;
+  final bool selected;
+  final bool showActions;
+  final bool canVerify;
+  final bool canArchive;
+  final VoidCallback onTap;
+  final VoidCallback onOpen;
+  final ValueChanged<String> onVerify;
+  final VoidCallback onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _documentDisplayStatus(document);
+    final hasFile = _documentFileUrl(document).isNotEmpty;
+    final owner = readText(document, const ['ownerName'], fallback: 'Owner');
+    final ownerId = readText(document, const [
+      'ownerId',
+      'studentId',
+      'employeeId',
+    ], fallback: '');
+    return InfoCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 4,
+                height: 82,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.accent
+                      : _documentStatusColor(status),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            readText(document, const [
+                              'title',
+                              'documentType',
+                              'fileName',
+                            ], fallback: 'Document'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        StatusPill(label: status),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      [
+                        readText(document, const [
+                          'ownerType',
+                        ], fallback: 'Owner'),
+                        owner,
+                        ownerId,
+                      ].where((value) => value.isNotEmpty).join(' | '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _DocumentChip(
+                          label: readText(document, const [
+                            'category',
+                          ], fallback: 'Other'),
+                        ),
+                        _DocumentChip(label: _documentDateLabel(document)),
+                        _DocumentChip(
+                          label: hasFile
+                              ? _formatDocumentFileSize(
+                                  readNumber(document, const [
+                                    'fileSize',
+                                  ], fallback: 0),
+                                )
+                              : 'Metadata only',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<_DocumentAction>(
+                tooltip: 'Actions',
+                onSelected: (action) {
+                  switch (action) {
+                    case _DocumentAction.open:
+                      onOpen();
+                      break;
+                    case _DocumentAction.verify:
+                      onVerify('Verified');
+                      break;
+                    case _DocumentAction.reject:
+                      onVerify('Rejected');
+                      break;
+                    case _DocumentAction.archive:
+                      onArchive();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: _DocumentAction.open,
+                    enabled: hasFile,
+                    child: const ListTile(
+                      leading: Icon(Icons.open_in_new_rounded),
+                      title: Text('Open file'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  if (showActions) ...[
+                    PopupMenuItem(
+                      value: _DocumentAction.verify,
+                      enabled:
+                          canVerify &&
+                          status != 'Verified' &&
+                          status != 'Archived',
+                      child: const ListTile(
+                        leading: Icon(Icons.verified_rounded),
+                        title: Text('Verify'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _DocumentAction.reject,
+                      enabled:
+                          canVerify &&
+                          status != 'Rejected' &&
+                          status != 'Archived',
+                      child: const ListTile(
+                        leading: Icon(Icons.block_rounded),
+                        title: Text('Reject'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _DocumentAction.archive,
+                      enabled: canArchive && status != 'Archived',
+                      child: const ListTile(
+                        leading: Icon(Icons.archive_rounded),
+                        title: Text('Archive'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          if (selected) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: hasFile ? onOpen : null,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Open'),
+                ),
+                if (showActions) ...[
+                  ElevatedButton.icon(
+                    onPressed: canVerify && status != 'Verified'
+                        ? () => onVerify('Verified')
+                        : null,
+                    icon: const Icon(Icons.verified_rounded, size: 18),
+                    label: const Text('Verify'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: canVerify && status != 'Rejected'
+                        ? () => onVerify('Rejected')
+                        : null,
+                    icon: const Icon(Icons.block_rounded, size: 18),
+                    label: const Text('Reject'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: canArchive && status != 'Archived'
+                        ? onArchive
+                        : null,
+                    icon: const Icon(Icons.archive_rounded, size: 18),
+                    label: const Text('Archive'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentPreviewCard extends StatelessWidget {
+  const _DocumentPreviewCard({
+    required this.document,
+    required this.showActions,
+    required this.canVerify,
+    required this.canArchive,
+    required this.onOpen,
+    required this.onVerify,
+    required this.onArchive,
+  });
+
+  final Map<String, dynamic>? document;
+  final bool showActions;
+  final bool canVerify;
+  final bool canArchive;
+  final VoidCallback? onOpen;
+  final ValueChanged<String>? onVerify;
+  final VoidCallback? onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = document;
+    if (item == null) {
+      return const EmptyState(
+        title: 'No document selected',
+        message: 'Choose a document to inspect its metadata and actions.',
+      );
+    }
+    final status = _documentDisplayStatus(item);
+    final hasFile = _documentFileUrl(item).isNotEmpty;
+    final notes = readText(item, const ['notes', 'note', 'tags'], fallback: '');
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 46,
+                width: 46,
+                decoration: BoxDecoration(
+                  color: _documentStatusColor(status).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.description_rounded,
+                  color: _documentStatusColor(status),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      readText(item, const [
+                        'title',
+                        'documentType',
+                        'fileName',
+                      ], fallback: 'Document'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      readText(item, const [
+                        'fileName',
+                      ], fallback: hasFile ? 'Uploaded file' : 'Metadata only'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              StatusPill(label: status),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Owner',
+                  value: readText(item, const ['ownerName'], fallback: '-'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Owner Type',
+                  value: readText(item, const ['ownerType'], fallback: '-'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Owner ID',
+                  value: readText(item, const [
+                    'ownerId',
+                    'studentId',
+                    'employeeId',
+                  ], fallback: '-'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Category',
+                  value: readText(item, const ['category'], fallback: '-'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Type',
+                  value: readText(item, const ['documentType'], fallback: '-'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Uploaded',
+                  value: _documentDateLabel(item),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Uploaded By',
+                  value: readText(item, const [
+                    'uploadedByName',
+                    'createdByName',
+                    'uploadedByEmail',
+                    'createdBy',
+                  ], fallback: '-'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'File Size',
+                  value: _formatDocumentFileSize(
+                    readNumber(item, const ['fileSize'], fallback: 0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.page,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                notes,
+                style: const TextStyle(fontSize: 12, color: AppColors.ink),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton.icon(
+                onPressed: hasFile ? onOpen : null,
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: const Text('Open File'),
+              ),
+              if (showActions) ...[
+                OutlinedButton.icon(
+                  onPressed: canVerify && status != 'Verified'
+                      ? () => onVerify?.call('Verified')
+                      : null,
+                  icon: const Icon(Icons.verified_rounded, size: 18),
+                  label: const Text('Verify'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: canVerify && status != 'Rejected'
+                      ? () => onVerify?.call('Rejected')
+                      : null,
+                  icon: const Icon(Icons.block_rounded, size: 18),
+                  label: const Text('Reject'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: canArchive && status != 'Archived'
+                      ? onArchive
+                      : null,
+                  icon: const Icon(Icons.archive_rounded, size: 18),
+                  label: const Text('Archive'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentArchiveList extends StatelessWidget {
+  const _DocumentArchiveList({required this.documents});
+
+  final List<Map<String, dynamic>> documents;
+
+  @override
+  Widget build(BuildContext context) {
+    if (documents.isEmpty) {
+      return const EmptyState(
+        title: 'No archived documents',
+        message:
+            'Verified archive records and archived files will appear here.',
+      );
+    }
+    return Column(
+      children: documents
+          .map(
+            (document) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: InfoCard(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      height: 38,
+                      width: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.inventory_2_rounded,
+                        color: AppColors.primaryDark,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            readText(document, const [
+                              'archiveTitle',
+                              'title',
+                              'documentType',
+                            ], fallback: 'Archive record'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${readText(document, const ['category'], fallback: 'Other')} | ${_documentDateLabel(document)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    StatusPill(label: _documentDisplayStatus(document)),
+                  ],
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _DocumentChip extends StatelessWidget {
+  const _DocumentChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.page,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label.isEmpty ? '-' : label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.muted,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+String _documentFileUrl(Map<String, dynamic> document) {
+  return readText(document, const [
+    'downloadUrl',
+    'fileUrl',
+    'url',
+  ], fallback: '');
+}
+
+String _documentDisplayStatus(Map<String, dynamic> document) {
+  final status = readText(document, const [
+    'verificationStatus',
+    'documentStatus',
+    'status',
+  ], fallback: '');
+  if (status.isEmpty || status == 'Uploaded') return 'Pending Review';
+  return status;
+}
+
+Color _documentStatusColor(String status) {
+  switch (status) {
+    case 'Verified':
+      return AppColors.accent;
+    case 'Rejected':
+      return AppColors.danger;
+    case 'Archived':
+      return AppColors.muted;
+    case 'Pending Review':
+      return AppColors.warning;
+    default:
+      return AppColors.primary;
+  }
+}
+
+String _documentDateLabel(Map<String, dynamic> document) {
+  final explicit = readText(document, const [
+    'uploadedAtText',
+    'createdAtText',
+    'verifiedAtText',
+    'archivedAtText',
+  ], fallback: '');
+  if (explicit.isNotEmpty) return explicit;
+  final date = readDate(document['createdAt'] ?? document['uploadedAt']);
+  return date == null ? '-' : DateFormat('dd MMM yyyy').format(date);
+}
+
+String _formatDocumentFileSize(num bytes) {
+  if (bytes <= 0) return 'No file attached';
+  if (bytes < 1024) return '${bytes.round()} B';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
 
 const _noticeTypes = [
@@ -10511,10 +11645,16 @@ class _HealthRecordFormSheetState extends State<_HealthRecordFormSheet> {
 }
 
 class _DocumentUploadSheet extends StatefulWidget {
-  const _DocumentUploadSheet({required this.onSave});
+  const _DocumentUploadSheet({
+    required this.students,
+    required this.staff,
+    required this.onSave,
+  });
 
+  final List<Map<String, dynamic>> students;
+  final List<Map<String, dynamic>> staff;
   final Future<void> Function({
-    required Uint8List bytes,
+    required Uint8List? bytes,
     required String fileName,
     required Map<String, dynamic> metadata,
   })
@@ -10527,11 +11667,13 @@ class _DocumentUploadSheet extends StatefulWidget {
 class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
   static const _maxUploadBytes = 10 * 1024 * 1024;
   static const _allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
-  final _titleController = TextEditingController();
-  final _ownerController = TextEditingController();
-  final _ownerIdController = TextEditingController();
-  final _ownerTypeController = TextEditingController(text: 'Student');
-  final _documentTypeController = TextEditingController();
+  final _ownerNameController = TextEditingController();
+  final _noteController = TextEditingController();
+  final _notesController = TextEditingController();
+  var _ownerType = 'Student';
+  var _ownerRecordId = '';
+  var _documentType = '';
+  var _category = 'Identity';
   XFile? _file;
   var _fileSize = 0;
   var _saving = false;
@@ -10539,13 +11681,19 @@ class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _ownerController.dispose();
-    _ownerIdController.dispose();
-    _ownerTypeController.dispose();
-    _documentTypeController.dispose();
+    _ownerNameController.dispose();
+    _noteController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
+
+  List<Map<String, dynamic>> get _ownerOptions {
+    if (_ownerType == 'Student') return widget.students;
+    if (_ownerType == 'Staff') return widget.staff;
+    return const [];
+  }
+
+  bool get _needsKnownOwner => _ownerType == 'Student' || _ownerType == 'Staff';
 
   Future<void> _pickFile() async {
     final picked = await openFile(
@@ -10571,25 +11719,32 @@ class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
       _file = picked;
       _fileSize = size;
       _error = '';
-      if (_titleController.text.trim().isEmpty) {
-        _titleController.text = picked.name;
-      }
     });
   }
 
   Future<void> _save() async {
-    final file = _file;
-    if (file == null) {
-      setState(() => _error = 'Choose a file to upload.');
+    if (!_documentOwnerTypes.contains(_ownerType)) {
+      setState(() => _error = 'Owner type is required.');
       return;
     }
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      setState(() => _error = 'The selected file is empty.');
+    if (_needsKnownOwner && _ownerRecordId.isEmpty) {
+      setState(() => _error = 'Name is required.');
       return;
     }
-    if (_titleController.text.trim().isEmpty) {
-      setState(() => _error = 'Title is required.');
+    if (_ownerType == 'Other' && _ownerNameController.text.trim().isEmpty) {
+      setState(() => _error = 'Name is required.');
+      return;
+    }
+    if (_documentType.trim().isEmpty) {
+      setState(() => _error = 'Document type is required.');
+      return;
+    }
+    if (_documentType == 'Other' && _noteController.text.trim().isEmpty) {
+      setState(() => _error = 'Note is required when document type is Other.');
+      return;
+    }
+    if (!_documentCategories.contains(_category)) {
+      setState(() => _error = 'Category is required.');
       return;
     }
 
@@ -10598,16 +11753,56 @@ class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
       _error = '';
     });
     try {
+      final file = _file;
+      Uint8List? bytes;
+      var fileName = '';
+      if (file != null) {
+        bytes = await file.readAsBytes();
+        if (bytes.isEmpty) {
+          setState(() => _error = 'The selected file is empty.');
+          return;
+        }
+        fileName = file.name;
+      }
+      final owner = _selectedOwner();
+      final ownerId = _ownerType == 'Student'
+          ? readText(owner ?? const {}, const [
+              'studentId',
+              'admissionNo',
+            ], fallback: '')
+          : _ownerType == 'Staff'
+          ? readText(owner ?? const {}, const ['employeeId'], fallback: '')
+          : 'OTHER-${DateTime.now().millisecondsSinceEpoch}';
+      final ownerName = _ownerType == 'Other'
+          ? _ownerNameController.text.trim()
+          : readText(owner ?? const {}, const [
+              'name',
+              'studentName',
+            ], fallback: '');
       await widget.onSave(
         bytes: bytes,
-        fileName: file.name,
+        fileName: fileName,
         metadata: {
-          'title': _titleController.text.trim(),
-          'ownerName': _ownerController.text.trim(),
-          'ownerId': _ownerIdController.text.trim(),
-          'ownerType': _ownerTypeController.text.trim(),
-          'documentType': _documentTypeController.text.trim(),
-          'verificationStatus': 'Uploaded',
+          'title': _documentType.trim(),
+          'ownerType': _ownerType,
+          'ownerRecordId': _ownerType == 'Other' ? '' : _ownerRecordId,
+          'ownerId': ownerId,
+          'ownerName': ownerName,
+          'archiveTitle': _ownerType == 'Other' ? ownerName : '',
+          'documentType': _documentType.trim(),
+          'note': _noteController.text.trim(),
+          'category': _category,
+          'notes': _notesController.text.trim(),
+          'tags': _notesController.text.trim(),
+          'courseCode': readText(owner ?? const {}, const [
+            'courseCode',
+          ], fallback: ''),
+          'courseName': readText(owner ?? const {}, const [
+            'courseName',
+            'program',
+          ], fallback: ''),
+          'verificationStatus': 'Pending Review',
+          'verifiedAtText': '',
         },
       );
       if (mounted) Navigator.of(context).pop(true);
@@ -10618,9 +11813,26 @@ class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
     }
   }
 
+  Map<String, dynamic>? _selectedOwner() {
+    for (final owner in _ownerOptions) {
+      if (readText(owner, const ['id'], fallback: '') == _ownerRecordId) {
+        return owner;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final file = _file;
+    final ownerOptions = _ownerOptions;
+    final ownerRecordValue =
+        ownerOptions.any(
+          (owner) =>
+              readText(owner, const ['id'], fallback: '') == _ownerRecordId,
+        )
+        ? _ownerRecordId
+        : '';
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -10650,53 +11862,136 @@ class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
                 'Upload Document',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
+              const SizedBox(height: 6),
+              const Text(
+                'Store student, staff, and academic archive documents.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
               const SizedBox(height: 14),
               OutlinedButton.icon(
                 onPressed: _saving ? null : _pickFile,
                 icon: const Icon(Icons.attach_file_rounded, size: 18),
-                label: Text(file == null ? 'Choose file' : file.name),
+                label: Text(
+                  file == null ? 'Choose file (optional)' : file.name,
+                ),
               ),
               if (file != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '${(_fileSize / 1024).toStringAsFixed(1)} KB',
+                  _formatDocumentFileSize(_fileSize),
                   style: const TextStyle(color: AppColors.muted, fontSize: 12),
                 ),
               ],
               const SizedBox(height: 12),
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Title *'),
+              DropdownButtonFormField<String>(
+                initialValue: _ownerType,
+                decoration: const InputDecoration(labelText: 'Owner Type *'),
+                items: _documentOwnerTypes
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() {
+                        _ownerType = value ?? 'Student';
+                        _ownerRecordId = '';
+                        _ownerNameController.clear();
+                      }),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: _documentTypeController,
-                decoration: const InputDecoration(labelText: 'Document type'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _ownerController,
-                decoration: const InputDecoration(labelText: 'Owner name'),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _ownerIdController,
-                      decoration: const InputDecoration(labelText: 'Owner ID'),
-                    ),
+              if (_needsKnownOwner)
+                DropdownButtonFormField<String>(
+                  initialValue: ownerRecordValue,
+                  decoration: InputDecoration(
+                    labelText: ownerOptions.isEmpty
+                        ? 'No owners available'
+                        : 'Name *',
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _ownerTypeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Owner type',
+                  items: [
+                    const DropdownMenuItem(
+                      value: '',
+                      child: Text('Select owner'),
+                    ),
+                    ...ownerOptions.map(
+                      (owner) => DropdownMenuItem(
+                        value: readText(owner, const ['id'], fallback: ''),
+                        child: Text(
+                          [
+                            readText(owner, const [
+                              'name',
+                              'studentName',
+                            ], fallback: ''),
+                            readText(owner, const [
+                              'studentId',
+                              'employeeId',
+                              'admissionNo',
+                            ], fallback: ''),
+                          ].where((value) => value.isNotEmpty).join(' - '),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
+                  ],
+                  onChanged: _saving || ownerOptions.isEmpty
+                      ? null
+                      : (value) => setState(() => _ownerRecordId = value ?? ''),
+                )
+              else
+                TextField(
+                  controller: _ownerNameController,
+                  enabled: !_saving,
+                  decoration: const InputDecoration(labelText: 'Name *'),
+                ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _documentType,
+                decoration: const InputDecoration(labelText: 'Document Type *'),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('Select document type'),
+                  ),
+                  ..._documentTypes.map(
+                    (item) => DropdownMenuItem(value: item, child: Text(item)),
                   ),
                 ],
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() {
+                        _documentType = value ?? '';
+                        if (_documentType != 'Other') _noteController.clear();
+                      }),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _category,
+                decoration: const InputDecoration(labelText: 'Category *'),
+                items: _documentCategories
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (value) =>
+                          setState(() => _category = value ?? 'Identity'),
+              ),
+              if (_documentType == 'Other') ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _noteController,
+                  enabled: !_saving,
+                  decoration: const InputDecoration(labelText: 'Note *'),
+                ),
+              ],
+              const SizedBox(height: 10),
+              TextField(
+                controller: _notesController,
+                enabled: !_saving,
+                decoration: const InputDecoration(labelText: 'Notes'),
               ),
               if (_error.isNotEmpty) ...[
                 const SizedBox(height: 10),
@@ -10731,7 +12026,7 @@ class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
                             : Icons.upload_file_rounded,
                         size: 18,
                       ),
-                      label: Text(_saving ? 'Uploading...' : 'Upload'),
+                      label: Text(_saving ? 'Saving...' : 'Save Document'),
                     ),
                   ),
                 ],
