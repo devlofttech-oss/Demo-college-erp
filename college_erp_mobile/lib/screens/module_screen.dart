@@ -1,6 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/role_permissions.dart';
 import '../models/app_user.dart';
@@ -359,21 +363,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('documents.upload'))
             _ModuleAction(
-              label: 'Add Doc',
+              label: 'Upload',
               icon: Icons.upload_file_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Document Record',
-                collectionName: 'managedDocuments',
-                fields: const [
-                  _FieldSpec('title', 'Title', isRequired: true),
-                  _FieldSpec('ownerName', 'Owner name'),
-                  _FieldSpec('ownerId', 'Owner ID'),
-                  _FieldSpec('ownerType', 'Owner type'),
-                  _FieldSpec('documentType', 'Document type'),
-                  _FieldSpec('fileName', 'File name / reference'),
-                ],
-                defaults: {'verificationStatus': 'Pending'},
-              ),
+              onTap: _showDocumentUploadSheet,
             ),
         ];
       case 'hostel-management':
@@ -1118,12 +1110,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   'staffName',
                   'ownerId',
                 ], fallback: 'ERP document'),
-                trailing: StatusPill(
-                  label: readText(doc, const [
-                    'verificationStatus',
-                    'documentStatus',
-                    'status',
-                  ], fallback: 'Uploaded'),
+                trailing: _DocumentTrailing(
+                  document: doc,
+                  onOpen: () => _openDocument(doc),
                 ),
               ),
             ),
@@ -1632,6 +1621,66 @@ class _ModuleScreenState extends State<ModuleScreen> {
     }
   }
 
+  Future<void> _showDocumentUploadSheet() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _DocumentUploadSheet(
+        onSave: ({required bytes, required fileName, required metadata}) {
+          return widget.repository.uploadManagedDocument(
+            bytes: bytes,
+            fileName: fileName,
+            uploadedBy: widget.user.uid,
+            metadata: {
+              ...metadata,
+              if (_academicYear.trim().isNotEmpty)
+                'academicYear': _academicYear.trim(),
+            },
+          );
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Document uploaded'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  Future<void> _openDocument(Map<String, dynamic> document) async {
+    final url = readText(document, const [
+      'downloadUrl',
+      'fileUrl',
+      'url',
+    ], fallback: '');
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No downloadable file is attached to this document.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open document link.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _showAttendanceSheet(
     Map<String, List<Map<String, dynamic>>> data,
   ) async {
@@ -1868,6 +1917,36 @@ class _ModuleAction {
   final VoidCallback onTap;
 }
 
+class _DocumentTrailing extends StatelessWidget {
+  const _DocumentTrailing({required this.document, required this.onOpen});
+
+  final Map<String, dynamic> document;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUrl = readText(document, const [
+      'downloadUrl',
+      'fileUrl',
+      'url',
+    ], fallback: '').isNotEmpty;
+    if (hasUrl) {
+      return IconButton(
+        tooltip: 'Open document',
+        onPressed: onOpen,
+        icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primary),
+      );
+    }
+    return StatusPill(
+      label: readText(document, const [
+        'verificationStatus',
+        'documentStatus',
+        'status',
+      ], fallback: 'Uploaded'),
+    );
+  }
+}
+
 class _FieldSpec {
   const _FieldSpec(
     this.key,
@@ -1880,6 +1959,240 @@ class _FieldSpec {
   final String label;
   final bool isRequired;
   final bool numeric;
+}
+
+class _DocumentUploadSheet extends StatefulWidget {
+  const _DocumentUploadSheet({required this.onSave});
+
+  final Future<void> Function({
+    required Uint8List bytes,
+    required String fileName,
+    required Map<String, dynamic> metadata,
+  })
+  onSave;
+
+  @override
+  State<_DocumentUploadSheet> createState() => _DocumentUploadSheetState();
+}
+
+class _DocumentUploadSheetState extends State<_DocumentUploadSheet> {
+  static const _maxUploadBytes = 10 * 1024 * 1024;
+  static const _allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+  final _titleController = TextEditingController();
+  final _ownerController = TextEditingController();
+  final _ownerIdController = TextEditingController();
+  final _ownerTypeController = TextEditingController(text: 'Student');
+  final _documentTypeController = TextEditingController();
+  XFile? _file;
+  var _fileSize = 0;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _ownerController.dispose();
+    _ownerIdController.dispose();
+    _ownerTypeController.dispose();
+    _documentTypeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final picked = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Documents', extensions: _allowedExtensions),
+      ],
+    );
+    if (picked == null) return;
+    final size = await picked.length();
+    if (size > _maxUploadBytes) {
+      setState(() => _error = 'Document uploads must be 10 MB or smaller.');
+      return;
+    }
+    final extension = picked.name.split('.').last.toLowerCase();
+    if (!_allowedExtensions.contains(extension)) {
+      setState(
+        () =>
+            _error = 'Only PDF, JPEG, PNG, and WebP documents can be uploaded.',
+      );
+      return;
+    }
+    setState(() {
+      _file = picked;
+      _fileSize = size;
+      _error = '';
+      if (_titleController.text.trim().isEmpty) {
+        _titleController.text = picked.name;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    final file = _file;
+    if (file == null) {
+      setState(() => _error = 'Choose a file to upload.');
+      return;
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      setState(() => _error = 'The selected file is empty.');
+      return;
+    }
+    if (_titleController.text.trim().isEmpty) {
+      setState(() => _error = 'Title is required.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(
+        bytes: bytes,
+        fileName: file.name,
+        metadata: {
+          'title': _titleController.text.trim(),
+          'ownerName': _ownerController.text.trim(),
+          'ownerId': _ownerIdController.text.trim(),
+          'ownerType': _ownerTypeController.text.trim(),
+          'documentType': _documentTypeController.text.trim(),
+          'verificationStatus': 'Uploaded',
+        },
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final file = _file;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Upload Document',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _pickFile,
+                icon: const Icon(Icons.attach_file_rounded, size: 18),
+                label: Text(file == null ? 'Choose file' : file.name),
+              ),
+              if (file != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${(_fileSize / 1024).toStringAsFixed(1)} KB',
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Title *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _documentTypeController,
+                decoration: const InputDecoration(labelText: 'Document type'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _ownerController,
+                decoration: const InputDecoration(labelText: 'Owner name'),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _ownerIdController,
+                      decoration: const InputDecoration(labelText: 'Owner ID'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _ownerTypeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Owner type',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.cloud_upload_rounded
+                            : Icons.upload_file_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Uploading...' : 'Upload'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _RecordFormSheet extends StatefulWidget {

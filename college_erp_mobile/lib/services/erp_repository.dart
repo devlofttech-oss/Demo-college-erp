@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../data/role_permissions.dart';
 import '../models/app_user.dart';
@@ -7,11 +10,13 @@ import '../models/erp_role.dart';
 import '../utils/field_reader.dart';
 
 class ErpRepository {
-  ErpRepository({FirebaseFirestore? firestore}) : this._(firestore);
+  ErpRepository({FirebaseFirestore? firestore, FirebaseStorage? storage})
+    : this._(firestore, storage);
 
-  ErpRepository._(this._firestore);
+  ErpRepository._(this._firestore, this._storage);
 
   final FirebaseFirestore? _firestore;
+  final FirebaseStorage? _storage;
 
   bool get isReady => _firestore != null;
 
@@ -21,6 +26,14 @@ class ErpRepository {
       throw StateError('Firebase is not configured.');
     }
     return db;
+  }
+
+  FirebaseStorage get _bucket {
+    final storage = _storage;
+    if (storage == null) {
+      throw StateError('Firebase Storage is not configured.');
+    }
+    return storage;
   }
 
   Future<Map<String, dynamic>?> userProfile(String uid) async {
@@ -538,6 +551,72 @@ class ErpRepository {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<String> uploadManagedDocument({
+    required Uint8List bytes,
+    required String fileName,
+    required String uploadedBy,
+    required Map<String, dynamic> metadata,
+  }) async {
+    if (!isReady) throw StateError('Firebase is not configured.');
+    final safeName = _safeStorageName(fileName);
+    final ownerType = (metadata['ownerType'] ?? 'Unknown').toString();
+    final ownerId = (metadata['ownerId'] ?? uploadedBy).toString();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final storagePath =
+        'managed-documents/${_safeStorageName(ownerType)}/${_safeStorageName(ownerId)}/$timestamp-$safeName';
+    final ref = _bucket.ref(storagePath);
+    final contentType = _contentTypeFor(fileName);
+
+    await ref.putData(
+      bytes,
+      SettableMetadata(
+        contentType: contentType,
+        customMetadata: {'ownerType': ownerType, 'ownerId': ownerId},
+      ),
+    );
+
+    final downloadUrl = await ref.getDownloadURL();
+    final docRef = await _db.collection('managedDocuments').add({
+      ...metadata,
+      'fileName': fileName,
+      'fileType': contentType,
+      'storagePath': storagePath,
+      'fileUrl': downloadUrl,
+      'downloadUrl': downloadUrl,
+      'fileSize': bytes.length,
+      'verificationStatus': metadata['verificationStatus'] ?? 'Uploaded',
+      'createdBy': uploadedBy,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return docRef.id;
+  }
+
+  String _safeStorageName(String fileName) {
+    final cleaned = fileName.trim().replaceAll(
+      RegExp(r'[^A-Za-z0-9._-]+'),
+      '-',
+    );
+    return cleaned.isEmpty ? 'document.bin' : cleaned;
+  }
+
+  String _contentTypeFor(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.doc')) return 'application/msword';
+    if (lower.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
+    if (lower.endsWith('.xlsx')) {
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+    return 'application/octet-stream';
   }
 
   List<Map<String, dynamic>> _mergeById(

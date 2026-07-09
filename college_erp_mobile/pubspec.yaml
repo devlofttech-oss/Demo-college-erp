@@ -40,6 +40,8 @@ dependencies:
   firebase_storage: ^13.4.3
   intl: ^0.20.3
   collection: ^1.19.1
+  url_launcher: ^6.3.2
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

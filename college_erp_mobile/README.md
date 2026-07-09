@@ -100,7 +100,7 @@ The app uses these Firebase products:
 
 - Firebase Auth
 - Cloud Firestore
-- Firebase Storage dependency is installed for document workflows and future upload/download expansion
+- Firebase Storage is used for managed document upload/download workflows.
 
 The app talks to the same collections used by the web ERP:
 
@@ -262,7 +262,7 @@ The source of truth remains Firestore `roles`. The Dart defaults exist so the ap
 - Fee assignment summary and paid/unpaid state.
 - Events/notices calendar strip.
 - Notice creation for roles with `notices.create`.
-- Document list.
+- Document list with Storage-backed upload/open actions.
 - Hostel room/allocation summaries.
 - Academic subjects and calendar events.
 - Users and roles list.
@@ -270,7 +270,7 @@ The source of truth remains Firestore `roles`. The Dart defaults exist so the ap
 - Pull to refresh on mobile screens.
 - Named module routes with smooth slide/fade transitions.
 - Home action on module screens so every module can return to the dashboard without depending on back-stack history.
-- Firestore-backed quick action forms for common operations such as adding students/staff, marking attendance, scheduling exams, entering marks, assigning/collecting fees, creating notices, adding document metadata, adding hostel rooms, and saving academic records.
+- Firestore-backed quick action forms for common operations such as adding students/staff, marking attendance, scheduling exams, entering marks, assigning/collecting fees, creating notices, uploading managed documents, adding hostel rooms, and saving academic records.
 
 ## Firebase Configuration
 
@@ -328,13 +328,20 @@ cd C:\STORAGE\Code\ERP\Demo\CollegeERP\college_erp_mobile
 .\tool\build_android_debug_from_root_env.ps1
 ```
 
-Release APK with the current debug signing fallback:
+Release APK with the current release-signing config or debug fallback:
 
 ```powershell
 .\tool\build_android_debug_from_root_env.ps1 -Release
 ```
 
-Before a production release, replace debug signing with a real Android keystore and release signing config.
+Production Android App Bundle:
+
+```powershell
+cd C:\STORAGE\Code\ERP\Demo\CollegeERP
+.\college_erp_mobile\tool\build_android_release_from_root_env.ps1
+```
+
+Before a production release, create a private upload keystore and local `android/key.properties` from `android/key.properties.example`. See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
 
 ## Sync Login Aliases
 
@@ -403,12 +410,12 @@ The app intentionally keeps state management simple for the first mobile impleme
 These are the best follow-up goals after the first pushed version:
 
 1. Add full create/edit forms for students, staff, fees, timetable, exams, documents, and hostel.
-2. Add Firebase Storage upload/download UI for documents and profile photos.
+2. Add Firebase Storage upload/download UI for profile photos.
 3. Add offline caching and optimistic updates for attendance.
 4. Add push notifications for notices, attendance alerts, and fee reminders.
 5. Add role-aware bottom navigation for the most-used modules by user type.
 6. Add app icons and native splash assets.
-7. Add signed release build configuration.
+7. Replace generated app icons and splash assets with production branding.
 8. Add widget/golden tests for the reference-style UI.
 
 ## Git Workflow

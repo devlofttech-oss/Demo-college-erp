@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import 'config/firebase_options.dart';
@@ -56,6 +57,7 @@ class _CollegeErpMobileAppState extends State<CollegeErpMobileApp> {
     super.initState();
     _erpRepository = ErpRepository(
       firestore: widget.firebaseReady ? FirebaseFirestore.instance : null,
+      storage: widget.firebaseReady ? FirebaseStorage.instance : null,
     );
     _authRepository = AuthRepository(
       auth: widget.firebaseReady ? FirebaseAuth.instance : null,
