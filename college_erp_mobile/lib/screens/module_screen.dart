@@ -94,6 +94,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _examTask = '';
   var _examBranch = '';
   var _examSelectedScheduleId = '';
+  var _feeTask = '';
+  var _feeBranch = '';
+  var _feeSelectedAssignmentId = '';
+  var _feeStatusFilter = 'all';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -199,7 +203,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       case 'examination-results':
         return _resultsParity(data);
       case 'fees':
-        return _fees(data);
+        return _feesParity(data);
       case 'communication':
         return _events(data);
       case 'document-management':
@@ -302,49 +306,29 @@ class _ModuleScreenState extends State<ModuleScreen> {
         ];
       case 'fees':
         return [
+          if (_can('fees.setup'))
+            _ModuleAction(
+              label: 'Structure',
+              icon: Icons.settings_rounded,
+              onTap: () => _showFeeStructureSheet(data: data),
+            ),
           if (_can('fees.assign'))
             _ModuleAction(
               label: 'Assign',
-              icon: Icons.receipt_long_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Assign Fee',
-                collectionName: 'feeAssignments',
-                fields: const [
-                  _FieldSpec('studentId', 'Student ID', isRequired: true),
-                  _FieldSpec('studentName', 'Student name'),
-                  _FieldSpec('feeName', 'Fee name', isRequired: true),
-                  _FieldSpec(
-                    'amount',
-                    'Amount',
-                    isRequired: true,
-                    numeric: true,
-                  ),
-                  _FieldSpec('balanceAmount', 'Unpaid amount', numeric: true),
-                ],
-                defaults: {'status': 'Assigned'},
-              ),
+              icon: Icons.assignment_rounded,
+              onTap: () => _showFeeAssignmentSheet(data: data),
             ),
           if (_can('fees.collect'))
             _ModuleAction(
               label: 'Collect',
               icon: Icons.payments_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Record Fee Collection',
-                collectionName: 'feeCollections',
-                fields: const [
-                  _FieldSpec('studentId', 'Student ID', isRequired: true),
-                  _FieldSpec('studentName', 'Student name'),
-                  _FieldSpec('receiptNo', 'Receipt number'),
-                  _FieldSpec(
-                    'amount',
-                    'Amount',
-                    isRequired: true,
-                    numeric: true,
-                  ),
-                  _FieldSpec('paymentMode', 'Payment mode'),
-                ],
-                defaults: {'status': 'Paid'},
-              ),
+              onTap: () => _showFeeCollectionSheet(data: data),
+            ),
+          if (_can('fees.adjust'))
+            _ModuleAction(
+              label: 'Adjust',
+              icon: Icons.tune_rounded,
+              onTap: () => _showFeeAdjustmentSheet(data: data),
             ),
         ];
       case 'communication':
@@ -3821,138 +3805,1435 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
   }
 
-  Widget _fees(Map<String, List<Map<String, dynamic>>> data) {
-    final assignments = _items(data, 'assignments')
-        .where(
-          (item) => containsQuery(item, _query, const [
-            'studentName',
-            'studentId',
-            'feeName',
-            'className',
-          ]),
+  Widget _feesParity(Map<String, List<Map<String, dynamic>>> data) {
+    final students = _feeStudents(data);
+    final structures = _feeStructures(data);
+    final assignments = _feeAssignments(data, students);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    final rows = assignments
+        .map(
+          (assignment) =>
+              _feeSnapshot(assignment, collections, adjustments, structures),
         )
         .toList();
-    final paid = _items(data, 'collections').fold<num>(
+    final visibleRows = rows
+        .where((row) => _feeMatchesQuery(row))
+        .where((row) => _feeMatchesStatus(row))
+        .toList();
+    final payableRows = rows.where((row) => row.due > 0).toList();
+    final totalAssigned = rows.fold<num>(0, (total, row) => total + row.total);
+    final totalCollected = rows.fold<num>(0, (total, row) => total + row.paid);
+    final totalAdjusted = rows.fold<num>(
       0,
-      (total, item) =>
-          total +
-          readNumber(item, const [
-            'paidAmount',
-            'amount',
-            'totalPaid',
-            'collectedAmount',
-          ]),
+      (total, row) => total + row.adjusted,
     );
-    final due = assignments.fold<num>(
-      0,
-      (total, item) =>
-          total +
-          readNumber(item, const [
-            'balanceAmount',
-            'unpaid',
-            'dueAmount',
-            'amountDue',
-          ]),
-    );
+    final totalOutstanding = rows.fold<num>(0, (total, row) => total + row.due);
+    final tasks = [
+      _FeeTaskOption(
+        id: 'collections',
+        title: 'Fee Collections',
+        description: 'Manual payments.',
+        icon: Icons.payments_rounded,
+        meta: [formatMoney(totalCollected), '${collections.length} posted'],
+      ),
+      _FeeTaskOption(
+        id: 'structures',
+        title: 'Payment Settings',
+        description: 'Create, edit, and assign fee structures.',
+        icon: Icons.settings_rounded,
+        meta: [
+          '${structures.length} active',
+          _can('fees.setup') ? 'Setup enabled' : 'View only',
+        ],
+      ),
+      _FeeTaskOption(
+        id: 'adjustments',
+        title: 'Adjustments',
+        description: 'Approve waivers and fee corrections.',
+        icon: Icons.tune_rounded,
+        meta: ['${adjustments.length} approved', formatMoney(totalAdjusted)],
+      ),
+      _FeeTaskOption(
+        id: 'due-tracking',
+        title: 'Due Fee Tracking',
+        description: 'Track pending fees and message parents on WhatsApp.',
+        icon: Icons.message_rounded,
+        meta: ['${payableRows.length} due', formatMoney(totalOutstanding)],
+      ),
+    ];
+
     return Column(
+      key: ValueKey('fees-$_feeTask-$_feeBranch-$_feeStatusFilter'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF465A6E).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: Color(0xFF465A6E),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Finance / Payment',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Payment',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Student payment collection, due tracking, fee setup, waivers, and receipts.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         _SummaryRow(
           stats: [
             _Stat(
               'Assigned',
-              assignments.length.toString(),
+              formatMoney(totalAssigned),
               Icons.receipt_long_rounded,
               AppColors.primary,
             ),
             _Stat(
               'Collected',
-              formatMoney(paid),
+              formatMoney(totalCollected),
               Icons.payments_rounded,
               AppColors.accent,
             ),
             _Stat(
               'Due',
-              formatMoney(due),
+              formatMoney(totalOutstanding),
               Icons.warning_rounded,
               AppColors.danger,
             ),
           ],
         ),
-        const SectionTitle('Fee Status'),
-        if (assignments.isEmpty)
-          const EmptyState(
-            title: 'No fee assignments',
-            message: 'Fee records from the ERP will appear here.',
-          )
-        else
-          ...assignments.map((fee) {
-            final balance = readNumber(fee, const [
-              'balanceAmount',
-              'unpaid',
-              'dueAmount',
-              'amountDue',
-            ]);
-            return Padding(
+        if (_feeTask.isEmpty) ...[
+          const SectionTitle('Payment'),
+          ...tasks.map(
+            (task) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: InfoCard(
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            readText(fee, const [
-                              'studentName',
-                              'studentId',
-                              'name',
-                            ]),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                        StatusPill(label: balance <= 0 ? 'Paid' : 'Unpaid'),
-                      ],
+              child: _FeeTaskCard(
+                option: task,
+                onTap: () => _openFeeTask(task.id),
+              ),
+            ),
+          ),
+        ] else if (_feeBranch.isEmpty) ...[
+          _FeeBackButton(onPressed: _goBackOneFeeStep),
+          SectionTitle(tasks.firstWhere((task) => task.id == _feeTask).title),
+          ..._feeBranchOptions(payableRows.length).map(
+            (branch) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _FeeTaskCard(
+                option: branch,
+                disabled: branch.disabled,
+                onTap: branch.disabled
+                    ? null
+                    : () {
+                        _openFeeBranch(branch.id);
+                        if (branch.id == 'create-structure') {
+                          _showFeeStructureSheet(data: data);
+                        }
+                      },
+              ),
+            ),
+          ),
+        ] else ...[
+          _FeeBackButton(onPressed: _goBackOneFeeStep),
+          _feeBranchHeader(data),
+          if (_feeBranch == 'collect-fee')
+            _feeCollectionsView(data, collections, payableRows)
+          else if (_feeBranch == 'create-structure' ||
+              _feeBranch == 'manage-structures')
+            _feeStructuresView(data, structures)
+          else if (_feeBranch == 'approve-adjustment')
+            _feeAssignmentsView(
+              data: data,
+              rows: payableRows,
+              emptyTitle: 'No payable assignments',
+              emptyMessage: 'All fee assignments are currently cleared.',
+              showCollect: false,
+              showAdjust: true,
+            )
+          else if (_feeBranch == 'adjustment-history')
+            _feeReportsView(collections, adjustments)
+          else
+            _feeAssignmentsView(
+              data: data,
+              rows: visibleRows.where((row) => row.due > 0).toList(),
+              emptyTitle: 'No due fees',
+              emptyMessage: 'No matching due fee records found.',
+              showCollect: _can('fees.collect'),
+              showNotify: true,
+            ),
+        ],
+      ],
+    );
+  }
+
+  List<_FeeTaskOption> _feeBranchOptions(int payableCount) {
+    switch (_feeTask) {
+      case 'collections':
+        return [
+          _FeeTaskOption(
+            id: 'collect-fee',
+            title: 'Fee Collections',
+            description: 'Record a student payment against an assigned fee.',
+            icon: Icons.payments_rounded,
+            disabled: !_can('fees.collect'),
+          ),
+        ];
+      case 'structures':
+        return [
+          _FeeTaskOption(
+            id: 'create-structure',
+            title: 'Create Structure',
+            description: 'Open a new fee structure form.',
+            icon: Icons.add_rounded,
+            disabled: !_can('fees.setup'),
+          ),
+          const _FeeTaskOption(
+            id: 'manage-structures',
+            title: 'Manage Structures',
+            description: 'Edit or assign existing structures.',
+            icon: Icons.settings_rounded,
+          ),
+        ];
+      case 'adjustments':
+        return [
+          _FeeTaskOption(
+            id: 'approve-adjustment',
+            title: 'Approve Adjustment',
+            description: 'Select a student fee, then approve adjustment.',
+            icon: Icons.tune_rounded,
+            disabled: !_can('fees.adjust') || payableCount == 0,
+          ),
+          const _FeeTaskOption(
+            id: 'adjustment-history',
+            title: 'Adjustment History',
+            description: 'Review recent waivers and corrections.',
+            icon: Icons.description_rounded,
+          ),
+        ];
+      case 'due-tracking':
+        return const [
+          _FeeTaskOption(
+            id: 'due-list',
+            title: 'Due Fee Tracking',
+            description: 'Review due students and notify parents on WhatsApp.',
+            icon: Icons.message_rounded,
+          ),
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  Widget _feeBranchHeader(Map<String, List<Map<String, dynamic>>> data) {
+    final branch = _feeBranchOptions(1).firstWhere(
+      (item) => item.id == _feeBranch,
+      orElse: () => const _FeeTaskOption(
+        id: 'fees',
+        title: 'Payment Details',
+        description: '',
+        icon: Icons.receipt_long_rounded,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InfoCard(
+        child: Row(
+          children: [
+            Container(
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(branch.icon, color: AppColors.primaryDark),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    branch.title,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: LabelValue(
-                            label: 'Amount',
-                            value: formatMoney(
-                              readNumber(fee, const [
-                                'amount',
-                                'totalAmount',
-                                'assignedAmount',
-                              ]),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: LabelValue(
-                            label: 'Paid',
-                            value: formatMoney(
-                              readNumber(fee, const [
-                                'paidAmount',
-                                'paid',
-                                'totalPaid',
-                              ]),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: LabelValue(
-                            label: 'Unpaid',
-                            value: formatMoney(balance),
-                          ),
-                        ),
-                      ],
+                  ),
+                  if (branch.description.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      branch.description,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
+                ],
+              ),
+            ),
+            if (_feeBranch == 'create-structure' && _can('fees.setup'))
+              IconButton.filledTonal(
+                tooltip: 'Create Structure',
+                onPressed: () => _showFeeStructureSheet(data: data),
+                icon: const Icon(Icons.add_rounded),
+              ),
+            if (_feeBranch == 'collect-fee' && _can('fees.collect'))
+              IconButton.filledTonal(
+                tooltip: 'Record Payment',
+                onPressed: () => _showFeeCollectionSheet(data: data),
+                icon: const Icon(Icons.add_card_rounded),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _feeCollectionsView(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<Map<String, dynamic>> collections,
+    List<_FeeAssignmentSnapshot> payableRows,
+  ) {
+    final visibleCollections = collections
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'studentName',
+            'studentId',
+            'classKey',
+            'paymentMode',
+            'referenceNo',
+            'receiptNo',
+            'paymentDate',
+          ]),
+        )
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_can('fees.collect')) ...[
+          PrimaryActionButton(
+            label: 'Record Payment',
+            icon: Icons.add_card_rounded,
+            onPressed: () => _showFeeCollectionSheet(data: data),
+          ),
+          const SizedBox(height: 10),
+        ],
+        const SectionTitle('Recent Collections'),
+        if (visibleCollections.isEmpty)
+          const EmptyState(
+            title: 'No fee collections',
+            message: 'Posted fee collections will appear here.',
+          )
+        else
+          ...visibleCollections
+              .take(20)
+              .map(
+                (collection) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _FeeCollectionCard(
+                    collection: collection,
+                    canEdit: _can('fees.collect'),
+                    onEdit: () => _showFeeCollectionSheet(
+                      data: data,
+                      collection: collection,
+                    ),
+                  ),
                 ),
               ),
-            );
-          }),
+        const SectionTitle('Outstanding Fee Assignments'),
+        _feeAssignmentsView(
+          data: data,
+          rows: payableRows,
+          emptyTitle: 'No outstanding fees',
+          emptyMessage: 'All assigned fees are currently cleared.',
+          showCollect: _can('fees.collect'),
+          showAdjust: false,
+          includeSectionTitle: false,
+        ),
       ],
+    );
+  }
+
+  Widget _feeStructuresView(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<Map<String, dynamic>> structures,
+  ) {
+    final visibleStructures = structures
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'name',
+            'classKey',
+            'courseName',
+            'academicYear',
+            'status',
+          ]),
+        )
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_can('fees.setup')) ...[
+          PrimaryActionButton(
+            label: 'Create Structure',
+            icon: Icons.add_rounded,
+            onPressed: () => _showFeeStructureSheet(data: data),
+          ),
+          const SizedBox(height: 10),
+        ],
+        const SectionTitle('Fee Structures'),
+        if (visibleStructures.isEmpty)
+          const EmptyState(
+            title: 'No fee structures',
+            message: 'Create fee structures to assign class-wise fees.',
+          )
+        else
+          ...visibleStructures.map(
+            (structure) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _FeeStructureCard(
+                structure: structure,
+                canEdit: _can('fees.setup'),
+                canAssign: _can('fees.assign'),
+                onEdit: () =>
+                    _showFeeStructureSheet(data: data, structure: structure),
+                onAssign: () => _assignFeeStructure(data, structure),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _feeReportsView(
+    List<Map<String, dynamic>> collections,
+    List<Map<String, dynamic>> adjustments,
+  ) {
+    final recentCollections = collections
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'studentName',
+            'studentId',
+            'paymentMode',
+            'referenceNo',
+          ]),
+        )
+        .take(8)
+        .toList();
+    final recentAdjustments = adjustments
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'studentName',
+            'studentId',
+            'reason',
+            'status',
+          ]),
+        )
+        .take(8)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionTitle('Recent Collections'),
+        if (recentCollections.isEmpty)
+          const EmptyState(
+            title: 'No collections',
+            message: 'No matching fee collections found.',
+          )
+        else
+          ...recentCollections.map(
+            (collection) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _FeeCollectionCard(
+                collection: collection,
+                canEdit: false,
+                onEdit: () {},
+              ),
+            ),
+          ),
+        const SectionTitle('Adjustments & Waivers'),
+        if (recentAdjustments.isEmpty)
+          const EmptyState(
+            title: 'No adjustments',
+            message: 'Approved fee adjustments will appear here.',
+          )
+        else
+          ...recentAdjustments.map(
+            (adjustment) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _FeeAdjustmentCard(adjustment: adjustment),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _feeAssignmentsView({
+    required Map<String, List<Map<String, dynamic>>> data,
+    required List<_FeeAssignmentSnapshot> rows,
+    required String emptyTitle,
+    required String emptyMessage,
+    bool showCollect = false,
+    bool showAdjust = false,
+    bool showNotify = false,
+    bool includeSectionTitle = true,
+  }) {
+    final visibleRows = rows
+        .where(_feeMatchesQuery)
+        .where(_feeMatchesStatus)
+        .toList();
+    _FeeAssignmentSnapshot? selected;
+    if (_feeSelectedAssignmentId.isNotEmpty) {
+      for (final row in rows) {
+        if (row.id == _feeSelectedAssignmentId) {
+          selected = row;
+          break;
+        }
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (includeSectionTitle)
+          SectionTitle(
+            'Fee Assignments',
+            trailing: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _feeStatusFilter,
+                isDense: true,
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('All')),
+                  DropdownMenuItem(value: 'due', child: Text('Due')),
+                  DropdownMenuItem(value: 'partial', child: Text('Partial')),
+                  DropdownMenuItem(value: 'paid', child: Text('Paid')),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _feeStatusFilter = value);
+                },
+              ),
+            ),
+          ),
+        if (visibleRows.isEmpty)
+          EmptyState(title: emptyTitle, message: emptyMessage)
+        else
+          ...visibleRows
+              .take(30)
+              .map(
+                (row) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _FeeAssignmentCard(
+                    row: row,
+                    selected: row.id == _feeSelectedAssignmentId,
+                    onTap: () =>
+                        setState(() => _feeSelectedAssignmentId = row.id),
+                    onCollect: showCollect && row.due > 0
+                        ? () => _showFeeCollectionSheet(
+                            data: data,
+                            assignment: row.assignment,
+                          )
+                        : null,
+                    onAdjust: showAdjust && row.due > 0
+                        ? () => _showFeeAdjustmentSheet(
+                            data: data,
+                            assignment: row.assignment,
+                          )
+                        : null,
+                    onNotify: showNotify && row.due > 0
+                        ? () => _sendFeeReminder(data, row)
+                        : null,
+                  ),
+                ),
+              ),
+        if (selected != null) ...[
+          const SectionTitle('Payment Details'),
+          _FeeAssignmentDetail(row: selected),
+        ],
+      ],
+    );
+  }
+
+  void _openFeeTask(String task) {
+    setState(() {
+      _feeTask = task;
+      _feeSelectedAssignmentId = '';
+      _feeStatusFilter = 'all';
+      _feeBranch = task == 'collections'
+          ? 'collect-fee'
+          : task == 'due-tracking'
+          ? 'due-list'
+          : '';
+    });
+  }
+
+  void _openFeeBranch(String branch) {
+    setState(() {
+      _feeBranch = branch;
+      _feeSelectedAssignmentId = '';
+      _feeStatusFilter = 'all';
+    });
+  }
+
+  void _goBackOneFeeStep() {
+    setState(() {
+      if (_feeBranch.isNotEmpty) {
+        if (_feeTask == 'collections' || _feeTask == 'due-tracking') {
+          _feeTask = '';
+        }
+        _feeBranch = '';
+        _feeSelectedAssignmentId = '';
+        return;
+      }
+      _feeTask = '';
+      _feeSelectedAssignmentId = '';
+    });
+  }
+
+  List<Map<String, dynamic>> _feeStudents(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(
+      data,
+      'students',
+    ).where((student) => !_isArchivedStudent(student)).toList();
+  }
+
+  List<Map<String, dynamic>> _feeStructures(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final structures = [..._items(data, 'structures')];
+    structures.sort(
+      (first, second) =>
+          readText(first, const [
+            'courseName',
+            'classKey',
+            'name',
+          ], fallback: '').compareTo(
+            readText(second, const [
+              'courseName',
+              'classKey',
+              'name',
+            ], fallback: ''),
+          ),
+    );
+    return structures;
+  }
+
+  List<Map<String, dynamic>> _feeAssignments(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<Map<String, dynamic>> students,
+  ) {
+    final assignments = [..._items(data, 'assignments')];
+    if (!widget.user.isParent) return assignments;
+    final studentKeys = _feeStudentKeys(students);
+    return assignments
+        .where(
+          (assignment) => _feeRecordMatchesStudentKeys(assignment, studentKeys),
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _feeCollections(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<Map<String, dynamic>> assignments,
+    List<Map<String, dynamic>> students,
+  ) {
+    final collections = [..._items(data, 'collections')];
+    if (!widget.user.isParent) return collections;
+    final assignmentIds = assignments
+        .map((assignment) => readText(assignment, const ['id'], fallback: ''))
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final studentKeys = _feeStudentKeys(students);
+    return collections.where((collection) {
+      final assignmentId = readText(collection, const [
+        'assignmentId',
+      ], fallback: '');
+      return assignmentIds.contains(assignmentId) ||
+          _feeRecordMatchesStudentKeys(collection, studentKeys);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _feeAdjustments(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<Map<String, dynamic>> assignments,
+    List<Map<String, dynamic>> students,
+  ) {
+    final adjustments = [..._items(data, 'adjustments')];
+    if (!widget.user.isParent) return adjustments;
+    final assignmentIds = assignments
+        .map((assignment) => readText(assignment, const ['id'], fallback: ''))
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final studentKeys = _feeStudentKeys(students);
+    return adjustments.where((adjustment) {
+      final assignmentId = readText(adjustment, const [
+        'assignmentId',
+      ], fallback: '');
+      return assignmentIds.contains(assignmentId) ||
+          _feeRecordMatchesStudentKeys(adjustment, studentKeys);
+    }).toList();
+  }
+
+  Set<String> _feeStudentKeys(List<Map<String, dynamic>> students) {
+    return students
+        .expand(
+          (student) => [
+            readText(student, const ['id'], fallback: ''),
+            readText(student, const ['studentId'], fallback: ''),
+            readText(student, const ['admissionNo'], fallback: ''),
+          ],
+        )
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
+  bool _feeRecordMatchesStudentKeys(
+    Map<String, dynamic> record,
+    Set<String> keys,
+  ) {
+    if (keys.isEmpty) return false;
+    return [
+      readText(record, const ['studentRecordId'], fallback: ''),
+      readText(record, const ['studentId'], fallback: ''),
+      readText(record, const ['admissionNo'], fallback: ''),
+      readText(record, const ['entityRecordId'], fallback: ''),
+      readText(record, const ['entityId'], fallback: ''),
+    ].any(keys.contains);
+  }
+
+  _FeeAssignmentSnapshot _feeSnapshot(
+    Map<String, dynamic> assignment,
+    List<Map<String, dynamic>> collections,
+    List<Map<String, dynamic>> adjustments,
+    List<Map<String, dynamic>> structures,
+  ) {
+    final assignmentId = readText(assignment, const ['id'], fallback: '');
+    final structureId = readText(assignment, const [
+      'feeStructureId',
+    ], fallback: '');
+    final structure = _feeFindById(structures, structureId);
+    final paidFromCollections = collections
+        .where(
+          (collection) =>
+              readText(collection, const ['assignmentId'], fallback: '') ==
+              assignmentId,
+        )
+        .fold<num>(0, (total, item) => total + _feeCollectionAmount(item));
+    final adjustedFromRecords = adjustments
+        .where(
+          (adjustment) =>
+              readText(adjustment, const ['assignmentId'], fallback: '') ==
+              assignmentId,
+        )
+        .fold<num>(0, (total, item) => total + _feeAdjustmentAmount(item));
+    final total = _feeAssignmentTotal(assignment);
+    final paid = paidFromCollections > 0
+        ? paidFromCollections
+        : readNumber(assignment, const ['paidAmount', 'paid', 'totalPaid']);
+    final adjusted = adjustedFromRecords > 0
+        ? adjustedFromRecords
+        : readNumber(assignment, const ['adjustmentAmount', 'adjustedAmount']);
+    final storedDue = readNumber(assignment, const [
+      'dueAmount',
+      'balanceAmount',
+      'amountDue',
+      'unpaid',
+    ], fallback: -1);
+    final due = total > 0
+        ? _feeDue(total, paid, adjusted)
+        : storedDue < 0
+        ? 0
+        : storedDue;
+    final status = _feeStatus(total, paid, adjusted, due);
+    final dueDate = readText(assignment, const ['dueDate'], fallback: '');
+    return _FeeAssignmentSnapshot(
+      assignment: assignment,
+      title: readText(assignment, const [
+        'feeName',
+        'feeStructureName',
+        'name',
+      ], fallback: readText(structure ?? const {}, const ['name'])),
+      total: total,
+      paid: paid,
+      adjusted: adjusted,
+      due: due,
+      status: status,
+      dueBucket: _feeDueBucket(dueDate, status),
+    );
+  }
+
+  bool _feeMatchesQuery(_FeeAssignmentSnapshot row) {
+    return containsQuery(row.assignment, _query, const [
+          'studentName',
+          'studentId',
+          'classKey',
+          'className',
+          'feeName',
+          'feeStructureName',
+          'status',
+          'academicYear',
+        ]) ||
+        row.title.toLowerCase().contains(_query.trim().toLowerCase());
+  }
+
+  bool _feeMatchesStatus(_FeeAssignmentSnapshot row) {
+    switch (_feeStatusFilter) {
+      case 'due':
+        return row.due > 0;
+      case 'partial':
+        return row.status == 'Partially Paid';
+      case 'paid':
+        return row.due <= 0;
+      default:
+        return true;
+    }
+  }
+
+  num _feeAssignmentTotal(Map<String, dynamic> assignment) {
+    final explicit = readNumber(assignment, const [
+      'totalAmount',
+      'assignedAmount',
+      'feeAmount',
+      'amount',
+    ]);
+    if (explicit > 0) return explicit;
+    return _feeComponentTotal(assignment);
+  }
+
+  num _feeCollectionAmount(Map<String, dynamic> collection) {
+    return readNumber(collection, const [
+      'amount',
+      'paidAmount',
+      'totalPaid',
+      'collectedAmount',
+    ]);
+  }
+
+  num _feeAdjustmentAmount(Map<String, dynamic> adjustment) {
+    return readNumber(adjustment, const [
+      'amount',
+      'adjustmentAmount',
+      'discountAmount',
+      'waiverAmount',
+    ]);
+  }
+
+  num _feeComponentTotal(Map<String, dynamic> source) {
+    return _feeComponentFields.fold<num>(
+      0,
+      (total, field) => total + readNumber(source, [field.key]),
+    );
+  }
+
+  num _feeDue(num total, num paid, num adjusted) {
+    final due = total - paid - adjusted;
+    return due < 0 ? 0 : due;
+  }
+
+  String _feeStatus(num total, num paid, num adjusted, num due) {
+    if (due <= 0 && total > 0) return 'Paid';
+    if (paid > 0 || adjusted > 0) return 'Partially Paid';
+    return 'Due';
+  }
+
+  String _feeDueBucket(String dueDate, String status) {
+    if (status == 'Paid') return 'Cleared';
+    if (dueDate.trim().isEmpty) return 'No Due Date';
+    final due = DateTime.tryParse(dueDate);
+    if (due == null) return 'No Due Date';
+    final days = due.difference(DateTime.now()).inDays;
+    if (days < 0) return 'Overdue';
+    if (days <= 7) return 'Due Soon';
+    return 'Upcoming';
+  }
+
+  Map<String, dynamic>? _feeFindById(
+    List<Map<String, dynamic>> items,
+    String id,
+  ) {
+    if (id.isEmpty) return null;
+    for (final item in items) {
+      if (readText(item, const ['id'], fallback: '') == id) return item;
+    }
+    return null;
+  }
+
+  String _feeClassKey(Map<String, dynamic> student) {
+    final explicit = readText(student, const ['classKey'], fallback: '');
+    if (explicit.isNotEmpty) return explicit;
+    final className = readText(student, const [
+      'className',
+      'standard',
+      'courseYear',
+      'program',
+      'courseName',
+    ], fallback: '');
+    final section = readText(student, const [
+      'section',
+      'division',
+      'batch',
+    ], fallback: '');
+    return [className, section].where((value) => value.isNotEmpty).join(' - ');
+  }
+
+  List<String> _feeClassOptions(Map<String, List<Map<String, dynamic>>> data) {
+    final options = <String>{
+      ..._feeStudents(data).map(_feeClassKey),
+      ..._feeStructures(data).map(
+        (structure) => readText(structure, const ['classKey'], fallback: ''),
+      ),
+    }..removeWhere((value) => value.isEmpty);
+    final sorted = options.toList()..sort();
+    return sorted;
+  }
+
+  Future<void> _showFeeStructureSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? structure,
+  }) async {
+    if (!_can('fees.setup')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot manage fee structures.')),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _FeeStructureFormSheet(
+        classOptions: _feeClassOptions(data),
+        academicYear: _academicYear.trim().isEmpty
+            ? _defaultAcademicYear
+            : _academicYear.trim(),
+        structure: structure,
+        onSave: (values) async {
+          final payload = {
+            ...values,
+            if (structure == null) 'createdBy': widget.user.uid,
+            if (structure == null) 'createdAtText': _displayDateNow(),
+            if (structure != null) 'updatedAtText': _displayDateNow(),
+          };
+          if (structure == null) {
+            await widget.repository.createDocument('feeStructures', payload);
+          } else {
+            await widget.repository.updateDocument(
+              'feeStructures',
+              readText(structure, const ['id'], fallback: ''),
+              payload,
+            );
+          }
+        },
+      ),
+    );
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          structure == null ? 'Fee structure created' : 'Fee structure updated',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _showFeeAssignmentSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+  }) async {
+    if (!_can('fees.assign')) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('You cannot assign fees.')));
+      return;
+    }
+    final structures = _feeStructures(data);
+    final students = _feeStudents(data);
+    if (structures.isEmpty || students.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Create structures and active students before assigning fees.',
+          ),
+        ),
+      );
+      return;
+    }
+    final assignedCount = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _FeeAssignmentFormSheet(
+        students: students,
+        structures: structures,
+        classKeyForStudent: _feeClassKey,
+        onSave: (values) => _createFeeAssignments(data, values),
+      ),
+    );
+    if (!mounted || assignedCount == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          assignedCount == 0
+              ? 'Selected fee structure is already assigned.'
+              : 'Assigned fee to $assignedCount student${assignedCount == 1 ? '' : 's'}',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<int> _createFeeAssignments(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> values,
+  ) async {
+    final students = _feeStudents(data);
+    final assignments = _feeAssignments(data, students);
+    final structure = _feeFindById(
+      _feeStructures(data),
+      readText(values, const ['feeStructureId'], fallback: ''),
+    );
+    if (structure == null) {
+      throw ArgumentError('Fee structure is required.');
+    }
+    final mode = readText(values, const ['assignMode'], fallback: 'class');
+    final targetStudentId = readText(values, const [
+      'studentRecordId',
+    ], fallback: '');
+    final structureClassKey = readText(structure, const [
+      'classKey',
+    ], fallback: '');
+    final targets = students.where((student) {
+      if (mode == 'student') {
+        return readText(student, const ['id'], fallback: '') == targetStudentId;
+      }
+      return _feeClassKey(student) == structureClassKey;
+    }).toList();
+    if (targets.isEmpty) {
+      throw ArgumentError('No matching active students found.');
+    }
+    final existingKeys = assignments
+        .map(
+          (assignment) =>
+              '${readText(assignment, const ['studentRecordId'], fallback: '')}-${readText(assignment, const ['feeStructureId'], fallback: '')}',
+        )
+        .toSet();
+    var created = 0;
+    for (final student in targets) {
+      final studentRecordId = readText(student, const ['id'], fallback: '');
+      final structureId = readText(structure, const ['id'], fallback: '');
+      if (existingKeys.contains('$studentRecordId-$structureId')) continue;
+      final totalAmount = _feeAssignmentTotal(structure);
+      final payload = {
+        'feeStructureId': structureId,
+        'feeStructureName': readText(structure, const ['name'], fallback: ''),
+        'studentRecordId': studentRecordId,
+        'studentId': readText(student, const [
+          'studentId',
+          'admissionNo',
+        ], fallback: ''),
+        'studentName': readText(student, const [
+          'name',
+          'studentName',
+        ], fallback: ''),
+        'classKey': structureClassKey.isEmpty
+            ? _feeClassKey(student)
+            : structureClassKey,
+        'academicYear': readText(
+          structure,
+          const ['academicYear'],
+          fallback: _academicYear.trim().isEmpty
+              ? _defaultAcademicYear
+              : _academicYear.trim(),
+        ),
+        'courseCode': readText(structure, const [
+          'courseCode',
+        ], fallback: readText(student, const ['courseCode'], fallback: '')),
+        'courseName': readText(
+          structure,
+          const ['courseName', 'programName'],
+          fallback: readText(student, const [
+            'courseName',
+            'program',
+          ], fallback: ''),
+        ),
+        for (final field in _feeComponentFields)
+          field.key: readNumber(structure, [field.key]),
+        'totalAmount': totalAmount,
+        'paidAmount': 0,
+        'adjustmentAmount': 0,
+        'dueAmount': totalAmount,
+        'dueDate': readText(structure, const ['dueDate'], fallback: ''),
+        'status': 'Due',
+        'assignedAtText': _displayDateNow(),
+        'createdBy': widget.user.uid,
+      };
+      await widget.repository.createDocument('feeAssignments', payload);
+      created += 1;
+    }
+    return created;
+  }
+
+  Future<void> _showFeeCollectionSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? assignment,
+    Map<String, dynamic>? collection,
+  }) async {
+    if (!_can('fees.collect')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot record fee collections.')),
+      );
+      return;
+    }
+    final students = _feeStudents(data);
+    final assignments = _feeAssignments(data, students);
+    final structures = _feeStructures(data);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    final rows = assignments
+        .map((item) => _feeSnapshot(item, collections, adjustments, structures))
+        .where(
+          (row) =>
+              collection != null ||
+              row.due > 0 ||
+              readText(row.assignment, const ['id'], fallback: '') ==
+                  readText(assignment ?? const {}, const ['id'], fallback: ''),
+        )
+        .toList();
+    if (rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No outstanding fee assignment found.')),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _FeeCollectionFormSheet(
+        rows: rows,
+        initialAssignmentId: collection == null
+            ? readText(assignment ?? const {}, const ['id'], fallback: '')
+            : readText(collection, const ['assignmentId'], fallback: ''),
+        collection: collection,
+        onSave: (values) => _saveFeeCollection(data, values, collection),
+      ),
+    );
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          collection == null
+              ? 'Fee collection posted'
+              : 'Fee collection updated',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _saveFeeCollection(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> values,
+    Map<String, dynamic>? editingCollection,
+  ) async {
+    final students = _feeStudents(data);
+    final assignments = _feeAssignments(data, students);
+    final structures = _feeStructures(data);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    final assignmentId = readText(values, const ['assignmentId'], fallback: '');
+    final assignment = _feeFindById(assignments, assignmentId);
+    if (assignment == null) throw ArgumentError('Fee assignment is required.');
+    final row = _feeSnapshot(assignment, collections, adjustments, structures);
+    final amount = readNumber(values, const ['amount']);
+    final oldAmount = editingCollection == null
+        ? 0
+        : _feeCollectionAmount(editingCollection);
+    final dueBeforePayment = row.due + oldAmount;
+    if (amount <= 0) throw ArgumentError('Collection amount is required.');
+    if (amount > dueBeforePayment) {
+      throw ArgumentError('Collection amount cannot exceed outstanding due.');
+    }
+    final nextPaid = row.paid - oldAmount + amount;
+    final safePaid = nextPaid < 0 ? 0 : nextPaid;
+    final nextDue = _feeDue(row.total, safePaid, row.adjusted);
+    final assignmentUpdates = {
+      'paidAmount': safePaid,
+      'dueAmount': nextDue,
+      'status': _feeStatus(row.total, safePaid, row.adjusted, nextDue),
+      'updatedAtText': _displayDateNow(),
+    };
+    final payload = {
+      'assignmentId': assignmentId,
+      'feeStructureId': readText(assignment, const [
+        'feeStructureId',
+      ], fallback: ''),
+      'feeStructureName': row.title,
+      'studentRecordId': readText(assignment, const [
+        'studentRecordId',
+      ], fallback: ''),
+      'studentId': readText(assignment, const ['studentId'], fallback: ''),
+      'studentName': readText(assignment, const ['studentName'], fallback: ''),
+      'classKey': readText(assignment, const ['classKey'], fallback: ''),
+      'amount': amount,
+      'academicYear': readText(
+        assignment,
+        const ['academicYear'],
+        fallback: _academicYear.trim().isEmpty
+            ? _defaultAcademicYear
+            : _academicYear.trim(),
+      ),
+      'paymentMode': readText(values, const ['paymentMode'], fallback: 'Cash'),
+      'referenceNo': readText(values, const ['referenceNo'], fallback: ''),
+      'receiptNo': readText(values, const ['receiptNo'], fallback: ''),
+      'paymentDate': readText(values, const ['paymentDate'], fallback: ''),
+      'collectedBy': readText(values, const [
+        'collectedBy',
+      ], fallback: widget.user.name),
+      'status': 'Posted',
+      if (editingCollection == null) 'createdAtText': _displayDateNow(),
+      if (editingCollection != null) 'updatedAtText': _displayDateNow(),
+      if (editingCollection == null) 'createdBy': widget.user.uid,
+    };
+    if (editingCollection == null) {
+      await widget.repository.createDocument('feeCollections', payload);
+    } else {
+      await widget.repository.updateDocument(
+        'feeCollections',
+        readText(editingCollection, const ['id'], fallback: ''),
+        payload,
+      );
+    }
+    await widget.repository.updateDocument(
+      'feeAssignments',
+      assignmentId,
+      assignmentUpdates,
+    );
+  }
+
+  Future<void> _showFeeAdjustmentSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? assignment,
+  }) async {
+    if (!_can('fees.adjust')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot approve fee adjustments.')),
+      );
+      return;
+    }
+    final students = _feeStudents(data);
+    final assignments = _feeAssignments(data, students);
+    final structures = _feeStructures(data);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    final rows = assignments
+        .map((item) => _feeSnapshot(item, collections, adjustments, structures))
+        .where((row) => row.due > 0)
+        .toList();
+    if (rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No payable assignment found.')),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _FeeAdjustmentFormSheet(
+        rows: rows,
+        initialAssignmentId: readText(assignment ?? const {}, const [
+          'id',
+        ], fallback: ''),
+        onSave: (values) => _saveFeeAdjustment(data, values),
+      ),
+    );
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Fee adjustment approved'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _saveFeeAdjustment(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> values,
+  ) async {
+    final students = _feeStudents(data);
+    final assignments = _feeAssignments(data, students);
+    final structures = _feeStructures(data);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    final assignmentId = readText(values, const ['assignmentId'], fallback: '');
+    final assignment = _feeFindById(assignments, assignmentId);
+    if (assignment == null) throw ArgumentError('Fee assignment is required.');
+    final row = _feeSnapshot(assignment, collections, adjustments, structures);
+    final amount = readNumber(values, const ['amount']);
+    final reason = readText(values, const ['reason'], fallback: '');
+    if (amount <= 0) throw ArgumentError('Adjustment amount is required.');
+    if (amount > row.due) {
+      throw ArgumentError('Adjustment amount cannot exceed outstanding due.');
+    }
+    if (reason.isEmpty) throw ArgumentError('Adjustment reason is required.');
+    final nextAdjusted = row.adjusted + amount;
+    final nextDue = _feeDue(row.total, row.paid, nextAdjusted);
+    await widget.repository.createDocument('feeAdjustments', {
+      'assignmentId': assignmentId,
+      'studentRecordId': readText(assignment, const [
+        'studentRecordId',
+      ], fallback: ''),
+      'studentId': readText(assignment, const ['studentId'], fallback: ''),
+      'studentName': readText(assignment, const ['studentName'], fallback: ''),
+      'amount': amount,
+      'academicYear': readText(
+        assignment,
+        const ['academicYear'],
+        fallback: _academicYear.trim().isEmpty
+            ? _defaultAcademicYear
+            : _academicYear.trim(),
+      ),
+      'reason': reason,
+      'status': 'Approved',
+      'createdAtText': _displayDateNow(),
+      'createdBy': widget.user.uid,
+    });
+    await widget.repository.updateDocument('feeAssignments', assignmentId, {
+      'adjustmentAmount': nextAdjusted,
+      'dueAmount': nextDue,
+      'status': _feeStatus(row.total, row.paid, nextAdjusted, nextDue),
+      'updatedAtText': _displayDateNow(),
+    });
+  }
+
+  Future<void> _assignFeeStructure(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> structure,
+  ) async {
+    if (!_can('fees.assign')) return;
+    try {
+      final count = await _createFeeAssignments(data, {
+        'feeStructureId': readText(structure, const ['id'], fallback: ''),
+        'assignMode': 'class',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            count == 0
+                ? 'This structure is already assigned to all matching students.'
+                : 'Fee structure assigned to $count student${count == 1 ? '' : 's'}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
+  Future<void> _sendFeeReminder(
+    Map<String, List<Map<String, dynamic>>> data,
+    _FeeAssignmentSnapshot row,
+  ) async {
+    Map<String, dynamic>? student;
+    for (final candidate in _feeStudents(data)) {
+      final matches =
+          readText(candidate, const ['id'], fallback: '') ==
+              readText(row.assignment, const [
+                'studentRecordId',
+              ], fallback: '') ||
+          readText(candidate, const ['studentId'], fallback: '') ==
+              readText(row.assignment, const ['studentId'], fallback: '');
+      if (matches) {
+        student = candidate;
+        break;
+      }
+    }
+    final rawPhone = readText(student ?? const {}, const [
+      'parentPhone',
+      'guardianPhone',
+      'fatherPhone',
+      'motherPhone',
+      'phone',
+      'mobile',
+    ], fallback: '');
+    final digits = rawPhone.replaceAll(RegExp(r'\D'), '');
+    final phone = digits.length == 10 ? '91$digits' : digits;
+    if (phone.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No parent WhatsApp number found.')),
+      );
+      return;
+    }
+    final parentName = readText(student ?? const {}, const [
+      'guardianName',
+      'fatherName',
+      'motherName',
+    ], fallback: 'Parent');
+    final message = [
+      'Dear $parentName,',
+      'This is a fee reminder for ${readText(row.assignment, const ['studentName'], fallback: 'student')}.',
+      'Outstanding due: ${formatMoney(row.due)}.',
+      'Due date: ${readText(row.assignment, const ['dueDate'], fallback: 'Not specified')}.',
+      'Please complete the payment at the earliest.',
+    ].join('\n');
+    final uri = Uri.parse(
+      'https://wa.me/$phone?text=${Uri.encodeComponent(message)}',
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          launched
+              ? 'WhatsApp reminder opened'
+              : 'Unable to open WhatsApp reminder',
+        ),
+      ),
     );
   }
 
@@ -5547,6 +6828,1479 @@ class _DocumentTrailing extends StatelessWidget {
         'documentStatus',
         'status',
       ], fallback: 'Uploaded'),
+    );
+  }
+}
+
+class _FeeComponentField {
+  const _FeeComponentField(this.key, this.label, this.shortLabel);
+
+  final String key;
+  final String label;
+  final String shortLabel;
+}
+
+const _feeComponentFields = <_FeeComponentField>[
+  _FeeComponentField('admissionFee', 'Admission Fee', 'Admission'),
+  _FeeComponentField('applicationFee', 'Application Fee', 'Application'),
+  _FeeComponentField('pocketArticleFee', 'Pocket Article Fee', 'Pocket'),
+  _FeeComponentField('tuitionFee', 'Year Fee', 'Year Fee'),
+  _FeeComponentField('libraryFee', 'Library Fee', 'Library'),
+  _FeeComponentField('labFee', 'Lab Fee', 'Lab'),
+  _FeeComponentField('transportFee', 'Transport Fee', 'Transport'),
+];
+
+class _FeeAssignmentSnapshot {
+  const _FeeAssignmentSnapshot({
+    required this.assignment,
+    required this.title,
+    required this.total,
+    required this.paid,
+    required this.adjusted,
+    required this.due,
+    required this.status,
+    required this.dueBucket,
+  });
+
+  final Map<String, dynamic> assignment;
+  final String title;
+  final num total;
+  final num paid;
+  final num adjusted;
+  final num due;
+  final String status;
+  final String dueBucket;
+
+  String get id => readText(assignment, const ['id'], fallback: '');
+}
+
+class _FeeTaskOption {
+  const _FeeTaskOption({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.icon,
+    this.meta = const [],
+    this.disabled = false,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final IconData icon;
+  final List<String> meta;
+  final bool disabled;
+}
+
+class _FeeBackButton extends StatelessWidget {
+  const _FeeBackButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 6),
+        child: TextButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.arrow_back_rounded, size: 18),
+          label: const Text('Back'),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeeTaskCard extends StatelessWidget {
+  const _FeeTaskCard({
+    required this.option,
+    required this.onTap,
+    this.disabled = false,
+  });
+
+  final _FeeTaskOption option;
+  final VoidCallback? onTap;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = InfoCard(
+      onTap: disabled ? null : onTap,
+      child: Row(
+        children: [
+          Container(
+            height: 48,
+            width: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primaryDark.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(option.icon, color: AppColors.primaryDark),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  option.title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  disabled ? 'Not available right now.' : option.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                if (option.meta.isNotEmpty) ...[
+                  const SizedBox(height: 9),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: option.meta
+                        .map(
+                          (item) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.page,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              item,
+                              style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+        ],
+      ),
+    );
+    return Opacity(opacity: disabled ? 0.55 : 1, child: card);
+  }
+}
+
+class _FeeStructureCard extends StatelessWidget {
+  const _FeeStructureCard({
+    required this.structure,
+    required this.canEdit,
+    required this.canAssign,
+    required this.onEdit,
+    required this.onAssign,
+  });
+
+  final Map<String, dynamic> structure;
+  final bool canEdit;
+  final bool canAssign;
+  final VoidCallback onEdit;
+  final VoidCallback onAssign;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleComponents = _feeComponentFields
+        .where((field) => readNumber(structure, [field.key]) > 0)
+        .toList();
+    final total = readNumber(
+      structure,
+      const ['totalAmount', 'amount', 'feeAmount'],
+      fallback: visibleComponents.fold<num>(
+        0,
+        (total, field) => total + readNumber(structure, [field.key]),
+      ),
+    );
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      readText(structure, const [
+                        'name',
+                      ], fallback: 'Fee Structure'),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${readText(structure, const ['classKey'], fallback: 'Class')} | ${readText(structure, const ['academicYear'], fallback: 'Academic year')}',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(
+                label: readText(structure, const [
+                  'status',
+                ], fallback: 'Active'),
+              ),
+            ],
+          ),
+          if (visibleComponents.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: visibleComponents
+                  .map(
+                    (field) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.page,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${field.shortLabel}: ${formatMoney(readNumber(structure, [field.key]))}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(label: 'Total', value: formatMoney(total)),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Due Date',
+                  value: readText(structure, const ['dueDate'], fallback: '-'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: canAssign ? onAssign : null,
+                  icon: const Icon(Icons.assignment_rounded, size: 18),
+                  label: const Text('Assign'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canEdit ? onEdit : null,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeAssignmentCard extends StatelessWidget {
+  const _FeeAssignmentCard({
+    required this.row,
+    required this.selected,
+    required this.onTap,
+    this.onCollect,
+    this.onAdjust,
+    this.onNotify,
+  });
+
+  final _FeeAssignmentSnapshot row;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onCollect;
+  final VoidCallback? onAdjust;
+  final VoidCallback? onNotify;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      readText(row.assignment, const [
+                        'studentName',
+                        'studentId',
+                      ], fallback: 'Student'),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${row.title} | ${readText(row.assignment, const ['classKey'], fallback: 'Class')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(label: row.status),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Total',
+                  value: formatMoney(row.total),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(label: 'Paid', value: formatMoney(row.paid)),
+              ),
+              Expanded(
+                child: LabelValue(label: 'Due', value: formatMoney(row.due)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(label: 'Aging', value: row.dueBucket),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Due Date',
+                  value: readText(row.assignment, const [
+                    'dueDate',
+                  ], fallback: '-'),
+                ),
+              ),
+            ],
+          ),
+          if (selected ||
+              onCollect != null ||
+              onAdjust != null ||
+              onNotify != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (onCollect != null)
+                  ElevatedButton.icon(
+                    onPressed: onCollect,
+                    icon: const Icon(Icons.payments_rounded, size: 18),
+                    label: const Text('Collect'),
+                  ),
+                if (onAdjust != null)
+                  OutlinedButton.icon(
+                    onPressed: onAdjust,
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('Adjust'),
+                  ),
+                if (onNotify != null)
+                  OutlinedButton.icon(
+                    onPressed: onNotify,
+                    icon: const Icon(Icons.message_rounded, size: 18),
+                    label: const Text('Notify'),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeAssignmentDetail extends StatelessWidget {
+  const _FeeAssignmentDetail({required this.row});
+
+  final _FeeAssignmentSnapshot row;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Student ID',
+                  value: readText(row.assignment, const ['studentId']),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Academic Year',
+                  value: readText(row.assignment, const ['academicYear']),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Assigned',
+                  value: formatMoney(row.total),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Adjusted',
+                  value: formatMoney(row.adjusted),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(label: 'Paid', value: formatMoney(row.paid)),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Outstanding',
+                  value: formatMoney(row.due),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeCollectionCard extends StatelessWidget {
+  const _FeeCollectionCard({
+    required this.collection,
+    required this.canEdit,
+    required this.onEdit,
+  });
+
+  final Map<String, dynamic> collection;
+  final bool canEdit;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  readText(collection, const ['studentName', 'studentId']),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${readText(collection, const ['paymentMode'], fallback: 'Mode')} | ${readText(collection, const ['paymentDate', 'createdAtText'], fallback: '-')}',
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  readText(collection, const [
+                    'referenceNo',
+                    'receiptNo',
+                    'feeStructureName',
+                  ], fallback: 'No reference'),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                formatMoney(
+                  readNumber(collection, const ['amount', 'paidAmount']),
+                ),
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (canEdit) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_rounded, size: 16),
+                  label: const Text('Edit'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeeAdjustmentCard extends StatelessWidget {
+  const _FeeAdjustmentCard({required this.adjustment});
+
+  final Map<String, dynamic> adjustment;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactRow(
+      title: readText(adjustment, const ['studentName', 'studentId']),
+      subtitle: readText(adjustment, const ['reason'], fallback: 'Adjustment'),
+      trailing: Text(
+        formatMoney(
+          readNumber(adjustment, const ['amount', 'adjustmentAmount']),
+        ),
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _FeeStructureFormSheet extends StatefulWidget {
+  const _FeeStructureFormSheet({
+    required this.classOptions,
+    required this.academicYear,
+    required this.onSave,
+    this.structure,
+  });
+
+  final List<String> classOptions;
+  final String academicYear;
+  final Map<String, dynamic>? structure;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_FeeStructureFormSheet> createState() => _FeeStructureFormSheetState();
+}
+
+class _FeeStructureFormSheetState extends State<_FeeStructureFormSheet> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _classController;
+  late final TextEditingController _academicYearController;
+  late final TextEditingController _dueDateController;
+  late final TextEditingController _noteController;
+  late final Map<String, TextEditingController> _componentControllers;
+  late String _classKey;
+  late String _status;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final structure = widget.structure ?? const <String, dynamic>{};
+    final initialClass = readText(structure, const ['classKey'], fallback: '');
+    _classKey = initialClass.isNotEmpty
+        ? initialClass
+        : widget.classOptions.isEmpty
+        ? ''
+        : widget.classOptions.first;
+    _status = readText(structure, const ['status'], fallback: 'Active');
+    _nameController = TextEditingController(
+      text: readText(structure, const ['name'], fallback: ''),
+    );
+    _classController = TextEditingController(text: _classKey);
+    _academicYearController = TextEditingController(
+      text: readText(structure, const [
+        'academicYear',
+      ], fallback: widget.academicYear),
+    );
+    _dueDateController = TextEditingController(
+      text: readText(structure, const ['dueDate'], fallback: ''),
+    );
+    _noteController = TextEditingController(
+      text: readText(structure, const ['extraChargesNote'], fallback: ''),
+    );
+    _componentControllers = {
+      for (final field in _feeComponentFields)
+        field.key: TextEditingController(
+          text: _numberText(readNumber(structure, [field.key])),
+        ),
+    };
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _classController.dispose();
+    _academicYearController.dispose();
+    _dueDateController.dispose();
+    _noteController.dispose();
+    for (final controller in _componentControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  num get _totalAmount => _feeComponentFields.fold<num>(
+    0,
+    (total, field) =>
+        total + (num.tryParse(_componentControllers[field.key]!.text) ?? 0),
+  );
+
+  String _numberText(num value) => value == 0 ? '' : value.toString();
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    final classKey = widget.classOptions.isEmpty
+        ? _classController.text.trim()
+        : _classKey.trim();
+    final academicYear = _academicYearController.text.trim();
+    final dueDate = _dueDateController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Fee structure name is required.');
+      return;
+    }
+    if (classKey.isEmpty) {
+      setState(() => _error = 'Class is required.');
+      return;
+    }
+    if (academicYear.isEmpty) {
+      setState(() => _error = 'Academic year is required.');
+      return;
+    }
+    if (_totalAmount <= 0) {
+      setState(() => _error = 'Total amount must be greater than zero.');
+      return;
+    }
+    if (dueDate.isEmpty) {
+      setState(() => _error = 'Due date is required.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'name': name,
+        'classKey': classKey,
+        'academicYear': academicYear,
+        'dueDate': dueDate,
+        'status': _status,
+        'extraChargesNote': _noteController.text.trim(),
+        for (final field in _feeComponentFields)
+          field.key: num.tryParse(_componentControllers[field.key]!.text) ?? 0,
+        'totalAmount': _totalAmount,
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final classOptions = <String>{
+      if (_classKey.isNotEmpty) _classKey,
+      ...widget.classOptions,
+    }.toList();
+    return _FeeSheetChrome(
+      title: widget.structure == null
+          ? 'Create Fee Structure'
+          : 'Edit Fee Structure',
+      helper: 'Define class-wise fee components and due date.',
+      saving: _saving,
+      error: _error,
+      saveLabel: widget.structure == null ? 'Create Structure' : 'Save Changes',
+      onSave: _save,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Structure Name *'),
+        ),
+        const SizedBox(height: 10),
+        if (classOptions.isEmpty)
+          TextField(
+            controller: _classController,
+            decoration: const InputDecoration(labelText: 'Class *'),
+          )
+        else
+          DropdownButtonFormField<String>(
+            initialValue: _classKey,
+            items: classOptions
+                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                .toList(),
+            decoration: const InputDecoration(labelText: 'Class *'),
+            onChanged: (value) =>
+                setState(() => _classKey = value ?? _classKey),
+          ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _academicYearController,
+          decoration: const InputDecoration(labelText: 'Academic Year *'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _dueDateController,
+          keyboardType: TextInputType.datetime,
+          decoration: const InputDecoration(
+            labelText: 'Due Date *',
+            hintText: 'YYYY-MM-DD',
+          ),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _status,
+          items: const ['Active', 'Inactive']
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Status'),
+          onChanged: (value) => setState(() => _status = value ?? _status),
+        ),
+        const SizedBox(height: 14),
+        ..._feeComponentFields.map(
+          (field) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: TextField(
+              controller: _componentControllers[field.key],
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: field.label),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ),
+        InfoCard(
+          padding: const EdgeInsets.all(12),
+          child: LabelValue(
+            label: 'Total Amount',
+            value: formatMoney(_totalAmount),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _noteController,
+          maxLines: 2,
+          decoration: const InputDecoration(labelText: 'Extra charges note'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeeAssignmentFormSheet extends StatefulWidget {
+  const _FeeAssignmentFormSheet({
+    required this.students,
+    required this.structures,
+    required this.classKeyForStudent,
+    required this.onSave,
+  });
+
+  final List<Map<String, dynamic>> students;
+  final List<Map<String, dynamic>> structures;
+  final String Function(Map<String, dynamic> student) classKeyForStudent;
+  final Future<int> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_FeeAssignmentFormSheet> createState() =>
+      _FeeAssignmentFormSheetState();
+}
+
+class _FeeAssignmentFormSheetState extends State<_FeeAssignmentFormSheet> {
+  late String _structureId;
+  var _assignMode = 'class';
+  var _studentRecordId = '';
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _structureId = readText(widget.structures.first, const [
+      'id',
+    ], fallback: '');
+    _studentRecordId = widget.students.isEmpty
+        ? ''
+        : readText(widget.students.first, const ['id'], fallback: '');
+  }
+
+  Map<String, dynamic> get _selectedStructure {
+    for (final structure in widget.structures) {
+      if (readText(structure, const ['id'], fallback: '') == _structureId) {
+        return structure;
+      }
+    }
+    return widget.structures.first;
+  }
+
+  List<Map<String, dynamic>> get _matchingStudents {
+    if (_assignMode == 'student') return widget.students;
+    final classKey = readText(_selectedStructure, const [
+      'classKey',
+    ], fallback: '');
+    return widget.students
+        .where((student) => widget.classKeyForStudent(student) == classKey)
+        .toList();
+  }
+
+  Future<void> _save() async {
+    if (_structureId.isEmpty) {
+      setState(() => _error = 'Fee structure is required.');
+      return;
+    }
+    if (_assignMode == 'student' && _studentRecordId.isEmpty) {
+      setState(() => _error = 'Student is required.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      final count = await widget.onSave({
+        'feeStructureId': _structureId,
+        'assignMode': _assignMode,
+        'studentRecordId': _studentRecordId,
+      });
+      if (mounted) Navigator.of(context).pop(count);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matchingStudents = _matchingStudents;
+    final studentOptions = _assignMode == 'student'
+        ? widget.students
+        : matchingStudents;
+    if (studentOptions.isNotEmpty &&
+        !studentOptions.any(
+          (student) =>
+              readText(student, const ['id'], fallback: '') == _studentRecordId,
+        )) {
+      _studentRecordId = readText(studentOptions.first, const [
+        'id',
+      ], fallback: '');
+    }
+    return _FeeSheetChrome(
+      title: 'Assign Fee',
+      helper: 'Assign a structure to all matching students or one student.',
+      saving: _saving,
+      error: _error,
+      saveLabel: 'Assign',
+      onSave: _save,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _structureId,
+          items: widget.structures
+              .map(
+                (item) => DropdownMenuItem(
+                  value: readText(item, const ['id'], fallback: ''),
+                  child: Text(
+                    '${readText(item, const ['name'])} - ${readText(item, const ['classKey'])}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Fee Structure *'),
+          onChanged: (value) =>
+              setState(() => _structureId = value ?? _structureId),
+        ),
+        const SizedBox(height: 10),
+        _SegmentedFilter(
+          value: _assignMode,
+          options: const {'class': 'Class', 'student': 'Student'},
+          onChanged: (value) => setState(() => _assignMode = value),
+        ),
+        const SizedBox(height: 10),
+        if (_assignMode == 'student')
+          DropdownButtonFormField<String>(
+            initialValue: _studentRecordId,
+            items: widget.students
+                .map(
+                  (student) => DropdownMenuItem(
+                    value: readText(student, const ['id'], fallback: ''),
+                    child: Text(
+                      '${readText(student, const ['name', 'studentName'])} - ${readText(student, const ['studentId'])}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            decoration: const InputDecoration(labelText: 'Student *'),
+            onChanged: (value) =>
+                setState(() => _studentRecordId = value ?? _studentRecordId),
+          )
+        else
+          InfoCard(
+            padding: const EdgeInsets.all(12),
+            child: LabelValue(
+              label: 'Matching students',
+              value:
+                  '${matchingStudents.length} students in ${readText(_selectedStructure, const ['classKey'], fallback: 'selected class')}',
+            ),
+          ),
+        const SizedBox(height: 10),
+        InfoCard(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Total',
+                  value: formatMoney(
+                    readNumber(_selectedStructure, const ['totalAmount']),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Due Date',
+                  value: readText(_selectedStructure, const ['dueDate']),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeeCollectionFormSheet extends StatefulWidget {
+  const _FeeCollectionFormSheet({
+    required this.rows,
+    required this.initialAssignmentId,
+    required this.onSave,
+    this.collection,
+  });
+
+  final List<_FeeAssignmentSnapshot> rows;
+  final String initialAssignmentId;
+  final Map<String, dynamic>? collection;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_FeeCollectionFormSheet> createState() =>
+      _FeeCollectionFormSheetState();
+}
+
+class _FeeCollectionFormSheetState extends State<_FeeCollectionFormSheet> {
+  late String _assignmentId;
+  late final TextEditingController _amountController;
+  late final TextEditingController _referenceController;
+  late final TextEditingController _receiptController;
+  late final TextEditingController _dateController;
+  late final TextEditingController _collectedByController;
+  var _paymentMode = 'Cash';
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final collection = widget.collection;
+    final initial = widget.initialAssignmentId.isNotEmpty
+        ? widget.initialAssignmentId
+        : collection == null
+        ? ''
+        : readText(collection, const ['assignmentId'], fallback: '');
+    _assignmentId = widget.rows.any((row) => row.id == initial)
+        ? initial
+        : widget.rows.first.id;
+    _amountController = TextEditingController(
+      text: collection == null
+          ? ''
+          : _numberText(readNumber(collection, const ['amount', 'paidAmount'])),
+    );
+    _referenceController = TextEditingController(
+      text: readText(collection ?? const <String, dynamic>{}, const [
+        'referenceNo',
+      ], fallback: ''),
+    );
+    _receiptController = TextEditingController(
+      text: readText(collection ?? const <String, dynamic>{}, const [
+        'receiptNo',
+      ], fallback: ''),
+    );
+    _dateController = TextEditingController(
+      text: readText(
+        collection ?? const <String, dynamic>{},
+        const ['paymentDate'],
+        fallback: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+      ),
+    );
+    _collectedByController = TextEditingController(
+      text: readText(collection ?? const <String, dynamic>{}, const [
+        'collectedBy',
+      ], fallback: 'Admin Office'),
+    );
+    _paymentMode = readText(collection ?? const <String, dynamic>{}, const [
+      'paymentMode',
+    ], fallback: 'Cash');
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _referenceController.dispose();
+    _receiptController.dispose();
+    _dateController.dispose();
+    _collectedByController.dispose();
+    super.dispose();
+  }
+
+  String _numberText(num value) => value == 0 ? '' : value.toString();
+
+  _FeeAssignmentSnapshot get _selectedRow {
+    for (final row in widget.rows) {
+      if (row.id == _assignmentId) return row;
+    }
+    return widget.rows.first;
+  }
+
+  num get _oldAmount => widget.collection == null
+      ? 0
+      : readNumber(widget.collection!, const ['amount', 'paidAmount']);
+
+  num get _amount => num.tryParse(_amountController.text.trim()) ?? 0;
+
+  num get _dueBefore => _selectedRow.due + _oldAmount;
+
+  num get _dueAfter {
+    final next = _dueBefore - _amount;
+    return next < 0 ? 0 : next;
+  }
+
+  Future<void> _save() async {
+    if (_assignmentId.isEmpty) {
+      setState(() => _error = 'Fee assignment is required.');
+      return;
+    }
+    if (_amount <= 0) {
+      setState(() => _error = 'Collection amount is required.');
+      return;
+    }
+    if (_amount > _dueBefore) {
+      setState(
+        () => _error = 'Collection amount cannot exceed outstanding due.',
+      );
+      return;
+    }
+    if (_dateController.text.trim().isEmpty) {
+      setState(() => _error = 'Payment date is required.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'assignmentId': _assignmentId,
+        'amount': _amount,
+        'paymentMode': _paymentMode,
+        'referenceNo': _referenceController.text.trim(),
+        'receiptNo': _receiptController.text.trim(),
+        'paymentDate': _dateController.text.trim(),
+        'collectedBy': _collectedByController.text.trim(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FeeSheetChrome(
+      title: widget.collection == null
+          ? 'Record Fee Collection'
+          : 'Edit Fee Collection',
+      helper: 'Post an offline payment against a student fee assignment.',
+      saving: _saving,
+      error: _error,
+      saveLabel: widget.collection == null ? 'Post Collection' : 'Save Changes',
+      onSave: _save,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _assignmentId,
+          items: widget.rows
+              .map(
+                (row) => DropdownMenuItem(
+                  value: row.id,
+                  child: Text(
+                    '${readText(row.assignment, const ['studentName'])} - ${row.title}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Fee Assignment *'),
+          onChanged: widget.collection == null
+              ? (value) =>
+                    setState(() => _assignmentId = value ?? _assignmentId)
+              : null,
+        ),
+        const SizedBox(height: 10),
+        InfoCard(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Due Before',
+                  value: formatMoney(_dueBefore),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Due After',
+                  value: formatMoney(_dueAfter),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Payment Amount *'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _paymentMode,
+          items:
+              const [
+                    'Cash',
+                    'Cheque',
+                    'Bank Transfer',
+                    'UPI Manual Entry',
+                    'Card Swipe Offline',
+                  ]
+                  .map(
+                    (item) => DropdownMenuItem(value: item, child: Text(item)),
+                  )
+                  .toList(),
+          decoration: const InputDecoration(labelText: 'Payment Mode *'),
+          onChanged: (value) =>
+              setState(() => _paymentMode = value ?? _paymentMode),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _dateController,
+          keyboardType: TextInputType.datetime,
+          decoration: const InputDecoration(labelText: 'Payment Date *'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _referenceController,
+          decoration: const InputDecoration(labelText: 'Reference No.'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _receiptController,
+          decoration: const InputDecoration(labelText: 'Receipt No.'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _collectedByController,
+          decoration: const InputDecoration(labelText: 'Collected By'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeeAdjustmentFormSheet extends StatefulWidget {
+  const _FeeAdjustmentFormSheet({
+    required this.rows,
+    required this.initialAssignmentId,
+    required this.onSave,
+  });
+
+  final List<_FeeAssignmentSnapshot> rows;
+  final String initialAssignmentId;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_FeeAdjustmentFormSheet> createState() =>
+      _FeeAdjustmentFormSheetState();
+}
+
+class _FeeAdjustmentFormSheetState extends State<_FeeAdjustmentFormSheet> {
+  late String _assignmentId;
+  late final TextEditingController _amountController;
+  late final TextEditingController _reasonController;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _assignmentId =
+        widget.rows.any((row) => row.id == widget.initialAssignmentId)
+        ? widget.initialAssignmentId
+        : widget.rows.first.id;
+    _amountController = TextEditingController();
+    _reasonController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  _FeeAssignmentSnapshot get _selectedRow {
+    for (final row in widget.rows) {
+      if (row.id == _assignmentId) return row;
+    }
+    return widget.rows.first;
+  }
+
+  num get _amount => num.tryParse(_amountController.text.trim()) ?? 0;
+
+  Future<void> _save() async {
+    if (_amount <= 0) {
+      setState(() => _error = 'Adjustment amount is required.');
+      return;
+    }
+    if (_amount > _selectedRow.due) {
+      setState(
+        () => _error = 'Adjustment amount cannot exceed outstanding due.',
+      );
+      return;
+    }
+    if (_reasonController.text.trim().isEmpty) {
+      setState(() => _error = 'Adjustment reason is required.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'assignmentId': _assignmentId,
+        'amount': _amount,
+        'reason': _reasonController.text.trim(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FeeSheetChrome(
+      title: 'Approve Adjustment',
+      helper: 'Approve a waiver or correction against an outstanding fee.',
+      saving: _saving,
+      error: _error,
+      saveLabel: 'Approve',
+      onSave: _save,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _assignmentId,
+          items: widget.rows
+              .map(
+                (row) => DropdownMenuItem(
+                  value: row.id,
+                  child: Text(
+                    '${readText(row.assignment, const ['studentName'])} - ${formatMoney(row.due)} due',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Fee Assignment *'),
+          onChanged: (value) =>
+              setState(() => _assignmentId = value ?? _assignmentId),
+        ),
+        const SizedBox(height: 10),
+        InfoCard(
+          padding: const EdgeInsets.all(12),
+          child: LabelValue(
+            label: 'Outstanding Due',
+            value: formatMoney(_selectedRow.due),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Adjustment Amount *'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _reasonController,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Reason *'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeeSheetChrome extends StatelessWidget {
+  const _FeeSheetChrome({
+    required this.title,
+    required this.helper,
+    required this.children,
+    required this.saving,
+    required this.error,
+    required this.saveLabel,
+    required this.onSave,
+  });
+
+  final String title;
+  final String helper;
+  final List<Widget> children;
+  final bool saving;
+  final String error;
+  final String saveLabel;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                helper,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              ...children,
+              if (error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: saving ? null : onSave,
+                      icon: Icon(
+                        saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(saving ? 'Saving...' : saveLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
