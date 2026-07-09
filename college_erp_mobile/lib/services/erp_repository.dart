@@ -279,6 +279,9 @@ class ErpRepository {
           'students': user.isParent
               ? await linkedParentStudents(user, academicYear: academicYear)
               : await listCollection('students', academicYear: academicYear),
+          'staff': user.isParent
+              ? const <Map<String, dynamic>>[]
+              : await listCollection('staffMembers'),
           'schedules': await listCollection(
             'examSchedules',
             academicYear: academicYear,

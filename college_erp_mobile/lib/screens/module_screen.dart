@@ -91,6 +91,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _attendanceSelectedEntityId = '';
   DateTime _attendanceSelectedDate = DateTime.now();
   var _timetableStatusView = 'active';
+  var _examTask = '';
+  var _examBranch = '';
+  var _examSelectedScheduleId = '';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -194,7 +197,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       case 'timetable':
         return _timetable(data);
       case 'examination-results':
-        return _results(data);
+        return _resultsParity(data);
       case 'fees':
         return _fees(data);
       case 'communication':
@@ -288,35 +291,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
             _ModuleAction(
               label: 'Schedule',
               icon: Icons.event_note_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Schedule Exam',
-                collectionName: 'examSchedules',
-                fields: const [
-                  _FieldSpec('examName', 'Exam name', isRequired: true),
-                  _FieldSpec('subject', 'Subject', isRequired: true),
-                  _FieldSpec('className', 'Class / Standard'),
-                  _FieldSpec('examDate', 'Exam date YYYY-MM-DD'),
-                  _FieldSpec('maxMarks', 'Max marks', numeric: true),
-                ],
-                defaults: {'status': 'Scheduled'},
-              ),
+              onTap: () => _showExamScheduleSheet(data: data),
             ),
           if (_can('exams.marks'))
             _ModuleAction(
               label: 'Marks',
               icon: Icons.assignment_turned_in_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Enter Marks',
-                collectionName: 'marksEntries',
-                fields: const [
-                  _FieldSpec('studentId', 'Student ID', isRequired: true),
-                  _FieldSpec('studentName', 'Student name'),
-                  _FieldSpec('examName', 'Exam name'),
-                  _FieldSpec('subject', 'Subject', isRequired: true),
-                  _FieldSpec('marks', 'Marks', isRequired: true, numeric: true),
-                  _FieldSpec('maxMarks', 'Max marks', numeric: true),
-                ],
-              ),
+              onTap: () => _showMarksEntrySheet(data: data),
             ),
         ];
       case 'fees':
@@ -2627,6 +2608,1141 @@ class _ModuleScreenState extends State<ModuleScreen> {
     await _refresh();
   }
 
+  Widget _resultsParity(Map<String, List<Map<String, dynamic>>> data) {
+    final canSchedule = _can('exams.schedule');
+    final canAssess = _can('exams.assessments');
+    final canEnterMarks = _can('exams.marks');
+    final canGenerateResults = _can('exams.results');
+    final canGenerateReportCards = _can('exams.reportCards');
+    final students = _examStudents(data);
+    final schedules = _examScopedSchedules(data);
+    final marks = _examScopedRecords(_items(data, 'marks'), students)
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'studentName',
+            'studentId',
+            'subject',
+            'examName',
+            'classKey',
+          ]),
+        )
+        .toList();
+    final results = _examScopedRecords(_items(data, 'results'), students);
+    final reportCards = _examScopedRecords(
+      _items(data, 'reportCards'),
+      students,
+    );
+    final assessments = _items(data, 'assessments');
+    final filteredSchedules = schedules
+        .where(
+          (item) => containsQuery(item, _query, const [
+            'examName',
+            'subject',
+            'className',
+            'classKey',
+            'facultyName',
+            'examType',
+          ]),
+        )
+        .toList();
+    final selectedSchedule = _examSelectedSchedule(data);
+    final selectedScheduleMarks = selectedSchedule == null
+        ? const <Map<String, dynamic>>[]
+        : marks
+              .where(
+                (mark) =>
+                    readText(mark, const ['examScheduleId'], fallback: '') ==
+                    readText(selectedSchedule, const ['id'], fallback: ''),
+              )
+              .toList();
+    final marksCompletion = schedules.isNotEmpty && students.isNotEmpty
+        ? ((marks.length / (schedules.length * students.length)) * 100).round()
+        : 0;
+    final passCount = results
+        .where((item) => readText(item, const ['status']) == 'Pass')
+        .length;
+    final needsImprovement = results
+        .where(
+          (item) => readText(item, const ['status']) == 'Needs Improvement',
+        )
+        .length;
+    final pendingCount = (students.length - results.length).clamp(0, 1 << 30);
+    final activeBranchTitle = _examBranchTitle(_examBranch);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8357C5).withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.assignment_turned_in_rounded,
+                  color: Color(0xFF8357C5),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Academics / Examination & Result Management',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _examTask.isEmpty
+                          ? 'Examination & Result Management'
+                          : activeBranchTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Exam scheduling, marks, results, and report cards.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Schedules',
+              schedules.length.toString(),
+              Icons.event_note_rounded,
+              AppColors.primary,
+            ),
+            _Stat(
+              'Marks',
+              marks.length.toString(),
+              Icons.assignment_turned_in_rounded,
+              const Color(0xFF8357C5),
+            ),
+            _Stat(
+              'Results',
+              results.length.toString(),
+              Icons.emoji_events_rounded,
+              AppColors.accent,
+            ),
+          ],
+        ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: _examTask.isEmpty
+              ? Column(
+                  key: const ValueKey('exam-home'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SectionTitle('Exam Readiness'),
+                    InfoCard(
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: LabelValue(
+                                  label: 'Marks Completion',
+                                  value: '$marksCompletion%',
+                                ),
+                              ),
+                              Expanded(
+                                child: LabelValue(
+                                  label: 'Report Cards',
+                                  value: reportCards.length.toString(),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: LabelValue(
+                                  label: 'Pass',
+                                  value: passCount.toString(),
+                                ),
+                              ),
+                              Expanded(
+                                child: LabelValue(
+                                  label: 'Needs Improvement',
+                                  value: needsImprovement.toString(),
+                                ),
+                              ),
+                              Expanded(
+                                child: LabelValue(
+                                  label: 'Pending',
+                                  value: pendingCount.toString(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SectionTitle('Exam Desk Workflow'),
+                    _AttendanceTaskCard(
+                      title: 'Exam Schedules',
+                      description: 'Create and review exam schedules.',
+                      icon: Icons.assignment_rounded,
+                      meta:
+                          '${schedules.length} schedules / ${canSchedule ? 'Schedule enabled' : 'View only'}',
+                      enabled: true,
+                      onTap: () => _openExamTask('schedules'),
+                    ),
+                    const SizedBox(height: 10),
+                    _AttendanceTaskCard(
+                      title: 'Marks Entry',
+                      description: 'Enter and review student marks.',
+                      icon: Icons.school_rounded,
+                      meta:
+                          '${marks.length} entries / ${canEnterMarks ? 'Entry enabled' : 'View only'}',
+                      enabled: true,
+                      onTap: () => _openExamTask('marks'),
+                    ),
+                    const SizedBox(height: 10),
+                    _AttendanceTaskCard(
+                      title: 'Results & Cards',
+                      description: 'Generate results and report cards.',
+                      icon: Icons.description_rounded,
+                      meta:
+                          '${results.length} results / ${reportCards.length} cards',
+                      enabled: true,
+                      onTap: () => _openExamTask('results'),
+                    ),
+                  ],
+                )
+              : _examBranch.isEmpty
+              ? Column(
+                  key: ValueKey('exam-branches-$_examTask'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _BackActionButton(onPressed: _backExamStep),
+                    const SectionTitle('Choose Next Step'),
+                    ..._examBranchCards(
+                      data: data,
+                      canSchedule: canSchedule,
+                      canAssess: canAssess,
+                      canEnterMarks: canEnterMarks,
+                      canGenerateResults: canGenerateResults,
+                      canGenerateReportCards: canGenerateReportCards,
+                    ),
+                  ],
+                )
+              : Column(
+                  key: ValueKey('exam-branch-$_examBranch'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _BackActionButton(onPressed: _backExamStep),
+                    InfoCard(
+                      child: Row(
+                        children: [
+                          Container(
+                            height: 48,
+                            width: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.13),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              _examBranchIcon(_examBranch),
+                              color: AppColors.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  activeBranchTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _examBranchHelper(_examBranch),
+                                  style: const TextStyle(
+                                    color: AppColors.muted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_examBranch == 'internal-assessment' ||
+                        _examBranch == 'generate-results' ||
+                        _examBranch == 'report-cards') ...[
+                      const SectionTitle('Results & Cards'),
+                      _ExamResultsPanel(
+                        marks: marks,
+                        results: results,
+                        reportCards: reportCards,
+                        assessments: assessments,
+                      ),
+                      const SizedBox(height: 12),
+                      if (_examBranch == 'internal-assessment')
+                        PrimaryActionButton(
+                          label: 'Create Assessment',
+                          icon: Icons.note_add_rounded,
+                          onPressed: canAssess
+                              ? () => _showAssessmentSheet(data: data)
+                              : null,
+                        ),
+                      if (_examBranch == 'generate-results')
+                        PrimaryActionButton(
+                          label: 'Generate Results',
+                          icon: Icons.auto_awesome_rounded,
+                          onPressed: canGenerateResults
+                              ? () => _showResultNameSheet(data: data)
+                              : null,
+                        ),
+                      if (_examBranch == 'report-cards')
+                        PrimaryActionButton(
+                          label: 'Generate Report Cards',
+                          icon: Icons.feed_rounded,
+                          onPressed: canGenerateReportCards
+                              ? () => _generateReportCards(data)
+                              : null,
+                        ),
+                    ] else ...[
+                      if (_examBranch == 'create-schedule' && canSchedule) ...[
+                        const SizedBox(height: 12),
+                        PrimaryActionButton(
+                          label: 'Open Form',
+                          icon: Icons.add_rounded,
+                          onPressed: () => _showExamScheduleSheet(data: data),
+                        ),
+                      ],
+                      if (_examBranch == 'enter-marks' && canEnterMarks) ...[
+                        const SizedBox(height: 12),
+                        PrimaryActionButton(
+                          label: 'Open Marks Entry',
+                          icon: Icons.assignment_turned_in_rounded,
+                          onPressed: () => _showMarksEntrySheet(
+                            data: data,
+                            schedule: selectedSchedule,
+                          ),
+                        ),
+                      ],
+                      const SectionTitle('Exam Schedules'),
+                      if (filteredSchedules.isEmpty)
+                        const EmptyState(
+                          title: 'No exam schedules found',
+                          message:
+                              'Create schedules before entering marks or generating results.',
+                        )
+                      else
+                        ...filteredSchedules.map(
+                          (schedule) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _ExamScheduleCard(
+                              schedule: schedule,
+                              selected:
+                                  readText(schedule, const [
+                                    'id',
+                                  ], fallback: '') ==
+                                  _examSelectedScheduleId,
+                              onTap: () => setState(
+                                () => _examSelectedScheduleId = readText(
+                                  schedule,
+                                  const ['id'],
+                                  fallback: '',
+                                ),
+                              ),
+                              canEdit: canSchedule,
+                              onEdit: () => _showExamScheduleSheet(
+                                data: data,
+                                schedule: schedule,
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SectionTitle('Exam Details'),
+                      if (selectedSchedule == null)
+                        const EmptyState(
+                          title: 'No schedule selected',
+                          message:
+                              'Tap an exam schedule to review details and related actions.',
+                        )
+                      else
+                        _ExamScheduleDetail(
+                          schedule: selectedSchedule,
+                          markCount: selectedScheduleMarks.length,
+                          canEdit: canSchedule,
+                          canEnterMarks: canEnterMarks,
+                          onEdit: () => _showExamScheduleSheet(
+                            data: data,
+                            schedule: selectedSchedule,
+                          ),
+                          onMarks: () => _showMarksEntrySheet(
+                            data: data,
+                            schedule: selectedSchedule,
+                          ),
+                        ),
+                      const SectionTitle('Recent Marks'),
+                      _MarksTable(marks: marks),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _examBranchCards({
+    required Map<String, List<Map<String, dynamic>>> data,
+    required bool canSchedule,
+    required bool canAssess,
+    required bool canEnterMarks,
+    required bool canGenerateResults,
+    required bool canGenerateReportCards,
+  }) {
+    final cards = <Widget>[];
+    void add({
+      required String id,
+      required String title,
+      required String description,
+      required IconData icon,
+      required bool enabled,
+      VoidCallback? afterOpen,
+    }) {
+      cards.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _AttendanceTaskCard(
+            title: title,
+            description: enabled ? description : 'Not available right now.',
+            icon: icon,
+            meta: enabled ? 'Open' : 'Restricted',
+            enabled: enabled,
+            onTap: () {
+              _openExamBranch(id);
+              afterOpen?.call();
+            },
+          ),
+        ),
+      );
+    }
+
+    if (_examTask == 'schedules') {
+      add(
+        id: 'create-schedule',
+        title: 'Create Schedule',
+        description: 'Open a new exam schedule form.',
+        icon: Icons.add_rounded,
+        enabled: canSchedule,
+        afterOpen: canSchedule
+            ? () => _showExamScheduleSheet(data: data)
+            : null,
+      );
+      add(
+        id: 'review-schedules',
+        title: 'Review Schedules',
+        description: 'Select an exam schedule to view or edit.',
+        icon: Icons.assignment_rounded,
+        enabled: true,
+      );
+    } else if (_examTask == 'marks') {
+      add(
+        id: 'enter-marks',
+        title: 'Enter Marks',
+        description: 'Open marks entry, or select a schedule first.',
+        icon: Icons.school_rounded,
+        enabled: canEnterMarks,
+        afterOpen: canEnterMarks
+            ? () => _showMarksEntrySheet(data: data)
+            : null,
+      );
+      add(
+        id: 'review-marks',
+        title: 'Review Marks',
+        description: 'Select a schedule to review entered marks.',
+        icon: Icons.search_rounded,
+        enabled: true,
+      );
+      add(
+        id: 'internal-assessment',
+        title: 'Internal Assessment',
+        description: 'Create an internal assessment from an exam schedule.',
+        icon: Icons.note_add_rounded,
+        enabled: canAssess,
+      );
+    } else {
+      add(
+        id: 'generate-results',
+        title: 'Generate Results',
+        description: 'Generate combined student results.',
+        icon: Icons.auto_awesome_rounded,
+        enabled: canGenerateResults,
+      );
+      add(
+        id: 'report-cards',
+        title: 'Report Cards',
+        description: 'Generate and review report cards.',
+        icon: Icons.feed_rounded,
+        enabled: canGenerateReportCards,
+      );
+    }
+    return cards;
+  }
+
+  void _openExamTask(String task) {
+    setState(() {
+      _examTask = task;
+      _examBranch = '';
+      _examSelectedScheduleId = '';
+    });
+  }
+
+  void _openExamBranch(String branch) {
+    setState(() {
+      _examBranch = branch;
+      _examSelectedScheduleId = '';
+    });
+  }
+
+  void _backExamStep() {
+    setState(() {
+      if (_examBranch.isNotEmpty) {
+        _examBranch = '';
+        _examSelectedScheduleId = '';
+      } else {
+        _examTask = '';
+        _examSelectedScheduleId = '';
+      }
+    });
+  }
+
+  String _examBranchTitle(String branch) {
+    switch (branch) {
+      case 'create-schedule':
+        return 'Create Schedule';
+      case 'review-schedules':
+        return 'Review Schedules';
+      case 'enter-marks':
+        return 'Enter Marks';
+      case 'review-marks':
+        return 'Review Marks';
+      case 'internal-assessment':
+        return 'Internal Assessment';
+      case 'generate-results':
+        return 'Generate Results';
+      case 'report-cards':
+        return 'Report Cards';
+      default:
+        return _examTask == 'marks'
+            ? 'Marks Entry'
+            : _examTask == 'results'
+            ? 'Results & Cards'
+            : 'Exam Schedules';
+    }
+  }
+
+  String _examBranchHelper(String branch) {
+    switch (branch) {
+      case 'create-schedule':
+        return 'Create subject-wise exam schedules for a class.';
+      case 'review-schedules':
+        return 'Select an exam schedule to inspect or edit.';
+      case 'enter-marks':
+        return 'Enter marks for a scheduled exam.';
+      case 'review-marks':
+        return 'Review marks by selecting a schedule.';
+      case 'internal-assessment':
+        return 'Create an assessment from a live schedule.';
+      case 'generate-results':
+        return 'Generate combined student results from marks.';
+      case 'report-cards':
+        return 'Generate report card records from results.';
+      default:
+        return 'Choose the next exam workflow step.';
+    }
+  }
+
+  IconData _examBranchIcon(String branch) {
+    switch (branch) {
+      case 'create-schedule':
+        return Icons.add_rounded;
+      case 'review-schedules':
+        return Icons.assignment_rounded;
+      case 'enter-marks':
+      case 'review-marks':
+        return Icons.school_rounded;
+      case 'internal-assessment':
+        return Icons.note_add_rounded;
+      case 'generate-results':
+        return Icons.auto_awesome_rounded;
+      case 'report-cards':
+        return Icons.feed_rounded;
+      default:
+        return Icons.assignment_turned_in_rounded;
+    }
+  }
+
+  List<Map<String, dynamic>> _examStudents(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'students')
+        .where(
+          (student) =>
+              readText(student, const ['status'], fallback: '').toLowerCase() !=
+              'archived',
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _examFaculty(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'staff')
+        .where(
+          (member) =>
+              readText(member, const ['staffType'], fallback: '') ==
+                  'Faculty' &&
+              readText(member, const ['status'], fallback: '').toLowerCase() !=
+                  'archived',
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _examScopedSchedules(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final schedules = _items(data, 'schedules');
+    if (!widget.user.isParent) return schedules;
+    final students = _examStudents(data);
+    final courseCodes = students
+        .map((student) => readText(student, const ['courseCode'], fallback: ''))
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final classKeys = students.map(_timetableClassKey).toSet();
+    return schedules.where((schedule) {
+      final courseCode = readText(schedule, const ['courseCode'], fallback: '');
+      final classKey = readText(schedule, const ['classKey'], fallback: '');
+      return (courseCode.isNotEmpty && courseCodes.contains(courseCode)) ||
+          (classKey.isNotEmpty && classKeys.contains(classKey));
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _examScopedRecords(
+    List<Map<String, dynamic>> records,
+    List<Map<String, dynamic>> students,
+  ) {
+    if (!widget.user.isParent) return records;
+    final recordIds = students
+        .map((student) => readText(student, const ['id'], fallback: ''))
+        .toSet();
+    final studentIds = students
+        .map((student) => readText(student, const ['studentId'], fallback: ''))
+        .toSet();
+    return records.where((record) {
+      final recordStudentId = readText(record, const [
+        'studentId',
+        'entityId',
+      ], fallback: '');
+      final recordStudentRecordId = readText(record, const [
+        'studentRecordId',
+        'entityRecordId',
+      ], fallback: '');
+      return studentIds.contains(recordStudentId) ||
+          recordIds.contains(recordStudentRecordId);
+    }).toList();
+  }
+
+  Map<String, dynamic>? _examSelectedSchedule(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    if (_examSelectedScheduleId.isEmpty) return null;
+    for (final schedule in _examScopedSchedules(data)) {
+      if (readText(schedule, const ['id'], fallback: '') ==
+          _examSelectedScheduleId) {
+        return schedule;
+      }
+    }
+    return null;
+  }
+
+  int _examPercentage(num obtained, num maximum) {
+    if (maximum <= 0) return 0;
+    return ((obtained / maximum) * 100).round();
+  }
+
+  String _examGrade(num percentage) {
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B+';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 50) return 'C';
+    if (percentage >= 40) return 'D';
+    return 'F';
+  }
+
+  String _examResultStatus(num percentage) =>
+      percentage >= 40 ? 'Pass' : 'Needs Improvement';
+
+  _ExamMarkSummary _summarizeExamMarks(List<Map<String, dynamic>> marks) {
+    final totalObtained = marks.fold<num>(
+      0,
+      (total, item) =>
+          total +
+          readNumber(item, const ['marksObtained', 'marks'], fallback: 0),
+    );
+    final totalMax = marks.fold<num>(
+      0,
+      (total, item) =>
+          total + readNumber(item, const ['maxMarks'], fallback: 0),
+    );
+    final percentage = _examPercentage(totalObtained, totalMax);
+    return _ExamMarkSummary(
+      totalObtained: totalObtained,
+      totalMax: totalMax,
+      percentage: percentage,
+      grade: _examGrade(percentage),
+      status: _examResultStatus(percentage),
+    );
+  }
+
+  Future<void> _showExamScheduleSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? schedule,
+  }) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ExamScheduleSheet(
+        initialValues: schedule,
+        classOptions: _timetableClassOptions(data),
+        faculty: _examFaculty(data),
+        isEdit: schedule != null,
+        onSave: (form) async {
+          final validation = _validateExamSchedule(form);
+          if (validation.isNotEmpty) throw ArgumentError(validation);
+          final payload = _buildExamSchedulePayload(data, form);
+          final id = readText(schedule ?? const {}, const ['id'], fallback: '');
+          if (schedule == null) {
+            if (!_can('exams.schedule')) {
+              throw StateError('You do not have permission to schedule exams.');
+            }
+            await widget.repository.createDocument('examSchedules', {
+              ...payload,
+              if (_academicYear.trim().isNotEmpty)
+                'academicYear': _academicYear.trim(),
+              'createdAtText': _displayDateNow(),
+              'createdBy': widget.user.uid,
+            });
+          } else {
+            if (!_can('exams.schedule')) {
+              throw StateError('You do not have permission to edit exams.');
+            }
+            await widget.repository.updateDocument('examSchedules', id, {
+              ...payload,
+              'updatedAtText': _displayDateNow(),
+            });
+          }
+        },
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(schedule == null ? 'Exam scheduled' : 'Exam updated'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  String _validateExamSchedule(Map<String, dynamic> form) {
+    for (final required in const [
+      ['examName', 'Exam name'],
+      ['classKey', 'Class'],
+      ['subject', 'Subject'],
+      ['examDate', 'Exam date'],
+      ['maxMarks', 'Max marks'],
+    ]) {
+      if (readText(form, [required[0]], fallback: '').trim().isEmpty) {
+        return '${required[1]} is required.';
+      }
+    }
+    if (readNumber(form, const ['maxMarks']) <= 0) {
+      return 'Max marks must be greater than zero.';
+    }
+    return '';
+  }
+
+  Map<String, dynamic> _buildExamSchedulePayload(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> form,
+  ) {
+    final faculty = _examFaculty(data);
+    final facultyMember = faculty.cast<Map<String, dynamic>?>().firstWhere(
+      (member) =>
+          member != null &&
+          readText(member, const ['id'], fallback: '') ==
+              readText(form, const ['facultyId'], fallback: ''),
+      orElse: () => null,
+    );
+    final classStudent = _items(data, 'students')
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (student) =>
+              student != null &&
+              _timetableClassKey(student) ==
+                  readText(form, const ['classKey'], fallback: ''),
+          orElse: () => null,
+        );
+    return {
+      ...form,
+      'examName': readText(form, const ['examName'], fallback: '').trim(),
+      'subject': readText(form, const ['subject'], fallback: '').trim(),
+      'maxMarks': readNumber(form, const ['maxMarks'], fallback: 0),
+      'durationMinutes': readNumber(form, const [
+        'durationMinutes',
+      ], fallback: 0),
+      'roomNo': readText(form, const ['roomNo'], fallback: '').trim(),
+      'facultyName': facultyMember == null
+          ? ''
+          : readText(facultyMember, const ['name'], fallback: ''),
+      'courseCode': classStudent == null
+          ? readText(form, const ['courseCode'], fallback: '')
+          : readText(classStudent, const ['courseCode'], fallback: ''),
+      'courseName': classStudent == null
+          ? readText(form, const ['courseName'], fallback: '')
+          : readText(classStudent, const [
+              'courseName',
+              'program',
+            ], fallback: ''),
+      'status': readText(form, const ['status'], fallback: 'Scheduled'),
+    };
+  }
+
+  Future<void> _showMarksEntrySheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? schedule,
+  }) async {
+    final schedules = _examScopedSchedules(data);
+    final students = _examStudents(data);
+    if (schedules.isEmpty || students.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Create exam schedules and students before marks entry.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _MarksEntrySheet(
+        schedules: schedules,
+        students: students,
+        initialScheduleId: readText(schedule ?? const {}, const [
+          'id',
+        ], fallback: ''),
+        onSave: (form) async {
+          if (!_can('exams.marks')) {
+            throw StateError('You do not have permission to enter marks.');
+          }
+          final selectedSchedule = schedules.firstWhere(
+            (item) =>
+                readText(item, const ['id'], fallback: '') ==
+                readText(form, const ['examScheduleId'], fallback: ''),
+          );
+          final student = students.firstWhere(
+            (item) =>
+                readText(item, const ['id'], fallback: '') ==
+                readText(form, const ['studentRecordId'], fallback: ''),
+          );
+          final maxMarks = readNumber(selectedSchedule, const ['maxMarks']);
+          final marksObtained = readNumber(form, const [
+            'marksObtained',
+          ], fallback: -1);
+          final validation = _validateMarksEntry(
+            form,
+            maxMarks: maxMarks,
+            marksObtained: marksObtained,
+          );
+          if (validation.isNotEmpty) throw ArgumentError(validation);
+          final percentage = _examPercentage(marksObtained, maxMarks);
+          final payload = {
+            'examScheduleId': readText(selectedSchedule, const ['id']),
+            'studentRecordId': readText(student, const ['id']),
+            'studentId': readText(student, const ['studentId']),
+            'studentName': readText(student, const ['name']),
+            'classKey': readText(selectedSchedule, const ['classKey']),
+            'subject': readText(selectedSchedule, const ['subject']),
+            if (_academicYear.trim().isNotEmpty)
+              'academicYear': _academicYear.trim(),
+            'marksObtained': marksObtained,
+            'maxMarks': maxMarks,
+            'percentage': percentage,
+            'grade': _examGrade(percentage),
+            'status': 'Entered',
+            'enteredAtText': _displayDateNow(),
+            'enteredBy': widget.user.uid,
+          };
+          final existing = _items(data, 'marks').firstWhere(
+            (item) =>
+                readText(item, const ['examScheduleId'], fallback: '') ==
+                    payload['examScheduleId'] &&
+                readText(item, const ['studentRecordId'], fallback: '') ==
+                    payload['studentRecordId'],
+            orElse: () => const <String, dynamic>{},
+          );
+          final existingId = readText(existing, const ['id'], fallback: '');
+          if (existingId.isEmpty) {
+            await widget.repository.createDocument('marksEntries', payload);
+          } else {
+            await widget.repository.updateDocument(
+              'marksEntries',
+              existingId,
+              payload,
+            );
+          }
+        },
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Marks saved'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  String _validateMarksEntry(
+    Map<String, dynamic> form, {
+    required num maxMarks,
+    required num marksObtained,
+  }) {
+    if (readText(form, const ['studentRecordId'], fallback: '').isEmpty) {
+      return 'Student is required.';
+    }
+    if (readText(form, const ['examScheduleId'], fallback: '').isEmpty) {
+      return 'Exam schedule is required.';
+    }
+    if (marksObtained < 0) return 'Marks cannot be negative.';
+    if (marksObtained > maxMarks) return 'Marks cannot exceed max marks.';
+    return '';
+  }
+
+  Future<void> _showAssessmentSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+  }) async {
+    final schedules = _examScopedSchedules(data);
+    if (schedules.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Create an exam schedule before assessments.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _AssessmentSheet(
+        schedules: schedules,
+        onSave: (form) async {
+          if (!_can('exams.assessments')) {
+            throw StateError(
+              'You do not have permission to manage assessments.',
+            );
+          }
+          final base = schedules.firstWhere(
+            (item) =>
+                readText(item, const ['id'], fallback: '') ==
+                readText(form, const ['examScheduleId'], fallback: ''),
+          );
+          final title = readText(form, const ['title'], fallback: '').trim();
+          final maxMarks = readNumber(form, const ['maxMarks']);
+          if (title.isEmpty) {
+            throw ArgumentError('Assessment title is required.');
+          }
+          if (maxMarks < 1) {
+            throw ArgumentError('Max marks must be at least 1.');
+          }
+          await widget.repository.createDocument('internalAssessments', {
+            'examScheduleId': readText(base, const ['id']),
+            'title': title,
+            'classKey': readText(base, const ['classKey']),
+            'subject': readText(base, const ['subject']),
+            'maxMarks': maxMarks,
+            'status': readText(form, const ['status'], fallback: 'Active'),
+            if (_academicYear.trim().isNotEmpty)
+              'academicYear': _academicYear.trim(),
+            'createdAtText': _displayDateNow(),
+            'createdBy': widget.user.uid,
+          });
+        },
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Assessment created'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  Future<void> _showResultNameSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+  }) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) =>
+          _ResultNameSheet(onSave: (name) => _generateResults(data, name)),
+    );
+    if (!mounted) return;
+    if (saved == true) await _refresh();
+  }
+
+  Future<void> _generateResults(
+    Map<String, List<Map<String, dynamic>>> data,
+    String resultName,
+  ) async {
+    if (!_can('exams.results')) {
+      throw StateError('You do not have permission to generate results.');
+    }
+    final examName = resultName.trim();
+    if (examName.isEmpty) throw ArgumentError('Result name is required.');
+    final students = _examStudents(data);
+    final marks = _examScopedRecords(_items(data, 'marks'), students);
+    final generated = <Map<String, dynamic>>[];
+    for (final student in students) {
+      final studentRecordId = readText(student, const ['id']);
+      final studentMarks = marks
+          .where(
+            (mark) =>
+                readText(mark, const ['studentRecordId'], fallback: '') ==
+                    studentRecordId ||
+                readText(mark, const ['studentId'], fallback: '') ==
+                    readText(student, const ['studentId']),
+          )
+          .toList();
+      final summary = _summarizeExamMarks(studentMarks);
+      if (summary.totalMax <= 0) continue;
+      generated.add({
+        'studentRecordId': studentRecordId,
+        'studentId': readText(student, const ['studentId']),
+        'studentName': readText(student, const ['name']),
+        'classKey': _timetableClassKey(student),
+        'examName': examName,
+        if (_academicYear.trim().isNotEmpty)
+          'academicYear': _academicYear.trim(),
+        'totalObtained': summary.totalObtained,
+        'totalMax': summary.totalMax,
+        'percentage': summary.percentage,
+        'grade': summary.grade,
+        'status': summary.status,
+        'generatedAtText': _displayDateNow(),
+        'generatedBy': widget.user.uid,
+      });
+    }
+    if (generated.isEmpty) {
+      throw StateError('No marks are available for generating results.');
+    }
+    for (final result in generated) {
+      await widget.repository.createDocument('studentResults', result);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Results generated'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _generateReportCards(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('exams.reportCards')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to generate report cards.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final students = _examStudents(data);
+    final results = _examScopedRecords(_items(data, 'results'), students);
+    if (results.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Generate results before report cards.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    for (final result in results) {
+      await widget.repository.createDocument('reportCards', {
+        'studentRecordId': readText(result, const ['studentRecordId']),
+        'studentId': readText(result, const ['studentId']),
+        'examName': readText(result, const ['examName']),
+        if (_academicYear.trim().isNotEmpty)
+          'academicYear': _academicYear.trim(),
+        'status': 'Generated',
+        'generatedAtText': _displayDateNow(),
+        'generatedBy': widget.user.uid,
+      });
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Report cards generated'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  // ignore: unused_element
   Widget _results(Map<String, List<Map<String, dynamic>>> data) {
     final marks = _items(data, 'marks')
         .where(
@@ -6032,6 +7148,22 @@ class _TimetableSlotParts {
   final String endTime;
 }
 
+class _ExamMarkSummary {
+  const _ExamMarkSummary({
+    required this.totalObtained,
+    required this.totalMax,
+    required this.percentage,
+    required this.grade,
+    required this.status,
+  });
+
+  final num totalObtained;
+  final num totalMax;
+  final int percentage;
+  final String grade;
+  final String status;
+}
+
 class _SegmentedFilter extends StatelessWidget {
   const _SegmentedFilter({
     required this.value,
@@ -7049,6 +8181,928 @@ class _TimetableEntrySheetState extends State<_TimetableEntrySheet> {
   }
 }
 
+class _ExamScheduleCard extends StatelessWidget {
+  const _ExamScheduleCard({
+    required this.schedule,
+    required this.selected,
+    required this.onTap,
+    required this.canEdit,
+    required this.onEdit,
+  });
+
+  final Map<String, dynamic> schedule;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool canEdit;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: selected ? AppColors.primary : Colors.transparent,
+          width: selected ? 1.5 : 0,
+        ),
+      ),
+      child: InfoCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            _Avatar(
+              label: readText(schedule, const ['examName'], fallback: 'E'),
+              color: const Color(0xFF8357C5),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    readText(schedule, const ['examName'], fallback: 'Exam'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${readText(schedule, const ['classKey', 'className'], fallback: 'Class')} / ${readText(schedule, const ['subject'], fallback: 'Subject')}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${readText(schedule, const ['examDate'], fallback: '-')} / Max ${readText(schedule, const ['maxMarks'], fallback: '-')}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            StatusPill(
+              label: readText(schedule, const [
+                'status',
+              ], fallback: 'Scheduled'),
+            ),
+            if (canEdit)
+              IconButton(
+                tooltip: 'Edit schedule',
+                icon: const Icon(Icons.edit_rounded, size: 19),
+                onPressed: onEdit,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExamScheduleDetail extends StatelessWidget {
+  const _ExamScheduleDetail({
+    required this.schedule,
+    required this.markCount,
+    required this.canEdit,
+    required this.canEnterMarks,
+    required this.onEdit,
+    required this.onMarks,
+  });
+
+  final Map<String, dynamic> schedule;
+  final int markCount;
+  final bool canEdit;
+  final bool canEnterMarks;
+  final VoidCallback onEdit;
+  final VoidCallback onMarks;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            readText(schedule, const ['examName'], fallback: 'Exam'),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${readText(schedule, const ['classKey', 'className'], fallback: 'Class')} / ${readText(schedule, const ['subject'], fallback: 'Subject')}',
+            style: const TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Date',
+                  value: readText(schedule, const ['examDate'], fallback: '-'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Max Marks',
+                  value: readText(schedule, const ['maxMarks'], fallback: '-'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Faculty',
+                  value: readText(schedule, const [
+                    'facultyName',
+                  ], fallback: '-'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(label: 'Marks', value: markCount.toString()),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: canEdit ? onEdit : null,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canEnterMarks ? onMarks : null,
+                  icon: const Icon(
+                    Icons.assignment_turned_in_rounded,
+                    size: 18,
+                  ),
+                  label: const Text('Marks'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamResultsPanel extends StatelessWidget {
+  const _ExamResultsPanel({
+    required this.marks,
+    required this.results,
+    required this.reportCards,
+    required this.assessments,
+  });
+
+  final List<Map<String, dynamic>> marks;
+  final List<Map<String, dynamic>> results;
+  final List<Map<String, dynamic>> reportCards;
+  final List<Map<String, dynamic>> assessments;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _panel('Recent Marks', marks, (item) {
+          return _CompactRow(
+            title: readText(item, const ['studentName'], fallback: 'Student'),
+            subtitle:
+                '${readText(item, const ['subject'], fallback: 'Subject')}: ${readText(item, const ['marksObtained', 'marks'], fallback: '-')}/${readText(item, const ['maxMarks'], fallback: '-')}',
+            trailing: StatusPill(
+              label: readText(item, const ['grade'], fallback: '-'),
+            ),
+          );
+        }, 'No marks entered.'),
+        _panel('Generated Results', results, (item) {
+          return _CompactRow(
+            title: readText(item, const ['studentName'], fallback: 'Student'),
+            subtitle:
+                '${readText(item, const ['percentage'], fallback: '0')}% / ${readText(item, const ['grade'], fallback: '-')}',
+            trailing: StatusPill(
+              label: readText(item, const ['status'], fallback: 'Result'),
+            ),
+          );
+        }, 'No results generated.'),
+        _panel('Report Cards', reportCards, (item) {
+          return _CompactRow(
+            title: readText(item, const ['studentId'], fallback: 'Student'),
+            subtitle: readText(item, const [
+              'examName',
+            ], fallback: 'Report card'),
+            trailing: StatusPill(
+              label: readText(item, const ['status'], fallback: 'Generated'),
+            ),
+          );
+        }, 'No report cards generated.'),
+        _panel('Internal Assessments', assessments, (item) {
+          return _CompactRow(
+            title: readText(item, const ['title'], fallback: 'Assessment'),
+            subtitle:
+                '${readText(item, const ['subject'], fallback: 'Subject')} / Max ${readText(item, const ['maxMarks'], fallback: '-')}',
+            trailing: StatusPill(
+              label: readText(item, const ['status'], fallback: 'Active'),
+            ),
+          );
+        }, 'No assessments created.'),
+      ],
+    );
+  }
+
+  Widget _panel(
+    String title,
+    List<Map<String, dynamic>> items,
+    Widget Function(Map<String, dynamic> item) builder,
+    String empty,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InfoCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 10),
+            if (items.isEmpty)
+              Text(
+                empty,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              )
+            else
+              ...items
+                  .take(5)
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: builder(item),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExamScheduleSheet extends StatefulWidget {
+  const _ExamScheduleSheet({
+    required this.initialValues,
+    required this.classOptions,
+    required this.faculty,
+    required this.isEdit,
+    required this.onSave,
+  });
+
+  final Map<String, dynamic>? initialValues;
+  final List<String> classOptions;
+  final List<Map<String, dynamic>> faculty;
+  final bool isEdit;
+  final Future<void> Function(Map<String, dynamic> form) onSave;
+
+  @override
+  State<_ExamScheduleSheet> createState() => _ExamScheduleSheetState();
+}
+
+class _ExamScheduleSheetState extends State<_ExamScheduleSheet> {
+  late final TextEditingController _examNameController;
+  late final TextEditingController _classController;
+  late final TextEditingController _subjectController;
+  late final TextEditingController _examDateController;
+  late final TextEditingController _startTimeController;
+  late final TextEditingController _durationController;
+  late final TextEditingController _roomController;
+  late final TextEditingController _maxMarksController;
+  late final TextEditingController _facultyController;
+  late String _classKey;
+  late String _facultyId;
+  late String _examType;
+  late String _status;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialValues ?? const <String, dynamic>{};
+    _classKey = _initialString(
+      widget.classOptions,
+      readText(initial, const ['classKey'], fallback: ''),
+    );
+    _facultyId = _initialRecordId(
+      widget.faculty,
+      readText(initial, const ['facultyId'], fallback: ''),
+    );
+    _examType = readText(initial, const ['examType'], fallback: 'Written');
+    _status = readText(initial, const ['status'], fallback: 'Scheduled');
+    _examNameController = TextEditingController(
+      text: readText(initial, const [
+        'examName',
+      ], fallback: 'Mid Term Examination'),
+    );
+    _classController = TextEditingController(text: _classKey);
+    _subjectController = TextEditingController(
+      text: readText(initial, const ['subject'], fallback: ''),
+    );
+    _examDateController = TextEditingController(
+      text: readText(initial, const ['examDate'], fallback: ''),
+    );
+    _startTimeController = TextEditingController(
+      text: readText(initial, const ['startTime'], fallback: ''),
+    );
+    _durationController = TextEditingController(
+      text: readText(initial, const ['durationMinutes'], fallback: '180'),
+    );
+    _roomController = TextEditingController(
+      text: readText(initial, const ['roomNo'], fallback: ''),
+    );
+    _maxMarksController = TextEditingController(
+      text: readText(initial, const ['maxMarks'], fallback: '100'),
+    );
+    _facultyController = TextEditingController(text: _facultyId);
+  }
+
+  @override
+  void dispose() {
+    _examNameController.dispose();
+    _classController.dispose();
+    _subjectController.dispose();
+    _examDateController.dispose();
+    _startTimeController.dispose();
+    _durationController.dispose();
+    _roomController.dispose();
+    _maxMarksController.dispose();
+    _facultyController.dispose();
+    super.dispose();
+  }
+
+  String _initialString(List<String> options, String value) {
+    if (options.isEmpty) return value;
+    return options.contains(value) ? value : options.first;
+  }
+
+  String _initialRecordId(List<Map<String, dynamic>> items, String value) {
+    if (items.isEmpty) return value;
+    final ids = items
+        .map((item) => readText(item, const ['id'], fallback: ''))
+        .toList();
+    return ids.contains(value) ? value : ids.first;
+  }
+
+  Future<void> _save() async {
+    final form = {
+      'examName': _examNameController.text.trim(),
+      'classKey': widget.classOptions.isEmpty
+          ? _classController.text.trim()
+          : _classKey,
+      'subject': _subjectController.text.trim(),
+      'examType': _examType,
+      'examDate': _examDateController.text.trim(),
+      'startTime': _startTimeController.text.trim(),
+      'durationMinutes': _durationController.text.trim(),
+      'roomNo': _roomController.text.trim(),
+      'maxMarks': _maxMarksController.text.trim(),
+      'facultyId': widget.faculty.isEmpty
+          ? _facultyController.text.trim()
+          : _facultyId,
+      'status': _status,
+    };
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(form);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExamSheetChrome(
+      title: widget.isEdit ? 'Edit Exam Schedule' : 'Schedule Exam',
+      helper: 'Create subject-wise exam schedules for a class.',
+      saving: _saving,
+      error: _error,
+      saveLabel: widget.isEdit ? 'Save Changes' : 'Schedule Exam',
+      onSave: _save,
+      children: [
+        TextField(
+          controller: _examNameController,
+          decoration: const InputDecoration(labelText: 'Exam Name *'),
+        ),
+        const SizedBox(height: 10),
+        _classField(),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _subjectController,
+          decoration: const InputDecoration(labelText: 'Subject *'),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _examType,
+          decoration: const InputDecoration(labelText: 'Exam Type'),
+          items: const ['Written', 'Practical', 'Internal', 'Viva']
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) => setState(() => _examType = value ?? _examType),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _examDateController,
+          decoration: const InputDecoration(labelText: 'Exam Date *'),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _startTimeController,
+                decoration: const InputDecoration(labelText: 'Start Time'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _durationController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Duration Min'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _roomController,
+                decoration: const InputDecoration(labelText: 'Room / Hall'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _maxMarksController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Max Marks *'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _facultyField(),
+      ],
+    );
+  }
+
+  Widget _classField() {
+    if (widget.classOptions.isEmpty) {
+      return TextField(
+        controller: _classController,
+        decoration: const InputDecoration(labelText: 'Class *'),
+      );
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: _classKey,
+      decoration: const InputDecoration(labelText: 'Class *'),
+      items: widget.classOptions
+          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+          .toList(),
+      onChanged: (value) => setState(() => _classKey = value ?? _classKey),
+    );
+  }
+
+  Widget _facultyField() {
+    if (widget.faculty.isEmpty) {
+      return TextField(
+        controller: _facultyController,
+        decoration: const InputDecoration(labelText: 'Faculty ID'),
+      );
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: _facultyId,
+      decoration: const InputDecoration(labelText: 'Faculty'),
+      items: widget.faculty
+          .map(
+            (member) => DropdownMenuItem(
+              value: readText(member, const ['id'], fallback: ''),
+              child: Text(
+                readText(member, const ['name'], fallback: 'Faculty'),
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: (value) => setState(() => _facultyId = value ?? _facultyId),
+    );
+  }
+}
+
+class _MarksEntrySheet extends StatefulWidget {
+  const _MarksEntrySheet({
+    required this.schedules,
+    required this.students,
+    required this.initialScheduleId,
+    required this.onSave,
+  });
+
+  final List<Map<String, dynamic>> schedules;
+  final List<Map<String, dynamic>> students;
+  final String initialScheduleId;
+  final Future<void> Function(Map<String, dynamic> form) onSave;
+
+  @override
+  State<_MarksEntrySheet> createState() => _MarksEntrySheetState();
+}
+
+class _MarksEntrySheetState extends State<_MarksEntrySheet> {
+  late String _scheduleId;
+  late String _studentRecordId;
+  final _marksController = TextEditingController();
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final scheduleIds = widget.schedules
+        .map((item) => readText(item, const ['id'], fallback: ''))
+        .toList();
+    _scheduleId = scheduleIds.contains(widget.initialScheduleId)
+        ? widget.initialScheduleId
+        : scheduleIds.first;
+    _studentRecordId = readText(widget.students.first, const ['id']);
+  }
+
+  @override
+  void dispose() {
+    _marksController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'examScheduleId': _scheduleId,
+        'studentRecordId': _studentRecordId,
+        'marksObtained': _marksController.text.trim(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedSchedule = widget.schedules.firstWhere(
+      (item) => readText(item, const ['id'], fallback: '') == _scheduleId,
+    );
+    return _ExamSheetChrome(
+      title: 'Marks Entry',
+      helper: 'Enter student marks for scheduled exams.',
+      saving: _saving,
+      error: _error,
+      saveLabel: 'Save Marks',
+      onSave: _save,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _scheduleId,
+          decoration: const InputDecoration(labelText: 'Exam *'),
+          items: widget.schedules
+              .map(
+                (item) => DropdownMenuItem(
+                  value: readText(item, const ['id'], fallback: ''),
+                  child: Text(
+                    '${readText(item, const ['examName'])} / ${readText(item, const ['classKey'])} / ${readText(item, const ['subject'])}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) =>
+              setState(() => _scheduleId = value ?? _scheduleId),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _studentRecordId,
+          decoration: const InputDecoration(labelText: 'Student *'),
+          items: widget.students
+              .map(
+                (item) => DropdownMenuItem(
+                  value: readText(item, const ['id'], fallback: ''),
+                  child: Text(
+                    '${readText(item, const ['name'])} / ${readText(item, const ['studentId'])}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) =>
+              setState(() => _studentRecordId = value ?? _studentRecordId),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _marksController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText:
+                'Marks Obtained / ${readText(selectedSchedule, const ['maxMarks'], fallback: '0')}',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AssessmentSheet extends StatefulWidget {
+  const _AssessmentSheet({required this.schedules, required this.onSave});
+
+  final List<Map<String, dynamic>> schedules;
+  final Future<void> Function(Map<String, dynamic> form) onSave;
+
+  @override
+  State<_AssessmentSheet> createState() => _AssessmentSheetState();
+}
+
+class _AssessmentSheetState extends State<_AssessmentSheet> {
+  late String _scheduleId;
+  final _titleController = TextEditingController();
+  final _maxMarksController = TextEditingController();
+  var _status = 'Active';
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleId = readText(widget.schedules.first, const ['id']);
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _maxMarksController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'examScheduleId': _scheduleId,
+        'title': _titleController.text.trim(),
+        'maxMarks': _maxMarksController.text.trim(),
+        'status': _status,
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExamSheetChrome(
+      title: 'Create Assessment',
+      helper: 'Create an assessment from a live exam schedule.',
+      saving: _saving,
+      error: _error,
+      saveLabel: 'Save Assessment',
+      onSave: _save,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _scheduleId,
+          decoration: const InputDecoration(labelText: 'Exam Schedule *'),
+          items: widget.schedules
+              .map(
+                (item) => DropdownMenuItem(
+                  value: readText(item, const ['id'], fallback: ''),
+                  child: Text(
+                    '${readText(item, const ['examName'])} - ${readText(item, const ['subject'])}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) =>
+              setState(() => _scheduleId = value ?? _scheduleId),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _titleController,
+          decoration: const InputDecoration(labelText: 'Assessment Title *'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _maxMarksController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Max Marks *'),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _status,
+          decoration: const InputDecoration(labelText: 'Status'),
+          items: const ['Active', 'Draft', 'Archived']
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: (value) => setState(() => _status = value ?? _status),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResultNameSheet extends StatefulWidget {
+  const _ResultNameSheet({required this.onSave});
+
+  final Future<void> Function(String resultName) onSave;
+
+  @override
+  State<_ResultNameSheet> createState() => _ResultNameSheetState();
+}
+
+class _ResultNameSheetState extends State<_ResultNameSheet> {
+  final _nameController = TextEditingController();
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(_nameController.text.trim());
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExamSheetChrome(
+      title: 'Generate Results',
+      helper: 'Name this result set before saving it to live data.',
+      saving: _saving,
+      error: _error,
+      saveLabel: 'Generate',
+      onSave: _save,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Result Name *'),
+          autofocus: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _ExamSheetChrome extends StatelessWidget {
+  const _ExamSheetChrome({
+    required this.title,
+    required this.helper,
+    required this.children,
+    required this.saving,
+    required this.error,
+    required this.saveLabel,
+    required this.onSave,
+  });
+
+  final String title;
+  final String helper;
+  final List<Widget> children;
+  final bool saving;
+  final String error;
+  final String saveLabel;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                helper,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              ...children,
+              if (error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: saving ? null : onSave,
+                      icon: Icon(
+                        saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(saving ? 'Saving...' : saveLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _StudentCollectionSummary extends StatelessWidget {
   const _StudentCollectionSummary({
     required this.admissions,
@@ -7768,6 +9822,7 @@ class _MarksTable extends StatelessWidget {
           ],
           rows: marks.take(12).map((mark) {
             final score = readNumber(mark, const [
+              'marksObtained',
               'marks',
               'score',
               'securedMarks',
