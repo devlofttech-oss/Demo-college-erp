@@ -632,6 +632,17 @@ class _ModuleScreenState extends State<ModuleScreen> {
       byCode[code] = _StudentCourseOption(
         code,
         type.isEmpty ? name : '$name - $type',
+        courseName: name,
+        courseYear: readText(record, const [
+          'courseYear',
+          'className',
+        ], fallback: ''),
+        admissionType: readText(record, const [
+          'admissionType',
+          'section',
+        ], fallback: ''),
+        collegeName: readText(record, const ['collegeName'], fallback: ''),
+        collegeCode: readText(record, const ['collegeCode'], fallback: ''),
       );
     }
     return byCode.values.toList();
@@ -6929,7 +6940,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
           'academicYear': _academicYear.trim().isNotEmpty
               ? _academicYear.trim()
               : _defaultAcademicYear,
-          if (selectedCourse != null) 'courseCode': selectedCourse.courseCode,
+          if (selectedCourse != null) ...{
+            'courseCode': selectedCourse.courseCode,
+            'courseName': selectedCourse.courseName,
+            'courseYear': selectedCourse.courseYear,
+            'admissionType': selectedCourse.admissionType,
+            'collegeName': selectedCourse.collegeName,
+            'collegeCode': selectedCourse.collegeCode,
+          },
         },
         fields: _studentProfileFields(includeStatus: false),
         onSave: (values) async {
@@ -6949,6 +6967,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ? DateTime.now().year.toString()
               : selectedAcademicYear.replaceAll(RegExp(r'\D'), '');
           final normalized = _normalizedStudentProfile(values);
+          final validationMessage = _validateStudentProfile(normalized);
+          if (validationMessage.isNotEmpty) {
+            throw ArgumentError(validationMessage);
+          }
           final studentPayload = {
             ...normalized,
             'admissionNo': 'ADM-$yearToken-$nextNumber',
@@ -7051,8 +7073,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
               'Only Super Admin can approve or admit a student.',
             );
           }
+          final normalized = _normalizedStudentProfile(values);
+          final validationMessage = _validateStudentProfile(normalized);
+          if (validationMessage.isNotEmpty) {
+            throw ArgumentError(validationMessage);
+          }
           final updates = {
-            ..._normalizedStudentProfile(values),
+            ...normalized,
             'status': requestedStatus.isEmpty
                 ? _pendingAdmissionStatus
                 : requestedStatus,
@@ -7186,6 +7213,36 @@ class _ModuleScreenState extends State<ModuleScreen> {
       'section': admissionType,
       'admissionType': admissionType,
     };
+  }
+
+  String _validateStudentProfile(Map<String, dynamic> form) {
+    for (final field in const [
+      ['name', 'Student name'],
+      ['guardianName', 'Guardian name'],
+      ['idHolder', 'ID holder'],
+      ['phone', 'Phone'],
+      ['className', 'Class'],
+      ['section', 'Section'],
+      ['program', 'Program'],
+      ['academicYear', 'Academic year'],
+    ]) {
+      if (readText(form, [field.first], fallback: '').trim().isEmpty) {
+        return '${field.last} is required.';
+      }
+    }
+
+    final email = readText(form, const ['email'], fallback: '').trim();
+    if (email.isNotEmpty &&
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      return 'Enter a valid email address.';
+    }
+
+    final phone = readText(form, const ['phone'], fallback: '').trim();
+    if (!RegExp(r'^[0-9+\-\s()]{7,20}$').hasMatch(phone)) {
+      return 'Enter a valid phone number.';
+    }
+
+    return '';
   }
 
   Future<void> _approveStudentAdmission(
@@ -13382,10 +13439,23 @@ class _Stat {
 }
 
 class _StudentCourseOption {
-  const _StudentCourseOption(this.courseCode, this.label);
+  const _StudentCourseOption(
+    this.courseCode,
+    this.label, {
+    this.courseName = '',
+    this.courseYear = '',
+    this.admissionType = '',
+    this.collegeName = '',
+    this.collegeCode = '',
+  });
 
   final String courseCode;
   final String label;
+  final String courseName;
+  final String courseYear;
+  final String admissionType;
+  final String collegeName;
+  final String collegeCode;
 }
 
 class _AttendanceSubjectOption {
@@ -16651,6 +16721,7 @@ class _StudentDetailSheet extends StatefulWidget {
 
 class _StudentDetailSheetState extends State<_StudentDetailSheet> {
   var _tab = 0;
+  var _showAllDetails = false;
 
   @override
   Widget build(BuildContext context) {
@@ -16680,6 +16751,16 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
     );
     final documents = _related(
       widget.data['documents'] ?? const [],
+      studentId,
+      recordId,
+    );
+    final promotions = _related(
+      widget.data['promotions'] ?? const [],
+      studentId,
+      recordId,
+    );
+    final transfers = _related(
+      widget.data['transfers'] ?? const [],
       studentId,
       recordId,
     );
@@ -16803,14 +16884,14 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
           ),
           const SizedBox(height: 14),
           _Tabs(
-            labels: const [
-              'Profile',
-              'Attendance',
-              'Exams',
-              'Payment',
-              'Docs',
-              'Health',
-            ],
+            labels: _studentDetailTabLabels(
+              attendance: attendance,
+              marks: marks,
+              results: results,
+              fees: fees,
+              documents: documents,
+              health: health,
+            ),
             selected: _tab,
             onChanged: (index) => setState(() => _tab = index),
           ),
@@ -16819,7 +16900,12 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
             _StudentInfo(
               student: student,
               documents: documents,
+              promotions: promotions,
+              transfers: transfers,
               latestAdmission: latestAdmission,
+              showAllDetails: _showAllDetails,
+              onToggleAllDetails: () =>
+                  setState(() => _showAllDetails = !_showAllDetails),
             ),
           if (_tab == 1) _StudentAttendanceTab(records: attendance),
           if (_tab == 2) _StudentExamTab(marks: marks, results: results),
@@ -16865,6 +16951,56 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
   }
 }
 
+List<String> _studentDetailTabLabels({
+  required List<Map<String, dynamic>> attendance,
+  required List<Map<String, dynamic>> marks,
+  required List<Map<String, dynamic>> results,
+  required List<Map<String, dynamic>> fees,
+  required List<Map<String, dynamic>> documents,
+  required List<Map<String, dynamic>> health,
+}) {
+  final generalAttendance = attendance
+      .where(
+        (record) => readText(record, const [
+          'subjectName',
+          'subject',
+        ], fallback: '').isEmpty,
+      )
+      .toList();
+  final present = generalAttendance
+      .where((record) => readText(record, const ['status']) == 'Present')
+      .length;
+  final attendancePercentage = generalAttendance.isEmpty
+      ? 0
+      : (present / generalAttendance.length * 100).round();
+  final due = fees.fold<num>(0, (total, item) => total + _studentFeeDue(item));
+  return [
+    'Profile',
+    'Attendance $attendancePercentage%',
+    'Exams ${marks.length + results.length}',
+    due > 0 ? 'Payment ${formatMoney(due)}' : 'Payment Clear',
+    'Docs ${documents.length}',
+    health.isEmpty ? 'Health Empty' : 'Health Uploaded',
+  ];
+}
+
+num _studentFeeDue(Map<String, dynamic> assignment) {
+  final explicit = readNumber(assignment, const [
+    'dueAmount',
+    'balanceAmount',
+    'amountDue',
+  ], fallback: -1);
+  if (explicit >= 0) return explicit;
+  final total = readNumber(assignment, const ['totalAmount'], fallback: 0);
+  final paid = readNumber(assignment, const ['paidAmount'], fallback: 0);
+  final adjusted = readNumber(assignment, const [
+    'adjustmentAmount',
+    'adjustedAmount',
+  ], fallback: 0);
+  final due = total - paid - adjusted;
+  return due > 0 ? due : 0;
+}
+
 class _Tabs extends StatelessWidget {
   const _Tabs({
     required this.labels,
@@ -16886,7 +17022,7 @@ class _Tabs extends StatelessWidget {
           return InkWell(
             onTap: () => onChanged(index),
             child: Container(
-              width: 92,
+              width: 112,
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 border: Border(
@@ -16899,7 +17035,7 @@ class _Tabs extends StatelessWidget {
               child: Text(
                 labels[index],
                 textAlign: TextAlign.center,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
@@ -16915,19 +17051,196 @@ class _Tabs extends StatelessWidget {
   }
 }
 
+class _StudentDetailGroupData {
+  const _StudentDetailGroupData({required this.title, required this.fields});
+
+  final String title;
+  final List<(String, String)> fields;
+}
+
+List<_StudentDetailGroupData> _studentDetailGroups(
+  Map<String, dynamic> student,
+) {
+  List<(String, String)> visible(List<List<String>> fields) {
+    return fields
+        .map((field) {
+          final value = readText(student, [field.first], fallback: '');
+          return (field.last, value);
+        })
+        .where((field) => field.$2.isNotEmpty)
+        .toList();
+  }
+
+  return [
+    _StudentDetailGroupData(
+      title: 'RGUHS Admission Details',
+      fields: visible(const [
+        ['nameAsInAadhaar', 'Name as in Aadhaar'],
+        ['fatherName', 'Father name'],
+        ['motherName', 'Mother name'],
+        ['nationality', 'Nationality'],
+        ['state', 'State'],
+        ['ruralUrban', 'Rural / Urban'],
+        ['religion', 'Religion'],
+        ['seatType', 'Admission seat type'],
+        ['govtSeatType', 'Govt seat type'],
+        ['actualCategory', 'Actual category'],
+        ['seatSelectCategory', 'Seat select category'],
+        ['admissionDate', 'Date of admission'],
+      ]),
+    ),
+    _StudentDetailGroupData(
+      title: 'Entrance & Qualifying Exam',
+      fields: visible(const [
+        ['keaCetNumber', 'KEA CET Number'],
+        ['sspId', 'SSP ID'],
+        ['neetRegNo', 'NEET Reg No'],
+        ['neetRank', 'NEET Rank'],
+        ['cetRegNo', 'CET Reg No'],
+        ['cetRank', 'CET Rank'],
+        ['qualifyingExamName', 'Qualifying Exam'],
+        ['qualifyingExamRegNo', 'Qualifying Exam Reg No'],
+        ['qualifyingMaxMarks', 'Qualifying Max Marks'],
+        ['qualifyingSecuredMarks', 'Qualifying Secured Marks'],
+        ['qualifyingPassDate', 'Qualifying Pass Date'],
+        ['qualifyingBoard', 'University / Board'],
+        ['optionalSubject', 'Optional Subject'],
+        ['optionalMaxMarks', 'Optional Max Marks'],
+        ['optionalSecuredMarks', 'Optional Secured Marks'],
+      ]),
+    ),
+    _StudentDetailGroupData(
+      title: 'Lateral Entry Diploma Details',
+      fields: visible(const [
+        ['diplomaCourse', 'Diploma Course'],
+        ['diplomaCourseDuration', 'Diploma Duration'],
+        ['diplomaPassedDate', 'Diploma Passed Date'],
+        ['diplomaBoard', 'Diploma University / Board'],
+        ['diplomaMaxMarks', 'Diploma Max Marks'],
+        ['diplomaSecuredMarks', 'Diploma Secured Marks'],
+      ]),
+    ),
+    _StudentDetailGroupData(
+      title: 'Caste & Income Certificate Details',
+      fields: visible(const [
+        ['casteRdNumber', 'Caste RD Number'],
+        ['casteCategory', 'Caste Category'],
+        ['casteName', 'Caste Name'],
+        ['casteCertificateStudentName', 'Student Name in Caste Certificate'],
+        ['casteCertificateFatherName', 'Father Name in Caste Certificate'],
+        ['incomeRdNumber', 'Income RD Number'],
+        ['incomeCategory', 'Income Category'],
+        ['incomeCasteName', 'Caste Name in Income Certificate'],
+        ['annualIncome', 'Annual Income'],
+        ['incomeCertificateStudentName', 'Student Name in Income Certificate'],
+        ['incomeCertificateFatherName', 'Father Name in Income Certificate'],
+      ]),
+    ),
+  ].where((group) => group.fields.isNotEmpty).toList();
+}
+
+class _StudentMiniMetric extends StatelessWidget {
+  const _StudentMiniMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.muted, fontSize: 11),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StudentDetailGroup extends StatelessWidget {
+  const _StudentDetailGroup({required this.title, required this.fields});
+
+  final String title;
+  final List<(String, String)> fields;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          ...fields.map(
+            (field) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: LabelValue(label: field.$1, value: field.$2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StudentInfo extends StatelessWidget {
   const _StudentInfo({
     required this.student,
     required this.documents,
+    required this.promotions,
+    required this.transfers,
     required this.latestAdmission,
+    required this.showAllDetails,
+    required this.onToggleAllDetails,
   });
 
   final Map<String, dynamic> student;
   final List<Map<String, dynamic>> documents;
+  final List<Map<String, dynamic>> promotions;
+  final List<Map<String, dynamic>> transfers;
   final Map<String, dynamic>? latestAdmission;
+  final bool showAllDetails;
+  final VoidCallback onToggleAllDetails;
 
   @override
   Widget build(BuildContext context) {
+    final verifiedDocs = documents
+        .where(
+          (item) => ['Verified', 'Source PDF'].contains(
+            readText(item, const ['verificationStatus'], fallback: ''),
+          ),
+        )
+        .length;
+    final pendingDocs = documents
+        .where(
+          (item) =>
+              readText(item, const ['verificationStatus'], fallback: '') ==
+              'Pending Review',
+        )
+        .length;
     return Column(
       children: [
         InfoCard(
@@ -17004,6 +17317,46 @@ class _StudentInfo extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _StudentMiniMetric(
+                label: 'Verified Docs',
+                value: verifiedDocs.toString(),
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StudentMiniMetric(
+                label: 'Pending Docs',
+                value: pendingDocs.toString(),
+                color: AppColors.warning,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _StudentMiniMetric(
+                label: 'Promotions',
+                value: promotions.length.toString(),
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StudentMiniMetric(
+                label: 'Transfers',
+                value: transfers.length.toString(),
+                color: AppColors.danger,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         InfoCard(
           child: Column(
             children: [
@@ -17051,6 +17404,88 @@ class _StudentInfo extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 10),
+        InfoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Parent Portal View',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  StatusPill(label: 'View only'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Guardian',
+                      value: readText(student, const ['guardianName']),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'ID Holder',
+                      value: readText(student, const ['idHolder']),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Class',
+                      value:
+                          '${readText(student, const ['className'], fallback: '-')} - ${readText(student, const ['section'], fallback: '-')}',
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Academic Year',
+                      value: readText(student, const ['academicYear']),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onToggleAllDetails,
+            icon: Icon(
+              showAllDetails
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+              size: 18,
+            ),
+            label: Text(
+              showAllDetails ? 'Hide all details' : 'View all details',
+            ),
+          ),
+        ),
+        if (showAllDetails) ...[
+          const SizedBox(height: 10),
+          ..._studentDetailGroups(student).map(
+            (group) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _StudentDetailGroup(
+                title: group.title,
+                fields: group.fields,
+              ),
+            ),
+          ),
+        ],
         if (documents.isNotEmpty) ...[
           const SectionTitle('Documents'),
           ...documents
@@ -17237,9 +17672,7 @@ class _StudentPaymentTab extends StatelessWidget {
     );
     final due = assignments.fold<num>(
       0,
-      (total, item) =>
-          total +
-          readNumber(item, const ['dueAmount', 'balanceAmount', 'amountDue']),
+      (total, item) => total + _studentFeeDue(item),
     );
     final collected = collections.fold<num>(
       0,
