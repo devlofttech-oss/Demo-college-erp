@@ -2248,6 +2248,116 @@ class _ModuleScreenState extends State<ModuleScreen> {
     if (mounted) setState(() => _studentStatusFilter = 'active');
   }
 
+  bool _canManageHealthRecord() =>
+      widget.user.roleId == 'admin' || widget.user.roleId == 'super-admin';
+
+  Future<void> _showHealthRecordSheet(
+    Map<String, dynamic> student,
+    Map<String, dynamic>? existingRecord,
+  ) async {
+    if (!_canManageHealthRecord()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Only Admin and Super Admin can manage health records.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final isEdit = existingRecord != null;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: isEdit ? 'Edit Student Health Record' : 'Upload Health Record',
+        helper: 'Stores the same structured health record used on the website.',
+        saveLabel: isEdit ? 'Save Changes' : 'Upload Record',
+        initialValues: healthRecordFormValues(
+          student: student,
+          record: existingRecord,
+          academicYear: _academicYear,
+        ),
+        fields: healthRecordFieldSpecs,
+        onSave: (values) async {
+          final payload = healthRecordPayloadFromForm(
+            values: values,
+            student: student,
+            existingRecord: existingRecord,
+            academicYear: _academicYear,
+            savedAtText: _displayDateNow(),
+            userName: widget.user.name.isEmpty
+                ? widget.user.email
+                : widget.user.name,
+          );
+          final id = readText(existingRecord ?? const {}, const [
+            'id',
+          ], fallback: '');
+          if (id.isNotEmpty) {
+            await widget.repository.updateDocument(
+              'studentHealthRecords',
+              id,
+              payload,
+            );
+          } else {
+            await widget.repository.createDocument(
+              'studentHealthRecords',
+              payload,
+            );
+          }
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEdit
+                ? 'Student health record updated'
+                : 'Student health record uploaded',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  Future<void> _deleteHealthRecord(Map<String, dynamic> record) async {
+    if (!_canManageHealthRecord()) return;
+    final id = readText(record, const ['id'], fallback: '');
+    if (id.isEmpty) return;
+    final confirmed = await _confirmStudentAction(
+      title: 'Delete health record?',
+      message: 'This permanently removes the student health record.',
+      actionLabel: 'Delete',
+    );
+    if (!confirmed) return;
+
+    try {
+      await widget.repository.deleteDocument('studentHealthRecords', id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student health record deleted'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Health record delete failed: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _updateStudentStatus(
     Map<String, dynamic> student,
     Map<String, dynamic> updates,
@@ -2544,6 +2654,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
           canEdit: _can('students.edit'),
           canArchive: _can('students.archive'),
           showApprove: _canApproveStudent(student, data),
+          canManageHealthRecord: _canManageHealthRecord(),
           onEdit: () {
             Navigator.of(context).pop();
             _showStudentProfileSheet(student);
@@ -2559,6 +2670,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
           onRestore: () {
             Navigator.of(context).pop();
             _restoreStudent(student);
+          },
+          onEditHealthRecord: (record) {
+            Navigator.of(context).pop();
+            _showHealthRecordSheet(student, record);
+          },
+          onDeleteHealthRecord: (record) {
+            Navigator.of(context).pop();
+            _deleteHealthRecord(record);
           },
         ),
       ),
@@ -2658,6 +2777,478 @@ class _FieldSpec {
   final String label;
   final bool isRequired;
   final bool numeric;
+}
+
+class _HealthNamedField {
+  const _HealthNamedField(this.key, this.label);
+
+  final String key;
+  final String label;
+}
+
+const healthVaccineStatus = <_HealthNamedField>[
+  _HealthNamedField('hepatitisA', 'Hepatitis A'),
+  _HealthNamedField('hepatitisB', 'Hepatitis B'),
+  _HealthNamedField('tt', 'T.T'),
+  _HealthNamedField('varicella', 'Varicella'),
+  _HealthNamedField('influenza', 'Influenza'),
+  _HealthNamedField('pneumococcal', 'Pneumococcal'),
+];
+
+const _healthImmunizations = <List<String>>[
+  ['BCG', 'Birth'],
+  ['Hep B', 'Birth'],
+  ['Polio', 'Birth'],
+  ['DPT', '6 weeks'],
+  ['Hib', '6 weeks'],
+  ['PCV', '6 weeks'],
+  ['Typhoid', '9 months'],
+  ['MMR', '9 months'],
+  ['Varicella', '1 years'],
+  ['HepA', '1 years'],
+  ['Tdap', '7 years'],
+  ['HPV', '9 years'],
+];
+
+const _healthFamilyRelations = ['Father', 'Mother', 'Brothers', 'Sisters'];
+
+const _healthMonths = [
+  'October',
+  'November',
+  'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+];
+
+const _healthYears = <_HealthNamedField>[
+  _HealthNamedField('year1', '1st Year'),
+  _HealthNamedField('year2', '2nd Year'),
+  _HealthNamedField('year3', '3rd Year'),
+  _HealthNamedField('year4', '4th Year'),
+];
+
+const _healthMedicalExamFindings = [
+  'Height',
+  'Weight',
+  'Pulse',
+  'Respiration',
+  'BP',
+  'Skin',
+  'Hair',
+  'Chest',
+  'High Vision',
+  'Ear',
+  'Nose',
+  'Mouth',
+  'Neck & Throat',
+  'Dental Examination',
+  'Lung Examination',
+  'Heart Examination',
+  'Chest X-ray',
+  'Neurological',
+  'Extremities movement',
+  'Abdomen Examination',
+  'Hb',
+  'ESR',
+  'TLC',
+  'DLC',
+  'Urine',
+  'Cholesterol',
+  'Any other',
+  "Physician's Signature & Date",
+];
+
+const healthRecordFieldSpecs = <_FieldSpec>[
+  _FieldSpec('studentName', 'Name of the Student', isRequired: true),
+  _FieldSpec('fatherName', "Father's Name"),
+  _FieldSpec('academicYear', 'Academic Year', isRequired: true),
+  _FieldSpec('rollNo', 'Roll No'),
+  _FieldSpec('courseYear', 'Course & Year'),
+  _FieldSpec('dateOfBirth', 'Date of Birth'),
+  _FieldSpec('age', 'Age'),
+  _FieldSpec('gender', 'Gender'),
+  _FieldSpec('dateOfAdmission', 'Date of Admission'),
+  _FieldSpec('dateOfCompletion', 'Date of Completion'),
+  _FieldSpec('permanentAddress', 'Permanent Address'),
+  _FieldSpec('emergencyContact', 'Emergency Contact'),
+  _FieldSpec('emergencyPhone', 'Emergency Phone No'),
+  _FieldSpec('medicalConditions', 'Medical Conditions (comma separated)'),
+  _FieldSpec('conditionExplanation', 'Condition explanation'),
+  _FieldSpec(
+    'seriousIllnessInjurySurgery',
+    'Serious illness, injury or surgery',
+  ),
+  _FieldSpec('currentMedications', 'Current medications'),
+  _FieldSpec('confinementTreatment', 'Bed confinement / treatment'),
+  _FieldSpec('bloodGroupType', 'Blood group & type'),
+  _FieldSpec('physicalAbnormalities', 'Physical abnormalities or defect'),
+  _FieldSpec('allergies', 'Allergies'),
+  _FieldSpec('allergyMedicines', 'Medicine for allergies'),
+  _FieldSpec('menstrualHistory', 'Menstrual history'),
+  _FieldSpec('ageOfMenarche', 'Age of Menarche'),
+  _FieldSpec('cycleDuration', 'Cycle Duration'),
+  _FieldSpec('frequency', 'Frequency'),
+  _FieldSpec('painOrDiscomfort', 'Pain or Discomfort'),
+  _FieldSpec('sleepSchedule', 'Schedule of sleep'),
+  _FieldSpec('sleepNormal', 'Normal sleep'),
+  _FieldSpec('sleepDisturbed', 'Disturbed sleep'),
+  _FieldSpec('sleepDisturbanceDetails', 'Sleep disturbance details'),
+  _FieldSpec('hepatitisA', 'Last vaccinated for Hepatitis A'),
+  _FieldSpec('hepatitisB', 'Last vaccinated for Hepatitis B'),
+  _FieldSpec('tt', 'Last vaccinated for T.T'),
+  _FieldSpec('varicella', 'Last vaccinated for Varicella'),
+  _FieldSpec('influenza', 'Last vaccinated for Influenza'),
+  _FieldSpec('pneumococcal', 'Last vaccinated for Pneumococcal'),
+  _FieldSpec('finalRemarks', 'Final Remarks and Recommendations'),
+  _FieldSpec('semester1And2', '1st & 2nd Semester Coordinator'),
+  _FieldSpec('semester3And4', '3rd & 4th Semester Coordinator'),
+  _FieldSpec('semester5And6', '5th & 6th Semester Coordinator'),
+  _FieldSpec('semester7And8', '7th & 8th Semester Coordinator'),
+  _FieldSpec('principal', 'Principal'),
+  _FieldSpec('sicknessDate', 'Sickness date'),
+  _FieldSpec('sicknessDiagnosis', 'Sickness diagnosis'),
+  _FieldSpec('sicknessTreatment', 'Sickness treatment'),
+  _FieldSpec('sicknessInvestigation', 'Sickness investigation'),
+  _FieldSpec('sicknessDays', 'No. of Sick Days'),
+  _FieldSpec('sicknessSignature', 'Sickness signature'),
+];
+
+Map<String, dynamic> _asMap(Object? value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) {
+    return value.map((key, value) => MapEntry(key.toString(), value));
+  }
+  return <String, dynamic>{};
+}
+
+List<String> _csvToList(String value) => value
+    .split(',')
+    .map((item) => item.trim())
+    .where((item) => item.isNotEmpty)
+    .toList();
+
+String _listToCsv(Object? value) {
+  if (value is Iterable) return value.map((item) => item.toString()).join(', ');
+  return value?.toString() ?? '';
+}
+
+Map<String, dynamic> _emptyHealthRecord(
+  Map<String, dynamic> student,
+  String academicYear,
+) {
+  Map<String, dynamic> yearCells() => {
+    for (final year in _healthYears) year.key: {'wt': '', 'bp': '', 'lmp': ''},
+  };
+  Map<String, dynamic> textYearCells() => {
+    for (final year in _healthYears) year.key: '',
+  };
+
+  return {
+    'identification': {
+      'studentName': readText(student, const ['name'], fallback: ''),
+      'fatherName': readText(student, const [
+        'fatherName',
+        'guardianName',
+      ], fallback: ''),
+      'academicYear': academicYear.isNotEmpty
+          ? academicYear
+          : readText(student, const ['academicYear'], fallback: ''),
+      'rollNo': readText(student, const ['rollNo', 'studentId'], fallback: ''),
+      'courseYear': readText(student, const [
+        'courseYear',
+        'className',
+      ], fallback: ''),
+      'dateOfBirth': readText(student, const [
+        'dateOfBirth',
+        'dob',
+      ], fallback: ''),
+      'age': readText(student, const ['age'], fallback: ''),
+      'gender': readText(student, const ['gender'], fallback: ''),
+      'dateOfAdmission': readText(student, const [
+        'admissionDate',
+      ], fallback: ''),
+      'dateOfCompletion': '',
+      'permanentAddress': readText(student, const ['address'], fallback: ''),
+      'emergencyContact': readText(student, const [
+        'guardianName',
+        'fatherName',
+      ], fallback: ''),
+      'emergencyPhone': readText(student, const [
+        'phone',
+        'mobileNo',
+      ], fallback: ''),
+    },
+    'personalHistory': {
+      'medicalConditions': <String>[],
+      'conditionExplanation': '',
+      'seriousIllnessInjurySurgery': '',
+      'currentMedications': '',
+      'confinementTreatment': '',
+      'bloodGroupType': readText(student, const ['bloodGroup'], fallback: ''),
+      'physicalAbnormalities': '',
+      'allergies': '',
+      'allergyMedicines': '',
+      'menstrualHistory': '',
+      'ageOfMenarche': '',
+      'cycleDuration': '',
+      'frequency': '',
+      'painOrDiscomfort': '',
+      'vaccinations': {for (final item in healthVaccineStatus) item.key: ''},
+      'sleepSchedule': '',
+      'sleepNormal': '',
+      'sleepDisturbed': '',
+      'sleepDisturbanceDetails': '',
+    },
+    'immunizations': _healthImmunizations
+        .map(
+          (item) => {
+            'vaccine': item[0],
+            'minimumAge': item[1],
+            'ageReceived': '',
+            'notReceived': false,
+            'remarks': '',
+          },
+        )
+        .toList(),
+    'familyHistory': _healthFamilyRelations
+        .map(
+          (relation) => {
+            'relation': relation,
+            'ageIfLiving': '',
+            'disease': '',
+            'ageAtDeath': '',
+            'causeOfDeath': '',
+            'remarks': '',
+          },
+        )
+        .toList(),
+    'finalRemarks': '',
+    'coordinatorSignatures': {
+      'semester1And2': '',
+      'semester3And4': '',
+      'semester5And6': '',
+      'semester7And8': '',
+      'principal': '',
+    },
+    'sicknessDetails': [
+      {
+        'date': '',
+        'diagnosis': '',
+        'treatment': '',
+        'investigation': '',
+        'sickDays': '',
+        'signature': '',
+      },
+    ],
+    'monthlyRecords': _healthMonths
+        .map((month) => {'month': month, ...yearCells()})
+        .toList(),
+    'medicalExaminations': _healthMedicalExamFindings
+        .map((finding) => {'finding': finding, ...textYearCells()})
+        .toList(),
+  };
+}
+
+Map<String, dynamic> healthRecordFormValues({
+  required Map<String, dynamic> student,
+  required Map<String, dynamic>? record,
+  required String academicYear,
+}) {
+  final base = _emptyHealthRecord(student, academicYear);
+  final identification = {
+    ..._asMap(base['identification']),
+    ..._asMap(record?['identification']),
+  };
+  final personalHistory = {
+    ..._asMap(base['personalHistory']),
+    ..._asMap(record?['personalHistory']),
+  };
+  final vaccinations = {
+    ..._asMap(_asMap(base['personalHistory'])['vaccinations']),
+    ..._asMap(personalHistory['vaccinations']),
+  };
+  final signatures = {
+    ..._asMap(base['coordinatorSignatures']),
+    ..._asMap(record?['coordinatorSignatures']),
+  };
+  final sickness =
+      record?['sicknessDetails'] is List &&
+          (record?['sicknessDetails'] as List).isNotEmpty
+      ? _asMap((record?['sicknessDetails'] as List).first)
+      : _asMap((_asMap(base)['sicknessDetails'] as List).first);
+
+  return {
+    for (final key in [
+      'studentName',
+      'fatherName',
+      'academicYear',
+      'rollNo',
+      'courseYear',
+      'dateOfBirth',
+      'age',
+      'gender',
+      'dateOfAdmission',
+      'dateOfCompletion',
+      'permanentAddress',
+      'emergencyContact',
+      'emergencyPhone',
+    ])
+      key: identification[key] ?? '',
+    'medicalConditions': _listToCsv(personalHistory['medicalConditions']),
+    for (final key in [
+      'conditionExplanation',
+      'seriousIllnessInjurySurgery',
+      'currentMedications',
+      'confinementTreatment',
+      'bloodGroupType',
+      'physicalAbnormalities',
+      'allergies',
+      'allergyMedicines',
+      'menstrualHistory',
+      'ageOfMenarche',
+      'cycleDuration',
+      'frequency',
+      'painOrDiscomfort',
+      'sleepSchedule',
+      'sleepNormal',
+      'sleepDisturbed',
+      'sleepDisturbanceDetails',
+    ])
+      key: personalHistory[key] ?? '',
+    for (final field in healthVaccineStatus)
+      field.key: vaccinations[field.key] ?? '',
+    'finalRemarks': record?['finalRemarks'] ?? '',
+    for (final key in [
+      'semester1And2',
+      'semester3And4',
+      'semester5And6',
+      'semester7And8',
+      'principal',
+    ])
+      key: signatures[key] ?? '',
+    'sicknessDate': sickness['date'] ?? '',
+    'sicknessDiagnosis': sickness['diagnosis'] ?? '',
+    'sicknessTreatment': sickness['treatment'] ?? '',
+    'sicknessInvestigation': sickness['investigation'] ?? '',
+    'sicknessDays': sickness['sickDays'] ?? '',
+    'sicknessSignature': sickness['signature'] ?? '',
+  };
+}
+
+Map<String, dynamic> healthRecordPayloadFromForm({
+  required Map<String, dynamic> values,
+  required Map<String, dynamic> student,
+  required Map<String, dynamic>? existingRecord,
+  required String academicYear,
+  required String savedAtText,
+  required String userName,
+}) {
+  final base = _emptyHealthRecord(student, academicYear);
+  final existing = {...?existingRecord}..remove('id');
+  final identification = {
+    ..._asMap(base['identification']),
+    ..._asMap(existingRecord?['identification']),
+    for (final key in [
+      'studentName',
+      'fatherName',
+      'academicYear',
+      'rollNo',
+      'courseYear',
+      'dateOfBirth',
+      'age',
+      'gender',
+      'dateOfAdmission',
+      'dateOfCompletion',
+      'permanentAddress',
+      'emergencyContact',
+      'emergencyPhone',
+    ])
+      key: values[key] ?? '',
+  };
+  final personalHistory = {
+    ..._asMap(base['personalHistory']),
+    ..._asMap(existingRecord?['personalHistory']),
+    for (final key in [
+      'conditionExplanation',
+      'seriousIllnessInjurySurgery',
+      'currentMedications',
+      'confinementTreatment',
+      'bloodGroupType',
+      'physicalAbnormalities',
+      'allergies',
+      'allergyMedicines',
+      'menstrualHistory',
+      'ageOfMenarche',
+      'cycleDuration',
+      'frequency',
+      'painOrDiscomfort',
+      'sleepSchedule',
+      'sleepNormal',
+      'sleepDisturbed',
+      'sleepDisturbanceDetails',
+    ])
+      key: values[key] ?? '',
+    'medicalConditions': _csvToList(
+      (values['medicalConditions'] ?? '').toString(),
+    ),
+    'vaccinations': {
+      ..._asMap(_asMap(base['personalHistory'])['vaccinations']),
+      ..._asMap(_asMap(existingRecord?['personalHistory'])['vaccinations']),
+      for (final field in healthVaccineStatus)
+        field.key: values[field.key] ?? '',
+    },
+  };
+  final sicknessDetails = [
+    {
+      'date': values['sicknessDate'] ?? '',
+      'diagnosis': values['sicknessDiagnosis'] ?? '',
+      'treatment': values['sicknessTreatment'] ?? '',
+      'investigation': values['sicknessInvestigation'] ?? '',
+      'sickDays': values['sicknessDays'] ?? '',
+      'signature': values['sicknessSignature'] ?? '',
+    },
+  ];
+  final recordAcademicYear = (identification['academicYear'] ?? '').toString();
+
+  return {
+    ...base,
+    ...existing,
+    'identification': identification,
+    'personalHistory': personalHistory,
+    'finalRemarks': values['finalRemarks'] ?? '',
+    'coordinatorSignatures': {
+      'semester1And2': values['semester1And2'] ?? '',
+      'semester3And4': values['semester3And4'] ?? '',
+      'semester5And6': values['semester5And6'] ?? '',
+      'semester7And8': values['semester7And8'] ?? '',
+      'principal': values['principal'] ?? '',
+    },
+    'sicknessDetails': sicknessDetails,
+    'studentRecordId': readText(student, const ['id'], fallback: ''),
+    'studentId': readText(student, const ['studentId'], fallback: ''),
+    'studentName': readText(student, const ['name'], fallback: ''),
+    'academicYear': recordAcademicYear,
+    'courseCode': readText(student, const ['courseCode'], fallback: ''),
+    'courseName': readText(student, const [
+      'courseName',
+      'program',
+    ], fallback: ''),
+    'bloodGroup': personalHistory['bloodGroupType'],
+    'allergies': personalHistory['allergies'],
+    'notes': values['finalRemarks'] ?? '',
+    'updatedBy': userName.isEmpty ? 'Admin' : userName,
+    'updatedAtText': savedAtText,
+    if (existingRecord == null)
+      'uploadedBy': userName.isEmpty ? 'Admin' : userName,
+    if (existingRecord == null) 'uploadedAtText': savedAtText,
+  };
 }
 
 class _DocumentUploadSheet extends StatefulWidget {
@@ -3903,10 +4494,13 @@ class _StudentDetailSheet extends StatefulWidget {
     required this.canEdit,
     required this.canArchive,
     required this.showApprove,
+    required this.canManageHealthRecord,
     required this.onEdit,
     required this.onApprove,
     required this.onArchive,
     required this.onRestore,
+    required this.onEditHealthRecord,
+    required this.onDeleteHealthRecord,
   });
 
   final Map<String, dynamic> student;
@@ -3915,10 +4509,13 @@ class _StudentDetailSheet extends StatefulWidget {
   final bool canEdit;
   final bool canArchive;
   final bool showApprove;
+  final bool canManageHealthRecord;
   final VoidCallback onEdit;
   final VoidCallback onApprove;
   final VoidCallback onArchive;
   final VoidCallback onRestore;
+  final ValueChanged<Map<String, dynamic>?> onEditHealthRecord;
+  final ValueChanged<Map<String, dynamic>> onDeleteHealthRecord;
 
   @override
   State<_StudentDetailSheet> createState() => _StudentDetailSheetState();
@@ -4108,6 +4705,13 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
           if (_tab == 5)
             _StudentHealthRecordView(
               record: health.isEmpty ? null : health.last,
+              canManage: widget.canManageHealthRecord,
+              onEdit: () => widget.onEditHealthRecord(
+                health.isEmpty ? null : health.last,
+              ),
+              onDelete: health.isEmpty
+                  ? null
+                  : () => widget.onDeleteHealthRecord(health.last),
             ),
         ],
       ),
@@ -4570,40 +5174,108 @@ class _StudentPaymentTab extends StatelessWidget {
 }
 
 class _StudentHealthRecordView extends StatelessWidget {
-  const _StudentHealthRecordView({required this.record});
+  const _StudentHealthRecordView({
+    required this.record,
+    required this.canManage,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final Map<String, dynamic>? record;
+  final bool canManage;
+  final VoidCallback onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final health = record;
     if (health == null) {
-      return const EmptyState(
-        title: 'No health record',
-        message: 'No student health record is uploaded yet.',
+      return Column(
+        children: [
+          if (canManage)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.upload_file_rounded, size: 18),
+                label: const Text('Upload Health Record'),
+              ),
+            ),
+          const EmptyState(
+            title: 'No health record',
+            message: 'No student health record is uploaded yet.',
+          ),
+        ],
       );
     }
+    final identification = _asMap(health['identification']);
+    final personalHistory = _asMap(health['personalHistory']);
+    final vaccinations = _asMap(personalHistory['vaccinations']);
     return InfoCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (canManage) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                ),
+                if (onDelete != null)
+                  OutlinedButton.icon(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_rounded, size: 18),
+                    label: const Text('Delete'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Student',
+                  value: readText(
+                    identification,
+                    const ['studentName'],
+                    fallback: readText(health, const ['studentName']),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Academic year',
+                  value: readText(
+                    identification,
+                    const ['academicYear'],
+                    fallback: readText(health, const ['academicYear']),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: LabelValue(
                   label: 'Blood group',
-                  value: readText(health, const ['bloodGroup']),
+                  value: readText(
+                    personalHistory,
+                    const ['bloodGroupType'],
+                    fallback: readText(health, const ['bloodGroup']),
+                  ),
                 ),
               ),
               Expanded(
                 child: LabelValue(
-                  label: 'Height',
-                  value: readText(health, const ['height']),
-                ),
-              ),
-              Expanded(
-                child: LabelValue(
-                  label: 'Weight',
-                  value: readText(health, const ['weight']),
+                  label: 'Emergency phone',
+                  value: readText(identification, const ['emergencyPhone']),
                 ),
               ),
             ],
@@ -4611,12 +5283,27 @@ class _StudentHealthRecordView extends StatelessWidget {
           const SizedBox(height: 14),
           LabelValue(
             label: 'Allergies',
-            value: readText(health, const ['allergies']),
+            value: readText(personalHistory, const ['allergies']),
           ),
           const SizedBox(height: 14),
           LabelValue(
-            label: 'Medical notes',
-            value: readText(health, const ['notes', 'medicalNotes']),
+            label: 'Current medications',
+            value: readText(personalHistory, const ['currentMedications']),
+          ),
+          const SizedBox(height: 14),
+          LabelValue(
+            label: 'Final remarks',
+            value: readText(health, const ['finalRemarks']),
+          ),
+          const SizedBox(height: 14),
+          LabelValue(
+            label: 'Vaccination status',
+            value: healthVaccineStatus
+                .map(
+                  (field) =>
+                      '${field.label}: ${readText(vaccinations, [field.key])}',
+                )
+                .join('\n'),
           ),
         ],
       ),
