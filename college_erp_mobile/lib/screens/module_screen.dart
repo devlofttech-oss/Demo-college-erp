@@ -98,6 +98,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _feeBranch = '';
   var _feeSelectedAssignmentId = '';
   var _feeStatusFilter = 'all';
+  var _communicationTask = 'notices';
+  var _communicationSelectedNoticeId = '';
+  var _communicationTypeFilter = '';
+  var _communicationAudienceFilter = '';
+  var _communicationStatusFilter = '';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -335,9 +340,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('notices.create'))
             _ModuleAction(
-              label: 'Notice',
+              label: _communicationTask == 'alerts'
+                  ? 'Alert'
+                  : _communicationTask == 'parents'
+                  ? 'Parent Message'
+                  : 'Announcement',
               icon: Icons.campaign_rounded,
-              onTap: _showNoticeSheet,
+              onTap: () => _showCommunicationNoticeSheet(data: data),
             ),
         ];
       case 'document-management':
@@ -5238,95 +5247,490 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _events(Map<String, List<Map<String, dynamic>>> data) {
-    final notices = _items(data, 'notices')
-        .where(
-          (item) => containsQuery(item, _query, const [
-            'title',
-            'message',
-            'audience',
-            'type',
-          ]),
-        )
+    final canCreate = _can('notices.create');
+    final canEdit = _can('notices.edit');
+    final canArchive = _can('notices.archive');
+    final canManage = canCreate || canEdit || canArchive;
+    final roleScopedNotices = _items(
+      data,
+      'notices',
+    ).where((notice) => _noticeVisibleForRole(notice, canManage)).toList();
+    final taskScopedNotices = roleScopedNotices
+        .where((notice) => _noticeMatchesCommunicationTask(notice))
         .toList();
+    final visibleNotices = taskScopedNotices
+        .where((notice) => _noticeMatchesFilters(notice, canManage))
+        .toList();
+    final selectedNotice = _selectedCommunicationNotice(
+      taskScopedNotices,
+      visibleNotices,
+    );
+    final summary = _noticeSummary(roleScopedNotices);
+    final tasks = [
+      _CommunicationTaskOption(
+        id: 'notices',
+        title: 'Notices & Announcements',
+        helper: 'Circulars, public notices, and event announcements.',
+        icon: Icons.campaign_rounded,
+        count: roleScopedNotices.length,
+      ),
+      _CommunicationTaskOption(
+        id: 'alerts',
+        title: 'SMS/WhatsApp Alerts',
+        helper: 'Short alerts for urgent updates and reminders.',
+        icon: Icons.message_rounded,
+        count: roleScopedNotices
+            .where((notice) => _isAlertNotice(notice))
+            .length,
+      ),
+      _CommunicationTaskOption(
+        id: 'parents',
+        title: 'Parent Communication',
+        helper: 'Parent-facing messages and guardian updates.',
+        icon: Icons.family_restroom_rounded,
+        count: roleScopedNotices
+            .where((notice) => _isParentCommunicationNotice(notice))
+            .length,
+      ),
+    ];
+    final activeTask = tasks.firstWhere(
+      (task) => task.id == _communicationTask,
+      orElse: () => tasks.first,
+    );
     return Column(
+      key: ValueKey(
+        'communication-$_communicationTask-$_communicationTypeFilter-$_communicationAudienceFilter-$_communicationStatusFilter',
+      ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_can('notices.create')) ...[
-          PrimaryActionButton(
-            label: 'Create Announcement',
-            icon: Icons.campaign_rounded,
-            onPressed: _showNoticeSheet,
-          ),
-          const SizedBox(height: 10),
-        ],
-        _MonthStrip(items: notices),
-        const SectionTitle('Events & Notices'),
-        if (notices.isEmpty)
-          const EmptyState(
-            title: 'No communication items',
-            message: 'Published notices and events will appear here.',
-          )
-        else
-          ...notices.map(
-            (notice) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: InfoCard(
-                child: Row(
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5835A).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.campaign_rounded,
+                  color: Color(0xFFE5835A),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 4,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: widget.module.color,
-                        borderRadius: BorderRadius.circular(999),
+                    Text(
+                      'Administration / Communication',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            readText(notice, const ['title', 'subject']),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            readText(notice, const [
-                              'message',
-                              'body',
-                              'description',
-                            ]),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            formatDateValue(
-                              notice['publishDate'] ??
-                                  notice['eventDate'] ??
-                                  notice['createdAt'],
-                            ),
-                            style: const TextStyle(
-                              color: AppColors.accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
+                    SizedBox(height: 4),
+                    Text(
+                      'Communication',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
                       ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Announcements, circular management, event communication, audience targeting, and publication status.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Total',
+              summary.total.toString(),
+              Icons.campaign_rounded,
+              AppColors.primary,
+            ),
+            _Stat(
+              'Published',
+              summary.published.toString(),
+              Icons.send_rounded,
+              AppColors.accent,
+            ),
+            _Stat(
+              'Urgent',
+              summary.urgent.toString(),
+              Icons.priority_high_rounded,
+              AppColors.danger,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...tasks.map(
+          (task) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _CommunicationTaskCard(
+              task: task,
+              selected: task.id == _communicationTask,
+              onTap: () => setState(() {
+                _communicationTask = task.id;
+                _communicationSelectedNoticeId = '';
+                _communicationTypeFilter = '';
+                _communicationAudienceFilter = '';
+                _communicationStatusFilter = '';
+              }),
             ),
           ),
+        ),
+        if (canCreate) ...[
+          const SizedBox(height: 10),
+          PrimaryActionButton(
+            label: _communicationTask == 'alerts'
+                ? 'Create Alert'
+                : _communicationTask == 'parents'
+                ? 'Create Parent Message'
+                : 'Create Announcement',
+            icon: Icons.add_rounded,
+            onPressed: () => _showCommunicationNoticeSheet(data: data),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _MonthStrip(items: visibleNotices),
+        SectionTitle(activeTask.title),
+        _CommunicationFilterPanel(
+          typeFilter: _communicationTypeFilter,
+          audienceFilter: _communicationAudienceFilter,
+          statusFilter: _communicationStatusFilter,
+          canManage: canManage,
+          isParentViewer: widget.user.roleId == 'parent' && !canManage,
+          onTypeChanged: (value) =>
+              setState(() => _communicationTypeFilter = value),
+          onAudienceChanged: (value) =>
+              setState(() => _communicationAudienceFilter = value),
+          onStatusChanged: (value) =>
+              setState(() => _communicationStatusFilter = value),
+        ),
+        const SizedBox(height: 12),
+        if (visibleNotices.isEmpty)
+          const EmptyState(
+            title: 'No announcements found',
+            message:
+                'Matching notices, alerts, and parent messages will appear here.',
+          )
+        else
+          ...visibleNotices.map(
+            (notice) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _CommunicationNoticeCard(
+                notice: notice,
+                selected:
+                    readText(notice, const ['id'], fallback: '') ==
+                    _communicationSelectedNoticeId,
+                showActions: canManage,
+                canEdit: canEdit,
+                canArchive: canArchive,
+                onTap: () => setState(
+                  () => _communicationSelectedNoticeId = readText(
+                    notice,
+                    const ['id'],
+                    fallback: '',
+                  ),
+                ),
+                onEdit: () =>
+                    _showCommunicationNoticeSheet(data: data, notice: notice),
+                onPublish: () => _publishCommunicationNotice(notice),
+                onArchive: () => _archiveCommunicationNotice(notice),
+              ),
+            ),
+          ),
+        const SectionTitle('Preview'),
+        _CommunicationPreviewCard(
+          notice: selectedNotice,
+          showActions: canManage,
+          canPublish: canEdit,
+          onPublish: selectedNotice == null
+              ? null
+              : () => _publishCommunicationNotice(selectedNotice),
+        ),
       ],
     );
+  }
+
+  bool _noticeVisibleForRole(Map<String, dynamic> notice, bool canManage) {
+    if (canManage) return true;
+    if (_noticeDisplayStatus(notice) != 'Published') return false;
+    final audience = readText(notice, const ['audience'], fallback: '');
+    switch (widget.user.roleId) {
+      case 'parent':
+        return audience == 'Parents';
+      case 'faculty':
+        return audience == 'All' || audience == 'Faculty';
+      case 'student':
+        return audience == 'All' || audience == 'Students';
+      default:
+        return audience == 'All' || audience == 'Administration';
+    }
+  }
+
+  bool _noticeMatchesCommunicationTask(Map<String, dynamic> notice) {
+    if (_communicationTask == 'alerts') return _isAlertNotice(notice);
+    if (_communicationTask == 'parents') {
+      return _isParentCommunicationNotice(notice);
+    }
+    return true;
+  }
+
+  bool _isAlertNotice(Map<String, dynamic> notice) {
+    return readText(notice, const ['type'], fallback: '') ==
+            'SMS/WhatsApp Alert' ||
+        readText(notice, const ['communicationFeature'], fallback: '') ==
+            'alerts';
+  }
+
+  bool _isParentCommunicationNotice(Map<String, dynamic> notice) {
+    return readText(notice, const ['audience'], fallback: '') == 'Parents' ||
+        readText(notice, const ['type'], fallback: '') ==
+            'Parent Communication' ||
+        readText(notice, const ['communicationFeature'], fallback: '') ==
+            'parents';
+  }
+
+  bool _noticeMatchesFilters(Map<String, dynamic> notice, bool canManage) {
+    final typeMatches =
+        _communicationTypeFilter.isEmpty ||
+        readText(notice, const ['type'], fallback: '') ==
+            _communicationTypeFilter;
+    final audienceMatches =
+        _communicationAudienceFilter.isEmpty ||
+        readText(notice, const ['audience'], fallback: '') ==
+            _communicationAudienceFilter;
+    final statusMatches =
+        !canManage ||
+        _communicationStatusFilter.isEmpty ||
+        _noticeDisplayStatus(notice) == _communicationStatusFilter;
+    final query = _query.trim().toLowerCase();
+    final textMatches =
+        query.isEmpty ||
+        [
+          'title',
+          'subject',
+          'referenceNo',
+          'body',
+          'message',
+          'description',
+          'createdByName',
+          'type',
+          'audience',
+        ].any(
+          (key) => (notice[key] ?? '').toString().toLowerCase().contains(query),
+        );
+    return typeMatches && audienceMatches && statusMatches && textMatches;
+  }
+
+  Map<String, dynamic>? _selectedCommunicationNotice(
+    List<Map<String, dynamic>> taskScopedNotices,
+    List<Map<String, dynamic>> visibleNotices,
+  ) {
+    if (_communicationSelectedNoticeId.isNotEmpty) {
+      for (final notice in taskScopedNotices) {
+        if (readText(notice, const ['id'], fallback: '') ==
+            _communicationSelectedNoticeId) {
+          return notice;
+        }
+      }
+    }
+    if (visibleNotices.isNotEmpty) return visibleNotices.first;
+    if (taskScopedNotices.isNotEmpty) return taskScopedNotices.first;
+    return null;
+  }
+
+  _CommunicationNoticeSummary _noticeSummary(
+    List<Map<String, dynamic>> notices,
+  ) {
+    return notices.fold(const _CommunicationNoticeSummary(), (summary, notice) {
+      final status = _noticeDisplayStatus(notice);
+      return _CommunicationNoticeSummary(
+        total: summary.total + 1,
+        published: summary.published + (status == 'Published' ? 1 : 0),
+        drafts: summary.drafts + (status == 'Draft' ? 1 : 0),
+        scheduled: summary.scheduled + (status == 'Scheduled' ? 1 : 0),
+        expired: summary.expired + (status == 'Expired' ? 1 : 0),
+        urgent:
+            summary.urgent +
+            (readText(notice, const ['priority'], fallback: '') == 'Urgent'
+                ? 1
+                : 0),
+      );
+    });
+  }
+
+  String _noticeDisplayStatus(Map<String, dynamic> notice) {
+    final status = readText(notice, const ['status'], fallback: '');
+    if (status == 'Archived') return 'Archived';
+    if (status == 'Draft') return 'Draft';
+    if (_noticeIsExpired(notice)) return 'Expired';
+    if (_noticeIsPublished(notice)) return 'Published';
+    return 'Scheduled';
+  }
+
+  bool _noticeIsPublished(Map<String, dynamic> notice) {
+    if (readText(notice, const ['status'], fallback: '') != 'Published') {
+      return false;
+    }
+    final date = readDate(notice['publishDate']);
+    if (date == null) return true;
+    final publishAt = DateTime(date.year, date.month, date.day);
+    final now = DateTime.now();
+    return !publishAt.isAfter(DateTime(now.year, now.month, now.day));
+  }
+
+  bool _noticeIsExpired(Map<String, dynamic> notice) {
+    final date = readDate(notice['expiryDate']);
+    if (date == null) return false;
+    final expiresAt = DateTime(date.year, date.month, date.day, 23, 59, 59);
+    return expiresAt.isBefore(DateTime.now());
+  }
+
+  String _communicationDisplayDateNow() =>
+      DateFormat('dd MMM yyyy').format(DateTime.now());
+
+  Future<void> _showCommunicationNoticeSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? notice,
+  }) async {
+    final isEdit = notice != null;
+    if (isEdit && !_can('notices.edit')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot edit announcements.')),
+      );
+      return;
+    }
+    if (!isEdit && !_can('notices.create')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot create announcements.')),
+      );
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _CommunicationNoticeFormSheet(
+        notice: notice,
+        task: _communicationTask,
+        academicYear: _academicYear.trim(),
+        onSave: (values) async {
+          final payload = _communicationPayload(values);
+          if (isEdit) {
+            await widget.repository.updateDocument(
+              'noticeItems',
+              readText(notice, const ['id'], fallback: ''),
+              {...payload, 'updatedAtText': _communicationDisplayDateNow()},
+            );
+          } else {
+            await widget.repository.createDocument('noticeItems', {
+              ...payload,
+              'academicYear': _academicYear.trim(),
+              'createdAtText': _communicationDisplayDateNow(),
+              'createdBy': widget.user.uid,
+            });
+          }
+        },
+      ),
+    );
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isEdit ? 'Announcement updated' : 'Announcement created'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Map<String, dynamic> _communicationPayload(Map<String, dynamic> values) {
+    final type = readText(values, const ['type'], fallback: 'Digital Notice');
+    final title = readText(values, const ['title'], fallback: '');
+    final referenceNo = readText(values, const ['referenceNo'], fallback: '');
+    return {
+      ...values,
+      'type': type,
+      'title': title,
+      'referenceNo': referenceNo.isEmpty
+          ? '${type.split(' ').first.toUpperCase()}-${DateTime.now().millisecondsSinceEpoch}'
+          : referenceNo,
+      'body': readText(values, const ['body'], fallback: ''),
+      'message': readText(values, const ['body'], fallback: ''),
+      'createdByName': widget.user.name.isEmpty
+          ? 'Admin Office'
+          : widget.user.name,
+      'communicationFeature': _communicationTask,
+      'channel': _communicationTask == 'alerts'
+          ? 'SMS/WhatsApp'
+          : 'Notice Board',
+    };
+  }
+
+  Future<void> _publishCommunicationNotice(Map<String, dynamic> notice) async {
+    if (!_can('notices.edit')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot publish announcements.')),
+      );
+      return;
+    }
+    if (readText(notice, const ['status'], fallback: '') != 'Draft') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only draft announcements can be published.'),
+        ),
+      );
+      return;
+    }
+    await widget.repository.updateDocument(
+      'noticeItems',
+      readText(notice, const ['id'], fallback: ''),
+      {
+        'status': 'Published',
+        'publishedAtText': _communicationDisplayDateNow(),
+      },
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Announcement published'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _archiveCommunicationNotice(Map<String, dynamic> notice) async {
+    if (!_can('notices.archive')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot archive announcements.')),
+      );
+      return;
+    }
+    await widget.repository.updateDocument(
+      'noticeItems',
+      readText(notice, const ['id'], fallback: ''),
+      {'status': 'Archived', 'archivedAtText': _communicationDisplayDateNow()},
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Announcement archived'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
   }
 
   Widget _documents(Map<String, List<Map<String, dynamic>>> data) {
@@ -6586,82 +6990,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
     }
   }
 
-  Future<void> _showNoticeSheet() async {
-    final titleController = TextEditingController();
-    final messageController = TextEditingController();
-    var audience = 'All';
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              MediaQuery.of(context).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Create Announcement',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: messageController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Message'),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: audience,
-                  decoration: const InputDecoration(labelText: 'Audience'),
-                  items: const ['All', 'Students', 'Parents', 'Faculty']
-                      .map(
-                        (item) =>
-                            DropdownMenuItem(value: item, child: Text(item)),
-                      )
-                      .toList(),
-                  onChanged: (value) =>
-                      setSheetState(() => audience = value ?? 'All'),
-                ),
-                const SizedBox(height: 16),
-                PrimaryActionButton(
-                  label: 'Publish',
-                  icon: Icons.send_rounded,
-                  onPressed: () async {
-                    await widget.repository.createDocument('noticeItems', {
-                      'title': titleController.text.trim(),
-                      'message': messageController.text.trim(),
-                      'audience': audience,
-                      'status': 'Published',
-                      'publishDate': Timestamp.now(),
-                      'academicYear': _academicYear,
-                      'createdBy': widget.user.uid,
-                    });
-                    if (context.mounted) Navigator.of(context).pop(true);
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-    titleController.dispose();
-    messageController.dispose();
-    if (saved == true) await _refresh();
-  }
-
   void _showStudentSheet(
     Map<String, dynamic> student,
     Map<String, List<Map<String, dynamic>>> data,
@@ -6828,6 +7156,838 @@ class _DocumentTrailing extends StatelessWidget {
         'documentStatus',
         'status',
       ], fallback: 'Uploaded'),
+    );
+  }
+}
+
+const _noticeTypes = [
+  'Digital Notice',
+  'Circular',
+  'Event Announcement',
+  'SMS/WhatsApp Alert',
+  'Parent Communication',
+];
+
+const _noticeAudiences = [
+  'All',
+  'Students',
+  'Faculty',
+  'Parents',
+  'Administration',
+];
+
+const _noticePriorities = ['Normal', 'Important', 'Urgent'];
+
+const _noticeStatuses = [
+  'Draft',
+  'Published',
+  'Scheduled',
+  'Expired',
+  'Archived',
+];
+
+class _CommunicationNoticeSummary {
+  const _CommunicationNoticeSummary({
+    this.total = 0,
+    this.published = 0,
+    this.drafts = 0,
+    this.scheduled = 0,
+    this.expired = 0,
+    this.urgent = 0,
+  });
+
+  final int total;
+  final int published;
+  final int drafts;
+  final int scheduled;
+  final int expired;
+  final int urgent;
+}
+
+class _CommunicationTaskOption {
+  const _CommunicationTaskOption({
+    required this.id,
+    required this.title,
+    required this.helper,
+    required this.icon,
+    required this.count,
+  });
+
+  final String id;
+  final String title;
+  final String helper;
+  final IconData icon;
+  final int count;
+}
+
+class _CommunicationTaskCard extends StatelessWidget {
+  const _CommunicationTaskCard({
+    required this.task,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _CommunicationTaskOption task;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            height: 48,
+            width: 48,
+            decoration: BoxDecoration(
+              color: (selected ? AppColors.accent : AppColors.primary)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              task.icon,
+              color: selected ? AppColors.accent : AppColors.primaryDark,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    StatusPill(label: task.count.toString()),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  task.helper,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunicationFilterPanel extends StatelessWidget {
+  const _CommunicationFilterPanel({
+    required this.typeFilter,
+    required this.audienceFilter,
+    required this.statusFilter,
+    required this.canManage,
+    required this.isParentViewer,
+    required this.onTypeChanged,
+    required this.onAudienceChanged,
+    required this.onStatusChanged,
+  });
+
+  final String typeFilter;
+  final String audienceFilter;
+  final String statusFilter;
+  final bool canManage;
+  final bool isParentViewer;
+  final ValueChanged<String> onTypeChanged;
+  final ValueChanged<String> onAudienceChanged;
+  final ValueChanged<String> onStatusChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          _CommunicationDropdown(
+            value: typeFilter,
+            label: 'Type',
+            allLabel: 'All Types',
+            options: _noticeTypes,
+            onChanged: onTypeChanged,
+          ),
+          const SizedBox(height: 10),
+          if (isParentViewer)
+            const _CommunicationLockedFilter(
+              label: 'Audience',
+              value: 'Parents',
+            )
+          else
+            _CommunicationDropdown(
+              value: audienceFilter,
+              label: 'Audience',
+              allLabel: 'All Audiences',
+              options: _noticeAudiences,
+              onChanged: onAudienceChanged,
+            ),
+          if (canManage) ...[
+            const SizedBox(height: 10),
+            _CommunicationDropdown(
+              value: statusFilter,
+              label: 'Status',
+              allLabel: 'All Statuses',
+              options: _noticeStatuses,
+              onChanged: onStatusChanged,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunicationDropdown extends StatelessWidget {
+  const _CommunicationDropdown({
+    required this.value,
+    required this.label,
+    required this.allLabel,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String value;
+  final String label;
+  final String allLabel;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: options.contains(value) ? value : '',
+        isExpanded: true,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        items: [
+          DropdownMenuItem(value: '', child: Text(allLabel)),
+          ...options.map(
+            (item) => DropdownMenuItem(value: item, child: Text(item)),
+          ),
+        ],
+        onChanged: (next) => onChanged(next ?? ''),
+        hint: Text(label),
+      ),
+    );
+  }
+}
+
+class _CommunicationLockedFilter extends StatelessWidget {
+  const _CommunicationLockedFilter({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: LabelValue(label: label, value: value),
+        ),
+        const Icon(Icons.lock_rounded, size: 18, color: AppColors.muted),
+      ],
+    );
+  }
+}
+
+enum _CommunicationNoticeAction { preview, edit, publish, archive }
+
+class _CommunicationNoticeCard extends StatelessWidget {
+  const _CommunicationNoticeCard({
+    required this.notice,
+    required this.selected,
+    required this.showActions,
+    required this.canEdit,
+    required this.canArchive,
+    required this.onTap,
+    required this.onEdit,
+    required this.onPublish,
+    required this.onArchive,
+  });
+
+  final Map<String, dynamic> notice;
+  final bool selected;
+  final bool showActions;
+  final bool canEdit;
+  final bool canArchive;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onPublish;
+  final VoidCallback onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _communicationNoticeDisplayStatus(notice);
+    return InfoCard(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 4,
+                height: 74,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.accent
+                      : _noticePriorityColor(notice),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            readText(notice, const [
+                              'title',
+                              'subject',
+                            ], fallback: 'Announcement'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        StatusPill(label: status),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${readText(notice, const ['type'], fallback: 'Digital Notice')} | ${readText(notice, const ['audience'], fallback: 'All')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      readText(notice, const [
+                        'body',
+                        'message',
+                        'description',
+                      ], fallback: ''),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${readText(notice, const ['referenceNo'], fallback: 'No reference')} | Publish ${_noticeDateLabel(notice['publishDate'])}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (showActions)
+                PopupMenuButton<_CommunicationNoticeAction>(
+                  tooltip: 'Actions',
+                  onSelected: (action) {
+                    switch (action) {
+                      case _CommunicationNoticeAction.preview:
+                        onTap();
+                        break;
+                      case _CommunicationNoticeAction.edit:
+                        onEdit();
+                        break;
+                      case _CommunicationNoticeAction.publish:
+                        onPublish();
+                        break;
+                      case _CommunicationNoticeAction.archive:
+                        onArchive();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: _CommunicationNoticeAction.preview,
+                      child: ListTile(
+                        leading: Icon(Icons.visibility_rounded),
+                        title: Text('Preview'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _CommunicationNoticeAction.edit,
+                      enabled: canEdit,
+                      child: const ListTile(
+                        leading: Icon(Icons.edit_rounded),
+                        title: Text('Edit'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _CommunicationNoticeAction.publish,
+                      enabled:
+                          canEdit &&
+                          readText(notice, const ['status'], fallback: '') ==
+                              'Draft',
+                      child: const ListTile(
+                        leading: Icon(Icons.send_rounded),
+                        title: Text('Publish'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _CommunicationNoticeAction.archive,
+                      enabled: canArchive && status != 'Archived',
+                      child: const ListTile(
+                        leading: Icon(Icons.archive_rounded),
+                        title: Text('Archive'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunicationPreviewCard extends StatelessWidget {
+  const _CommunicationPreviewCard({
+    required this.notice,
+    required this.showActions,
+    required this.canPublish,
+    required this.onPublish,
+  });
+
+  final Map<String, dynamic>? notice;
+  final bool showActions;
+  final bool canPublish;
+  final VoidCallback? onPublish;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = notice;
+    if (item == null) {
+      return const EmptyState(
+        title: 'No preview',
+        message: 'Choose an announcement to preview it.',
+      );
+    }
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Reference',
+                  value: readText(item, const ['referenceNo'], fallback: '-'),
+                ),
+              ),
+              StatusPill(label: _communicationNoticeDisplayStatus(item)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.page,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${readText(item, const ['type'], fallback: 'Notice')} | ${readText(item, const ['audience'], fallback: 'All')}',
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  readText(item, const ['title', 'subject']),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  readText(item, const [
+                    'body',
+                    'message',
+                    'description',
+                  ], fallback: '-'),
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Priority',
+                  value: readText(item, const ['priority'], fallback: 'Normal'),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Created By',
+                  value: readText(item, const [
+                    'createdByName',
+                    'createdBy',
+                  ], fallback: '-'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Publish',
+                  value: _noticeDateLabel(item['publishDate']),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Expiry',
+                  value: _noticeDateLabel(item['expiryDate']),
+                ),
+              ),
+            ],
+          ),
+          if (showActions) ...[
+            const SizedBox(height: 14),
+            ElevatedButton.icon(
+              onPressed:
+                  canPublish &&
+                      readText(item, const ['status'], fallback: '') == 'Draft'
+                  ? onPublish
+                  : null,
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: const Text('Publish'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Color _noticePriorityColor(Map<String, dynamic> notice) {
+  final priority = readText(notice, const ['priority'], fallback: 'Normal');
+  if (priority == 'Urgent') return AppColors.danger;
+  if (priority == 'Important') return AppColors.warning;
+  return AppColors.primary;
+}
+
+String _communicationNoticeDisplayStatus(Map<String, dynamic> notice) {
+  final status = readText(notice, const ['status'], fallback: '');
+  if (status == 'Archived') return 'Archived';
+  if (status == 'Draft') return 'Draft';
+  final expiry = readDate(notice['expiryDate']);
+  if (expiry != null) {
+    final expiresAt = DateTime(
+      expiry.year,
+      expiry.month,
+      expiry.day,
+      23,
+      59,
+      59,
+    );
+    if (expiresAt.isBefore(DateTime.now())) return 'Expired';
+  }
+  if (status == 'Published') {
+    final publish = readDate(notice['publishDate']);
+    if (publish == null) return 'Published';
+    final publishAt = DateTime(publish.year, publish.month, publish.day);
+    final now = DateTime.now();
+    return publishAt.isAfter(DateTime(now.year, now.month, now.day))
+        ? 'Scheduled'
+        : 'Published';
+  }
+  return 'Scheduled';
+}
+
+String _noticeDateLabel(Object? value) {
+  if (value == null) return '-';
+  final date = readDate(value);
+  if (date != null) return DateFormat('d MMM yyyy').format(date);
+  final text = value.toString().trim();
+  return text.isEmpty ? '-' : text;
+}
+
+String _noticeDateInputText(Object? value) {
+  final date = readDate(value);
+  if (date != null) return DateFormat('yyyy-MM-dd').format(date);
+  final text = value?.toString().trim() ?? '';
+  return text;
+}
+
+class _CommunicationNoticeFormSheet extends StatefulWidget {
+  const _CommunicationNoticeFormSheet({
+    required this.task,
+    required this.academicYear,
+    required this.onSave,
+    this.notice,
+  });
+
+  final String task;
+  final String academicYear;
+  final Map<String, dynamic>? notice;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_CommunicationNoticeFormSheet> createState() =>
+      _CommunicationNoticeFormSheetState();
+}
+
+class _CommunicationNoticeFormSheetState
+    extends State<_CommunicationNoticeFormSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _referenceController;
+  late final TextEditingController _bodyController;
+  late final TextEditingController _publishDateController;
+  late final TextEditingController _expiryDateController;
+  late String _type;
+  late String _audience;
+  late String _priority;
+  late String _status;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final notice = widget.notice ?? const <String, dynamic>{};
+    _type = readText(
+      notice,
+      const ['type'],
+      fallback: widget.task == 'alerts'
+          ? 'SMS/WhatsApp Alert'
+          : widget.task == 'parents'
+          ? 'Parent Communication'
+          : 'Digital Notice',
+    );
+    _audience = readText(notice, const [
+      'audience',
+    ], fallback: widget.task == 'parents' ? 'Parents' : 'All');
+    _priority = readText(notice, const ['priority'], fallback: 'Normal');
+    _status = readText(notice, const ['status'], fallback: 'Draft');
+    _titleController = TextEditingController(
+      text: readText(notice, const ['title'], fallback: ''),
+    );
+    _referenceController = TextEditingController(
+      text: readText(notice, const ['referenceNo'], fallback: ''),
+    );
+    _bodyController = TextEditingController(
+      text: readText(notice, const ['body', 'message'], fallback: ''),
+    );
+    _publishDateController = TextEditingController(
+      text: _noticeDateInputText(
+        notice['publishDate'] ?? DateTime.now().toIso8601String(),
+      ),
+    );
+    _expiryDateController = TextEditingController(
+      text: _noticeDateInputText(notice['expiryDate']),
+    );
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _referenceController.dispose();
+    _bodyController.dispose();
+    _publishDateController.dispose();
+    _expiryDateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    final body = _bodyController.text.trim();
+    final publishDate = _publishDateController.text.trim();
+    final expiryDate = _expiryDateController.text.trim();
+    if (title.isEmpty) {
+      setState(() => _error = 'Title is required.');
+      return;
+    }
+    if (!_noticeTypes.contains(_type)) {
+      setState(() => _error = 'Notice type is required.');
+      return;
+    }
+    if (!_noticeAudiences.contains(_audience)) {
+      setState(() => _error = 'Audience is required.');
+      return;
+    }
+    if (body.isEmpty) {
+      setState(() => _error = 'Notice content is required.');
+      return;
+    }
+    if (publishDate.isEmpty) {
+      setState(() => _error = 'Publish date is required.');
+      return;
+    }
+    final publishDateValue = DateTime.tryParse(publishDate);
+    final expiryDateValue = DateTime.tryParse(expiryDate);
+    if (publishDateValue == null) {
+      setState(() => _error = 'Publish date must be YYYY-MM-DD.');
+      return;
+    }
+    if (expiryDate.isNotEmpty && expiryDateValue == null) {
+      setState(() => _error = 'Expiry date must be YYYY-MM-DD.');
+      return;
+    }
+    if (expiryDateValue != null && expiryDateValue.isBefore(publishDateValue)) {
+      setState(() => _error = 'Expiry date cannot be before publish date.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave({
+        'type': _type,
+        'title': title,
+        'referenceNo': _referenceController.text.trim(),
+        'audience': _audience,
+        'priority': _priority,
+        'body': body,
+        'publishDate': publishDate,
+        'expiryDate': expiryDate,
+        'status': _status,
+        if (widget.academicYear.isNotEmpty) 'academicYear': widget.academicYear,
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FeeSheetChrome(
+      title: widget.notice == null
+          ? 'Create Announcement'
+          : 'Edit Announcement',
+      helper: 'Publish announcements, circulars, and event communication.',
+      saving: _saving,
+      error: _error,
+      saveLabel: widget.notice == null ? 'Create' : 'Save Changes',
+      onSave: _save,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _type,
+          items: _noticeTypes
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Type *'),
+          onChanged: (value) => setState(() => _type = value ?? _type),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _audience,
+          items: _noticeAudiences
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Audience *'),
+          onChanged: (value) => setState(() => _audience = value ?? _audience),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _titleController,
+          decoration: const InputDecoration(labelText: 'Title *'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _referenceController,
+          decoration: const InputDecoration(labelText: 'Reference No.'),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _priority,
+          items: _noticePriorities
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          decoration: const InputDecoration(labelText: 'Priority'),
+          onChanged: (value) => setState(() => _priority = value ?? _priority),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _publishDateController,
+          keyboardType: TextInputType.datetime,
+          decoration: const InputDecoration(
+            labelText: 'Publish Date *',
+            hintText: 'YYYY-MM-DD',
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _expiryDateController,
+          keyboardType: TextInputType.datetime,
+          decoration: const InputDecoration(
+            labelText: 'Expiry Date',
+            hintText: 'YYYY-MM-DD',
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _bodyController,
+          maxLines: 5,
+          decoration: const InputDecoration(labelText: 'Content *'),
+        ),
+      ],
     );
   }
 }
