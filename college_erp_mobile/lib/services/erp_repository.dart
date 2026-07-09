@@ -361,6 +361,9 @@ class ErpRepository {
             'hostelRecords',
             academicYear: academicYear,
           ),
+          'students': user.isParent
+              ? await linkedParentStudents(user, academicYear: academicYear)
+              : await listCollection('students', academicYear: academicYear),
         };
       case 'parent-portal':
         final students = await linkedParentStudents(

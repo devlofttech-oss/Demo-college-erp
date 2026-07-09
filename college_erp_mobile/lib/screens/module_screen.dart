@@ -103,6 +103,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _communicationTypeFilter = '';
   var _communicationAudienceFilter = '';
   var _communicationStatusFilter = '';
+  var _hostelTab = 'rooms';
   var _documentSelectedId = '';
   var _documentOwnerTypeFilter = '';
   var _documentCategoryFilter = '';
@@ -366,19 +367,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('hostel.manage'))
             _ModuleAction(
-              label: 'Add Room',
-              icon: Icons.bed_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Hostel Room',
-                collectionName: 'hostelRooms',
-                fields: const [
-                  _FieldSpec('roomNumber', 'Room number', isRequired: true),
-                  _FieldSpec('block', 'Block'),
-                  _FieldSpec('capacity', 'Capacity', numeric: true),
-                  _FieldSpec('roomType', 'Room type'),
-                ],
-                defaults: {'status': 'Available'},
-              ),
+              label: 'New ${_hostelTabLabel(_hostelTab, singular: true)}',
+              icon: _hostelTabIcon(_hostelTab),
+              onTap: () => _showHostelEntrySheet(data),
             ),
         ];
       case 'academics':
@@ -6188,65 +6179,289 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _hostel(Map<String, List<Map<String, dynamic>>> data) {
-    final rooms = _items(data, 'rooms')
-        .where(
-          (item) => containsQuery(item, _query, const [
-            'roomNo',
-            'roomNumber',
-            'block',
-            'status',
-          ]),
-        )
-        .toList();
+    final rooms = _items(data, 'rooms');
     final allocations = _items(data, 'allocations');
+    final records = _items(data, 'records');
+    final summary = _hostelSummary(rooms, allocations, records);
+    final activeRows =
+        (_hostelTab == 'rooms'
+                ? rooms
+                : _hostelTab == 'allocations'
+                ? allocations
+                : records)
+            .where((item) => _hostelMatchesQuery(item, _query))
+            .toList();
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFB9A5B).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.bed_rounded,
+                  color: Color(0xFFFB8D49),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Campus Services / Hostel Management',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Hostel Management',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Room allocation, hostel occupancy tracking, and hostel records management.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         _SummaryRow(
           stats: [
             _Stat(
               'Rooms',
-              rooms.length.toString(),
+              summary.rooms.toString(),
+              Icons.home_rounded,
+              const Color(0xFFFB8D49),
+            ),
+            _Stat(
+              'Capacity',
+              summary.totalCapacity.toString(),
               Icons.bed_rounded,
               AppColors.primary,
             ),
             _Stat(
-              'Allocations',
-              allocations.length.toString(),
-              Icons.person_pin_circle_rounded,
+              'Occupied',
+              '${summary.occupancyRate}%',
+              Icons.groups_rounded,
               AppColors.accent,
             ),
             _Stat(
-              'Records',
-              _items(data, 'records').length.toString(),
-              Icons.fact_check_rounded,
-              const Color(0xFF6B8B4E),
+              'Open',
+              summary.openRecords.toString(),
+              Icons.assignment_rounded,
+              AppColors.warning,
             ),
           ],
         ),
-        const SectionTitle('Hostel Rooms'),
-        if (rooms.isEmpty)
-          const EmptyState(
-            title: 'No hostel rooms',
-            message: 'Hostel rooms and allocations will appear here.',
+        if (_can('hostel.manage')) ...[
+          const SizedBox(height: 12),
+          PrimaryActionButton(
+            label: 'New ${_hostelTabLabel(_hostelTab, singular: true)}',
+            icon: _hostelTabIcon(_hostelTab),
+            onPressed: () => _showHostelEntrySheet(data),
+          ),
+        ],
+        const SectionTitle('Hostel Desk'),
+        _SegmentedFilter(
+          value: _hostelTab,
+          options: const {
+            'rooms': 'Rooms',
+            'allocations': 'Allocations',
+            'records': 'Records',
+          },
+          onChanged: (value) => setState(() => _hostelTab = value),
+        ),
+        SectionTitle(_hostelTabLabel(_hostelTab)),
+        if (activeRows.isEmpty)
+          EmptyState(
+            title: 'No ${_hostelTabLabel(_hostelTab).toLowerCase()} found',
+            message:
+                'Hostel ${_hostelTabLabel(_hostelTab).toLowerCase()} matching your search will appear here.',
           )
         else
-          ...rooms.map(
-            (room) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _CompactRow(
-                title:
-                    'Room ${readText(room, const ['roomNo', 'roomNumber', 'name'])}',
-                subtitle:
-                    '${readText(room, const ['block', 'building'], fallback: 'Block')} · ${readText(room, const ['capacity'], fallback: 'Capacity')}',
-                trailing: StatusPill(
-                  label: readText(room, const [
-                    'status',
-                  ], fallback: 'Available'),
-                ),
+          ...activeRows.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _HostelCard(
+                tab: _hostelTab,
+                item: item,
+                onTap: () => _showHostelDetailSheet(_hostelTab, item),
               ),
             ),
           ),
       ],
+    );
+  }
+
+  List<Map<String, dynamic>> _hostelActiveStudents(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(
+      data,
+      'students',
+    ).where((student) => !_isArchivedStudent(student)).toList();
+  }
+
+  Future<void> _showHostelEntrySheet(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _HostelEntrySheet(
+        activeTab: _hostelTab,
+        rooms: _items(data, 'rooms'),
+        allocations: _items(data, 'allocations'),
+        students: _hostelActiveStudents(data),
+        academicYear: _academicYear,
+        onSave: (values) => _saveHostelEntry(values, data),
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Hostel record created'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  Future<void> _saveHostelEntry(
+    Map<String, dynamic> values,
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('hostel.manage')) {
+      throw StateError('You do not have permission to manage hostel records.');
+    }
+    final createdAtText = DateFormat('dd MMM yyyy').format(DateTime.now());
+    if (_hostelTab == 'rooms') {
+      final payload = {
+        'roomNo': readText(values, const ['roomNo']).trim(),
+        'hostelName': readText(values, const ['hostelName']).trim(),
+        'blockName': readText(values, const ['blockName']).trim(),
+        'floor': readText(values, const ['floor']).trim(),
+        'capacity': readNumber(values, const ['capacity'], fallback: 0),
+        'occupiedCount': readNumber(values, const [
+          'occupiedCount',
+        ], fallback: 0),
+        'status': readText(values, const ['status'], fallback: 'Available'),
+        if (_academicYear.trim().isNotEmpty) 'academicYear': _academicYear,
+        'wardenName': readText(values, const ['wardenName']).trim(),
+        'createdAtText': createdAtText,
+      };
+      final message = _validateHostelRoom(payload);
+      if (message.isNotEmpty) throw ArgumentError(message);
+      await widget.repository.createDocument('hostelRooms', payload);
+      return;
+    }
+
+    if (_hostelTab == 'allocations') {
+      final roomId = readText(values, const ['roomId']);
+      final studentRecordId = readText(values, const ['studentRecordId']);
+      final room = _hostelFindById(_items(data, 'rooms'), roomId);
+      final student = _hostelFindById(
+        _hostelActiveStudents(data),
+        studentRecordId,
+      );
+      if (room == null) throw ArgumentError('Select an available hostel room.');
+      if (student == null) throw ArgumentError('Select a student to allocate.');
+      final capacity = readNumber(room, const ['capacity'], fallback: 0);
+      final currentOccupied = readNumber(room, const [
+        'occupiedCount',
+      ], fallback: 0);
+      if (currentOccupied >= capacity) {
+        throw ArgumentError('Selected hostel room is already full.');
+      }
+      final payload = {
+        'studentRecordId': studentRecordId,
+        'studentName': readText(student, const [
+          'name',
+          'studentName',
+        ], fallback: ''),
+        'studentId': readText(student, const [
+          'studentId',
+          'admissionNo',
+        ], fallback: ''),
+        'courseName': readText(student, const [
+          'courseName',
+          'program',
+          'className',
+        ], fallback: ''),
+        'courseCode': readText(student, const ['courseCode'], fallback: ''),
+        'roomNo': readText(room, const ['roomNo', 'roomNumber']),
+        'hostelName': readText(room, const ['hostelName']),
+        'allocatedOn': readText(values, const ['allocatedOn']),
+        if (_academicYear.trim().isNotEmpty) 'academicYear': _academicYear,
+        'status': readText(values, const ['status'], fallback: 'Active'),
+        'guardianPhone': readText(student, const ['phone'], fallback: ''),
+        'createdAtText': createdAtText,
+      };
+      final message = _validateHostelAllocation(payload);
+      if (message.isNotEmpty) throw ArgumentError(message);
+      await widget.repository.createDocument('hostelAllocations', payload);
+      final occupiedCount = currentOccupied + 1;
+      await widget.repository.updateDocument('hostelRooms', roomId, {
+        'occupiedCount': occupiedCount,
+        'status': occupiedCount >= capacity ? 'Full' : 'Available',
+      });
+      return;
+    }
+
+    final roomId = readText(values, const ['roomId']);
+    final room = _hostelFindById(_items(data, 'rooms'), roomId);
+    final payload = {
+      'recordType': readText(values, const ['recordType']).trim(),
+      'title': readText(values, const ['title']).trim(),
+      'hostelName': readText(room ?? values, const [
+        'hostelName',
+      ], fallback: '').trim(),
+      'roomNo': readText(room ?? values, const ['roomNo'], fallback: '').trim(),
+      'recordDate': readText(values, const ['recordDate']),
+      'status': readText(values, const ['status'], fallback: 'Open'),
+      'notes': readText(values, const ['notes']).trim(),
+      if (_academicYear.trim().isNotEmpty) 'academicYear': _academicYear,
+      'createdAtText': createdAtText,
+    };
+    final message = _validateHostelRecord(payload);
+    if (message.isNotEmpty) throw ArgumentError(message);
+    await widget.repository.createDocument('hostelRecords', payload);
+  }
+
+  Map<String, dynamic>? _hostelFindById(
+    List<Map<String, dynamic>> items,
+    String id,
+  ) {
+    for (final item in items) {
+      if (readText(item, const ['id'], fallback: '') == id) return item;
+    }
+    return null;
+  }
+
+  void _showHostelDetailSheet(String tab, Map<String, dynamic> item) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _HostelDetailSheet(tab: tab, item: item),
     );
   }
 
@@ -7535,6 +7750,864 @@ class _ModuleAction {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+}
+
+const _hostelRoomStatuses = ['Available', 'Full', 'Maintenance', 'Archived'];
+const _hostelAllocationStatuses = ['Active', 'Released'];
+const _hostelRecordStatuses = ['Open', 'Closed', 'Archived'];
+
+class _HostelSummary {
+  const _HostelSummary({
+    required this.rooms,
+    required this.totalCapacity,
+    required this.occupied,
+    required this.available,
+    required this.occupancyRate,
+    required this.activeAllocations,
+    required this.openRecords,
+  });
+
+  final int rooms;
+  final int totalCapacity;
+  final int occupied;
+  final int available;
+  final int occupancyRate;
+  final int activeAllocations;
+  final int openRecords;
+}
+
+_HostelSummary _hostelSummary(
+  List<Map<String, dynamic>> rooms,
+  List<Map<String, dynamic>> allocations,
+  List<Map<String, dynamic>> records,
+) {
+  final activeRooms = rooms
+      .where(
+        (room) =>
+            readText(room, const ['status'], fallback: '').toLowerCase() !=
+            'archived',
+      )
+      .toList();
+  final totalCapacity = activeRooms.fold<int>(
+    0,
+    (total, room) => total + readNumber(room, const ['capacity']).round(),
+  );
+  final occupied = activeRooms.fold<int>(
+    0,
+    (total, room) => total + readNumber(room, const ['occupiedCount']).round(),
+  );
+  final activeAllocations = allocations
+      .where(
+        (item) => readText(item, const ['status'], fallback: '') == 'Active',
+      )
+      .length;
+  final openRecords = records
+      .where(
+        (item) => ![
+          'Closed',
+          'Archived',
+        ].contains(readText(item, const ['status'], fallback: '')),
+      )
+      .length;
+  return _HostelSummary(
+    rooms: activeRooms.length,
+    totalCapacity: totalCapacity,
+    occupied: occupied,
+    available: totalCapacity > occupied ? totalCapacity - occupied : 0,
+    occupancyRate: totalCapacity == 0
+        ? 0
+        : ((occupied / totalCapacity) * 100).round(),
+    activeAllocations: activeAllocations,
+    openRecords: openRecords,
+  );
+}
+
+String _hostelTabLabel(String tab, {bool singular = false}) {
+  switch (tab) {
+    case 'allocations':
+      return singular ? 'Allocation' : 'Allocations';
+    case 'records':
+      return singular ? 'Record' : 'Records';
+    case 'rooms':
+    default:
+      return singular ? 'Room' : 'Rooms';
+  }
+}
+
+IconData _hostelTabIcon(String tab) {
+  switch (tab) {
+    case 'allocations':
+      return Icons.person_pin_circle_rounded;
+    case 'records':
+      return Icons.assignment_rounded;
+    case 'rooms':
+    default:
+      return Icons.bed_rounded;
+  }
+}
+
+bool _hostelMatchesQuery(Map<String, dynamic> item, String query) {
+  return containsQuery(item, query, const [
+    'roomNo',
+    'roomNumber',
+    'hostelName',
+    'blockName',
+    'block',
+    'wardenName',
+    'studentName',
+    'studentId',
+    'courseName',
+    'recordType',
+    'title',
+    'status',
+  ]);
+}
+
+String _validateHostelRoom(Map<String, dynamic> form) {
+  if (readText(form, const ['roomNo']).trim().isEmpty) {
+    return 'Room number is required.';
+  }
+  if (readText(form, const ['hostelName']).trim().isEmpty) {
+    return 'Hostel name is required.';
+  }
+  final capacity = readNumber(form, const ['capacity'], fallback: 0);
+  final occupied = readNumber(form, const ['occupiedCount'], fallback: 0);
+  if (capacity < 1) return 'Room capacity must be at least 1.';
+  if (occupied > capacity) return 'Occupied count cannot exceed capacity.';
+  return '';
+}
+
+String _validateHostelAllocation(Map<String, dynamic> form) {
+  if (readText(form, const ['studentName']).trim().isEmpty) {
+    return 'Student name is required.';
+  }
+  if (readText(form, const ['studentId']).trim().isEmpty) {
+    return 'Student ID is required.';
+  }
+  if (readText(form, const ['roomNo']).trim().isEmpty) {
+    return 'Room number is required.';
+  }
+  if (readText(form, const ['hostelName']).trim().isEmpty) {
+    return 'Hostel name is required.';
+  }
+  return '';
+}
+
+String _validateHostelRecord(Map<String, dynamic> form) {
+  if (readText(form, const ['title']).trim().isEmpty) {
+    return 'Record title is required.';
+  }
+  if (readText(form, const ['recordType']).trim().isEmpty) {
+    return 'Record type is required.';
+  }
+  return '';
+}
+
+class _HostelCard extends StatelessWidget {
+  const _HostelCard({
+    required this.tab,
+    required this.item,
+    required this.onTap,
+  });
+
+  final String tab;
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = readText(item, const ['status'], fallback: '-');
+    final title = switch (tab) {
+      'allocations' => readText(item, const [
+        'studentName',
+        'studentId',
+      ], fallback: 'Student'),
+      'records' => readText(item, const ['title'], fallback: 'Hostel record'),
+      _ =>
+        '${readText(item, const ['hostelName'], fallback: 'Hostel')} / ${readText(item, const ['roomNo', 'roomNumber'], fallback: 'Room')}',
+    };
+    final subtitle = switch (tab) {
+      'allocations' =>
+        '${readText(item, const ['studentId'], fallback: '-')} | ${readText(item, const ['courseName'], fallback: 'Course')}',
+      'records' =>
+        '${readText(item, const ['recordType'], fallback: 'Record')} | ${_hostelDateLabel(item, const ['recordDate', 'createdAtText'])}',
+      _ =>
+        '${readText(item, const ['blockName', 'block'], fallback: 'Block')} | Floor ${readText(item, const ['floor'], fallback: '-')}',
+    };
+    final detail = switch (tab) {
+      'allocations' =>
+        '${readText(item, const ['hostelName'], fallback: '-')} / ${readText(item, const ['roomNo'], fallback: '-')}',
+      'records' =>
+        '${readText(item, const ['hostelName'], fallback: '-')} ${readText(item, const ['roomNo'], fallback: '')}'
+            .trim(),
+      _ =>
+        '${readNumber(item, const ['occupiedCount']).round()} / ${readNumber(item, const ['capacity']).round()} occupied',
+    };
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            height: 46,
+            width: 46,
+            decoration: BoxDecoration(
+              color: _hostelStatusColor(status).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(_hostelTabIcon(tab), color: _hostelStatusColor(status)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  detail.isEmpty ? '-' : detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              StatusPill(label: status),
+              const SizedBox(height: 8),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HostelDetailSheet extends StatelessWidget {
+  const _HostelDetailSheet({required this.tab, required this.item});
+
+  final String tab;
+  final Map<String, dynamic> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = _hostelDetailFields(tab, item);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _hostelTabLabel(tab, singular: true),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  StatusPill(
+                    label: readText(item, const ['status'], fallback: '-'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ...fields.map(
+                (field) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: LabelValue(label: field.$1, value: field.$2),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                label: const Text('Close'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HostelEntrySheet extends StatefulWidget {
+  const _HostelEntrySheet({
+    required this.activeTab,
+    required this.rooms,
+    required this.allocations,
+    required this.students,
+    required this.academicYear,
+    required this.onSave,
+  });
+
+  final String activeTab;
+  final List<Map<String, dynamic>> rooms;
+  final List<Map<String, dynamic>> allocations;
+  final List<Map<String, dynamic>> students;
+  final String academicYear;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_HostelEntrySheet> createState() => _HostelEntrySheetState();
+}
+
+class _HostelEntrySheetState extends State<_HostelEntrySheet> {
+  final _roomNoController = TextEditingController();
+  final _hostelNameController = TextEditingController();
+  final _blockNameController = TextEditingController();
+  final _floorController = TextEditingController();
+  final _capacityController = TextEditingController();
+  final _occupiedController = TextEditingController(text: '0');
+  final _wardenController = TextEditingController();
+  final _allocatedOnController = TextEditingController();
+  final _recordTypeController = TextEditingController();
+  final _titleController = TextEditingController();
+  final _recordDateController = TextEditingController();
+  final _notesController = TextEditingController();
+  var _roomStatus = 'Available';
+  var _allocationStatus = 'Active';
+  var _recordStatus = 'Open';
+  var _studentRecordId = '';
+  var _roomId = '';
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void dispose() {
+    _roomNoController.dispose();
+    _hostelNameController.dispose();
+    _blockNameController.dispose();
+    _floorController.dispose();
+    _capacityController.dispose();
+    _occupiedController.dispose();
+    _wardenController.dispose();
+    _allocatedOnController.dispose();
+    _recordTypeController.dispose();
+    _titleController.dispose();
+    _recordDateController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _availableRooms {
+    return widget.rooms.where((room) {
+      final status = readText(room, const ['status'], fallback: '');
+      final capacity = readNumber(room, const ['capacity'], fallback: 0);
+      final occupied = readNumber(room, const ['occupiedCount'], fallback: 0);
+      return status != 'Archived' && occupied < capacity;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _availableStudents {
+    final allocatedKeys = widget.allocations
+        .where(
+          (item) => readText(item, const ['status'], fallback: '') == 'Active',
+        )
+        .expand(
+          (item) => [
+            readText(item, const ['studentRecordId'], fallback: ''),
+            readText(item, const ['studentId'], fallback: ''),
+          ],
+        )
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    return widget.students.where((student) {
+      final recordId = readText(student, const ['id'], fallback: '');
+      final studentId = readText(student, const ['studentId'], fallback: '');
+      return !allocatedKeys.contains(recordId) &&
+          !allocatedKeys.contains(studentId);
+    }).toList();
+  }
+
+  Future<void> _save() async {
+    final values = switch (widget.activeTab) {
+      'allocations' => {
+        'studentRecordId': _studentRecordId,
+        'roomId': _roomId,
+        'allocatedOn': _allocatedOnController.text.trim(),
+        'status': _allocationStatus,
+      },
+      'records' => {
+        'recordType': _recordTypeController.text.trim(),
+        'title': _titleController.text.trim(),
+        'roomId': _roomId,
+        'hostelName': _hostelNameController.text.trim(),
+        'roomNo': _roomNoController.text.trim(),
+        'recordDate': _recordDateController.text.trim(),
+        'status': _recordStatus,
+        'notes': _notesController.text.trim(),
+      },
+      _ => {
+        'roomNo': _roomNoController.text.trim(),
+        'hostelName': _hostelNameController.text.trim(),
+        'blockName': _blockNameController.text.trim(),
+        'floor': _floorController.text.trim(),
+        'capacity': _capacityController.text.trim(),
+        'occupiedCount': _occupiedController.text.trim(),
+        'wardenName': _wardenController.text.trim(),
+        'status': _roomStatus,
+      },
+    };
+    final validation = switch (widget.activeTab) {
+      'allocations' =>
+        _studentRecordId.isEmpty
+            ? 'Select a student to allocate.'
+            : _roomId.isEmpty
+            ? 'Select an available hostel room.'
+            : '',
+      'records' => _validateHostelRecord(values),
+      _ => _validateHostelRoom(values),
+    };
+    if (validation.isNotEmpty) {
+      setState(() => _error = validation);
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(values);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _selectRoom(String id) {
+    final room = widget.rooms.firstWhere(
+      (item) => readText(item, const ['id'], fallback: '') == id,
+      orElse: () => const <String, dynamic>{},
+    );
+    setState(() {
+      _roomId = id;
+      if (room.isNotEmpty) {
+        _roomNoController.text = readText(room, const ['roomNo', 'roomNumber']);
+        _hostelNameController.text = readText(room, const ['hostelName']);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _hostelTabLabel(widget.activeTab, singular: true);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'New $label',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Save a live hostel record for ${widget.academicYear.isEmpty ? 'the selected academic year' : widget.academicYear}.',
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              ..._fieldsForActiveTab(),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Saving...' : 'Save $label'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _fieldsForActiveTab() {
+    switch (widget.activeTab) {
+      case 'allocations':
+        return [
+          _dropdown(
+            label: _availableStudents.isEmpty
+                ? 'No unallocated students'
+                : 'Student *',
+            value:
+                _availableStudents.any(
+                  (student) =>
+                      readText(student, const ['id'], fallback: '') ==
+                      _studentRecordId,
+                )
+                ? _studentRecordId
+                : '',
+            items: [
+              const DropdownMenuItem(value: '', child: Text('Select student')),
+              ..._availableStudents.map(
+                (student) => DropdownMenuItem(
+                  value: readText(student, const ['id'], fallback: ''),
+                  child: Text(
+                    [
+                      readText(student, const ['name', 'studentName']),
+                      readText(student, const ['studentId']),
+                    ].where((value) => value.isNotEmpty).join(' - '),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: _saving || _availableStudents.isEmpty
+                ? null
+                : (value) => setState(() => _studentRecordId = value ?? ''),
+          ),
+          const SizedBox(height: 10),
+          _dropdown(
+            label: _availableRooms.isEmpty ? 'No available rooms' : 'Room *',
+            value:
+                _availableRooms.any(
+                  (room) =>
+                      readText(room, const ['id'], fallback: '') == _roomId,
+                )
+                ? _roomId
+                : '',
+            items: [
+              const DropdownMenuItem(value: '', child: Text('Select room')),
+              ..._availableRooms.map(
+                (room) => DropdownMenuItem(
+                  value: readText(room, const ['id'], fallback: ''),
+                  child: Text(
+                    '${readText(room, const ['hostelName'], fallback: 'Hostel')} / ${readText(room, const ['roomNo', 'roomNumber'], fallback: 'Room')}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: _saving || _availableRooms.isEmpty
+                ? null
+                : (value) => _selectRoom(value ?? ''),
+          ),
+          const SizedBox(height: 10),
+          _textField(
+            _allocatedOnController,
+            'Allocated On',
+            hint: 'YYYY-MM-DD',
+          ),
+          const SizedBox(height: 10),
+          _statusDropdown(
+            value: _allocationStatus,
+            options: _hostelAllocationStatuses,
+            onChanged: (value) =>
+                setState(() => _allocationStatus = value ?? 'Active'),
+          ),
+        ];
+      case 'records':
+        return [
+          _textField(_recordTypeController, 'Record Type *'),
+          const SizedBox(height: 10),
+          _textField(_titleController, 'Title *'),
+          const SizedBox(height: 10),
+          _dropdown(
+            label: 'Linked Room',
+            value:
+                widget.rooms.any(
+                  (room) =>
+                      readText(room, const ['id'], fallback: '') == _roomId,
+                )
+                ? _roomId
+                : '',
+            items: [
+              const DropdownMenuItem(value: '', child: Text('No linked room')),
+              ...widget.rooms.map(
+                (room) => DropdownMenuItem(
+                  value: readText(room, const ['id'], fallback: ''),
+                  child: Text(
+                    '${readText(room, const ['hostelName'], fallback: 'Hostel')} / ${readText(room, const ['roomNo', 'roomNumber'], fallback: 'Room')}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: _saving ? null : (value) => _selectRoom(value ?? ''),
+          ),
+          const SizedBox(height: 10),
+          _textField(_recordDateController, 'Record Date', hint: 'YYYY-MM-DD'),
+          const SizedBox(height: 10),
+          _textField(_hostelNameController, 'Hostel Name'),
+          const SizedBox(height: 10),
+          _textField(_roomNoController, 'Room Number'),
+          const SizedBox(height: 10),
+          _statusDropdown(
+            value: _recordStatus,
+            options: _hostelRecordStatuses,
+            onChanged: (value) =>
+                setState(() => _recordStatus = value ?? 'Open'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _notesController,
+            enabled: !_saving,
+            minLines: 3,
+            maxLines: 5,
+            decoration: const InputDecoration(labelText: 'Notes'),
+          ),
+        ];
+      default:
+        return [
+          _textField(_roomNoController, 'Room Number *'),
+          const SizedBox(height: 10),
+          _textField(_hostelNameController, 'Hostel Name *'),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _textField(_blockNameController, 'Block')),
+              const SizedBox(width: 10),
+              Expanded(child: _textField(_floorController, 'Floor')),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _textField(
+                  _capacityController,
+                  'Capacity *',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _textField(
+                  _occupiedController,
+                  'Occupied Count',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _textField(_wardenController, 'Warden Name'),
+          const SizedBox(height: 10),
+          _statusDropdown(
+            value: _roomStatus,
+            options: _hostelRoomStatuses,
+            onChanged: (value) =>
+                setState(() => _roomStatus = value ?? 'Available'),
+          ),
+        ];
+    }
+  }
+
+  Widget _textField(
+    TextEditingController controller,
+    String label, {
+    String? hint,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: !_saving,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(labelText: label, hintText: hint),
+    );
+  }
+
+  Widget _statusDropdown({
+    required String value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return _dropdown(
+      label: 'Status',
+      value: value,
+      items: options
+          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+          .toList(),
+      onChanged: _saving ? null : onChanged,
+    );
+  }
+
+  Widget _dropdown({
+    required String label,
+    required String value,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?>? onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: InputDecoration(labelText: label),
+      isExpanded: true,
+      items: items,
+      onChanged: onChanged,
+    );
+  }
+}
+
+List<(String, String)> _hostelDetailFields(
+  String tab,
+  Map<String, dynamic> item,
+) {
+  if (tab == 'allocations') {
+    return [
+      ('Student', readText(item, const ['studentName'], fallback: '-')),
+      ('Student ID', readText(item, const ['studentId'], fallback: '-')),
+      ('Course', readText(item, const ['courseName'], fallback: '-')),
+      (
+        'Room',
+        '${readText(item, const ['hostelName'], fallback: '-')} / ${readText(item, const ['roomNo'], fallback: '-')}',
+      ),
+      ('Allocated On', readText(item, const ['allocatedOn'], fallback: '-')),
+      (
+        'Guardian Phone',
+        readText(item, const ['guardianPhone'], fallback: '-'),
+      ),
+    ];
+  }
+  if (tab == 'records') {
+    return [
+      ('Title', readText(item, const ['title'], fallback: '-')),
+      ('Record Type', readText(item, const ['recordType'], fallback: '-')),
+      (
+        'Room',
+        '${readText(item, const ['hostelName'], fallback: '-')} ${readText(item, const ['roomNo'], fallback: '')}'
+            .trim(),
+      ),
+      ('Record Date', readText(item, const ['recordDate'], fallback: '-')),
+      ('Notes', readText(item, const ['notes'], fallback: '-')),
+    ];
+  }
+  return [
+    (
+      'Room',
+      '${readText(item, const ['hostelName'], fallback: '-')} / ${readText(item, const ['roomNo', 'roomNumber'], fallback: '-')}',
+    ),
+    ('Block', readText(item, const ['blockName', 'block'], fallback: '-')),
+    ('Floor', readText(item, const ['floor'], fallback: '-')),
+    ('Capacity', readNumber(item, const ['capacity']).round().toString()),
+    ('Occupied', readNumber(item, const ['occupiedCount']).round().toString()),
+    ('Warden', readText(item, const ['wardenName'], fallback: '-')),
+  ];
+}
+
+String _hostelDateLabel(Map<String, dynamic> item, List<String> keys) {
+  final explicit = readText(item, keys, fallback: '');
+  if (explicit.isNotEmpty) return explicit;
+  final date = readDate(item['createdAt'] ?? item['updatedAt']);
+  return date == null ? '-' : DateFormat('dd MMM yyyy').format(date);
+}
+
+Color _hostelStatusColor(String status) {
+  switch (status) {
+    case 'Active':
+    case 'Available':
+    case 'Closed':
+      return AppColors.accent;
+    case 'Full':
+    case 'Open':
+      return AppColors.warning;
+    case 'Maintenance':
+    case 'Released':
+      return AppColors.primary;
+    case 'Archived':
+      return AppColors.danger;
+    default:
+      return AppColors.primaryDark;
+  }
 }
 
 const _documentOwnerTypes = ['Student', 'Staff', 'Other'];
@@ -10706,7 +11779,7 @@ const healthRecordFieldSpecs = <_FieldSpec>[
   _FieldSpec('rollNo', 'Roll No'),
   _FieldSpec('courseYear', 'Course & Year'),
   _FieldSpec('dateOfBirth', 'Date of Birth'),
-  _FieldSpec('age', 'Age'),
+  _FieldSpec('age', 'Age', numeric: true),
   _FieldSpec('gender', 'Gender'),
   _FieldSpec('dateOfAdmission', 'Date of Admission'),
   _FieldSpec('dateOfCompletion', 'Date of Completion'),
@@ -10750,7 +11823,7 @@ const healthRecordFieldSpecs = <_FieldSpec>[
   _FieldSpec('sicknessDiagnosis', 'Sickness diagnosis'),
   _FieldSpec('sicknessTreatment', 'Sickness treatment'),
   _FieldSpec('sicknessInvestigation', 'Sickness investigation'),
-  _FieldSpec('sicknessDays', 'No. of Sick Days'),
+  _FieldSpec('sicknessDays', 'No. of Sick Days', numeric: true),
   _FieldSpec('sicknessSignature', 'Sickness signature'),
 ];
 
