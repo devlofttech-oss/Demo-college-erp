@@ -4853,3 +4853,84 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
     padding-left:18px;
   }
 }
+
+/* Keep the grouped course menu visually simple and free from global CTA gradients. */
+.erp-header .erp-course-picker-menu button.erp-course-picker-all,
+.erp-header .erp-course-picker-menu button.erp-course-picker-department,
+.erp-header .erp-course-picker-menu button.erp-course-picker-course {
+  background:#071117!important;
+  background-image:none!important;
+  border-color:transparent!important;
+  color:#e5edf0!important;
+  -webkit-text-fill-color:#e5edf0!important;
+  box-shadow:none!important;
+}
+
+.erp-header .erp-course-picker-menu button.erp-course-picker-department {
+  background:#0b171e!important;
+  border-color:rgba(255,255,255,.08)!important;
+}
+
+.erp-header .erp-course-picker-menu button.erp-course-picker-course {
+  background:transparent!important;
+  border-color:transparent!important;
+}
+
+.erp-header .erp-course-picker-menu button.erp-course-picker-all:hover,
+.erp-header .erp-course-picker-menu button.erp-course-picker-department:hover,
+.erp-header .erp-course-picker-menu button.erp-course-picker-course:hover {
+  background:#102129!important;
+  background-image:none!important;
+  border-color:rgba(0,255,136,.18)!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+}
+
+.erp-header .erp-course-picker-menu button.erp-course-picker-all.is-selected,
+.erp-header .erp-course-picker-menu button.erp-course-picker-course.is-selected {
+  background:rgba(0,255,136,.10)!important;
+  background-image:none!important;
+  border-color:rgba(0,255,136,.22)!important;
+  color:#dfffee!important;
+  -webkit-text-fill-color:#dfffee!important;
+}
+
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-all,
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-department,
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-course {
+  background:#ffffff!important;
+  background-image:none!important;
+  border-color:transparent!important;
+  color:#273244!important;
+  -webkit-text-fill-color:#273244!important;
+  box-shadow:none!important;
+}
+
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-department {
+  background:#f8fafc!important;
+  border-color:#e4eaf3!important;
+}
+
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-course {
+  background:#ffffff!important;
+  border-color:transparent!important;
+}
+
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-all:hover,
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-department:hover,
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-course:hover {
+  background:#eef7eb!important;
+  background-image:none!important;
+  border-color:#b8d4b0!important;
+  color:#033500!important;
+  -webkit-text-fill-color:#033500!important;
+}
+
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-all.is-selected,
+.erp-shell.light-mode .erp-header .erp-course-picker-menu button.erp-course-picker-course.is-selected {
+  background:#e1f0de!important;
+  background-image:none!important;
+  border-color:#8fbc86!important;
+  color:#033500!important;
+  -webkit-text-fill-color:#033500!important;
+}
