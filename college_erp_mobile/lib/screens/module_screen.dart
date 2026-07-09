@@ -2270,27 +2270,18 @@ class _ModuleScreenState extends State<ModuleScreen> {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _RecordFormSheet(
+      builder: (context) => _HealthRecordFormSheet(
         title: isEdit ? 'Edit Student Health Record' : 'Upload Health Record',
         helper: 'Stores the same structured health record used on the website.',
         saveLabel: isEdit ? 'Save Changes' : 'Upload Record',
-        initialValues: healthRecordFormValues(
-          student: student,
-          record: existingRecord,
-          academicYear: _academicYear,
-        ),
-        fields: healthRecordFieldSpecs,
-        onSave: (values) async {
-          final payload = healthRecordPayloadFromForm(
-            values: values,
-            student: student,
-            existingRecord: existingRecord,
-            academicYear: _academicYear,
-            savedAtText: _displayDateNow(),
-            userName: widget.user.name.isEmpty
-                ? widget.user.email
-                : widget.user.name,
-          );
+        student: student,
+        existingRecord: existingRecord,
+        academicYear: _academicYear,
+        savedAtText: _displayDateNow(),
+        userName: widget.user.name.isEmpty
+            ? widget.user.email
+            : widget.user.name,
+        onSave: (payload) async {
           final id = readText(existingRecord ?? const {}, const [
             'id',
           ], fallback: '');
@@ -2928,6 +2919,26 @@ Map<String, dynamic> _asMap(Object? value) {
   return <String, dynamic>{};
 }
 
+List<Map<String, dynamic>> _asMapList(Object? value) {
+  if (value is Iterable) {
+    return value.map(_asMap).where((item) => item.isNotEmpty).toList();
+  }
+  return <Map<String, dynamic>>[];
+}
+
+List<Map<String, dynamic>> _mergeRowLists(
+  List<Map<String, dynamic>> base,
+  List<Map<String, dynamic>> existing,
+) {
+  final length = base.length > existing.length ? base.length : existing.length;
+  return List.generate(length, (index) {
+    return {
+      if (index < base.length) ...base[index],
+      if (index < existing.length) ...existing[index],
+    };
+  });
+}
+
 List<String> _csvToList(String value) => value
     .split(',')
     .map((item) => item.trim())
@@ -3249,6 +3260,545 @@ Map<String, dynamic> healthRecordPayloadFromForm({
       'uploadedBy': userName.isEmpty ? 'Admin' : userName,
     if (existingRecord == null) 'uploadedAtText': savedAtText,
   };
+}
+
+class _HealthRecordFormSheet extends StatefulWidget {
+  const _HealthRecordFormSheet({
+    required this.title,
+    required this.helper,
+    required this.saveLabel,
+    required this.student,
+    required this.existingRecord,
+    required this.academicYear,
+    required this.savedAtText,
+    required this.userName,
+    required this.onSave,
+  });
+
+  final String title;
+  final String helper;
+  final String saveLabel;
+  final Map<String, dynamic> student;
+  final Map<String, dynamic>? existingRecord;
+  final String academicYear;
+  final String savedAtText;
+  final String userName;
+  final Future<void> Function(Map<String, dynamic> payload) onSave;
+
+  @override
+  State<_HealthRecordFormSheet> createState() => _HealthRecordFormSheetState();
+}
+
+class _HealthRecordFormSheetState extends State<_HealthRecordFormSheet> {
+  static const _identificationKeys = [
+    'studentName',
+    'fatherName',
+    'academicYear',
+    'rollNo',
+    'courseYear',
+    'dateOfBirth',
+    'age',
+    'gender',
+    'dateOfAdmission',
+    'dateOfCompletion',
+    'permanentAddress',
+    'emergencyContact',
+    'emergencyPhone',
+  ];
+  static const _personalHistoryKeys = [
+    'medicalConditions',
+    'conditionExplanation',
+    'seriousIllnessInjurySurgery',
+    'currentMedications',
+    'confinementTreatment',
+    'bloodGroupType',
+    'physicalAbnormalities',
+    'allergies',
+    'allergyMedicines',
+    'menstrualHistory',
+    'ageOfMenarche',
+    'cycleDuration',
+    'frequency',
+    'painOrDiscomfort',
+    'sleepSchedule',
+    'sleepNormal',
+    'sleepDisturbed',
+    'sleepDisturbanceDetails',
+  ];
+  static const _signatureKeys = [
+    'semester1And2',
+    'semester3And4',
+    'semester5And6',
+    'semester7And8',
+    'principal',
+  ];
+
+  late final Map<String, TextEditingController> _controllers;
+  late List<Map<String, dynamic>> _immunizations;
+  late List<Map<String, dynamic>> _familyHistory;
+  late List<Map<String, dynamic>> _sicknessDetails;
+  late List<Map<String, dynamic>> _monthlyRecords;
+  late List<Map<String, dynamic>> _medicalExaminations;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final initialValues = healthRecordFormValues(
+      student: widget.student,
+      record: widget.existingRecord,
+      academicYear: widget.academicYear,
+    );
+    _controllers = {
+      for (final field in healthRecordFieldSpecs)
+        field.key: TextEditingController(
+          text: (initialValues[field.key] ?? '').toString(),
+        ),
+    };
+    final base = _emptyHealthRecord(widget.student, widget.academicYear);
+    _immunizations = _mergeRowLists(
+      _asMapList(base['immunizations']),
+      _asMapList(widget.existingRecord?['immunizations']),
+    );
+    _familyHistory = _mergeRowLists(
+      _asMapList(base['familyHistory']),
+      _asMapList(widget.existingRecord?['familyHistory']),
+    );
+    final existingSickness = _asMapList(
+      widget.existingRecord?['sicknessDetails'],
+    );
+    _sicknessDetails = existingSickness.isEmpty
+        ? _asMapList(base['sicknessDetails'])
+        : existingSickness;
+    _monthlyRecords = _mergeRowLists(
+      _asMapList(base['monthlyRecords']),
+      _asMapList(widget.existingRecord?['monthlyRecords']),
+    );
+    _medicalExaminations = _mergeRowLists(
+      _asMapList(base['medicalExaminations']),
+      _asMapList(widget.existingRecord?['medicalExaminations']),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final values = <String, dynamic>{};
+    for (final field in healthRecordFieldSpecs) {
+      final text = _controllers[field.key]?.text.trim() ?? '';
+      if (field.isRequired && text.isEmpty) {
+        setState(() => _error = '${field.label} is required.');
+        return;
+      }
+      values[field.key] = field.numeric ? (num.tryParse(text) ?? text) : text;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      final payload = healthRecordPayloadFromForm(
+        values: values,
+        student: widget.student,
+        existingRecord: widget.existingRecord,
+        academicYear: widget.academicYear,
+        savedAtText: widget.savedAtText,
+        userName: widget.userName,
+      );
+      payload['immunizations'] = _immunizations;
+      payload['familyHistory'] = _familyHistory;
+      payload['sicknessDetails'] = _sicknessDetails;
+      payload['monthlyRecords'] = _monthlyRecords;
+      payload['medicalExaminations'] = _medicalExaminations;
+      await widget.onSave(payload);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  List<_FieldSpec> _fieldsFor(List<String> keys) => [
+    for (final key in keys)
+      healthRecordFieldSpecs.firstWhere((field) => field.key == key),
+  ];
+
+  Widget _field(_FieldSpec field) {
+    final multiline = const {
+      'permanentAddress',
+      'medicalConditions',
+      'conditionExplanation',
+      'seriousIllnessInjurySurgery',
+      'currentMedications',
+      'confinementTreatment',
+      'physicalAbnormalities',
+      'allergies',
+      'allergyMedicines',
+      'menstrualHistory',
+      'sleepDisturbanceDetails',
+      'finalRemarks',
+    }.contains(field.key);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: _controllers[field.key],
+        minLines: multiline ? 2 : 1,
+        maxLines: multiline ? 4 : 1,
+        decoration: InputDecoration(
+          labelText: field.isRequired ? '${field.label} *' : field.label,
+        ),
+      ),
+    );
+  }
+
+  Widget _mapField(
+    Map<String, dynamic> row,
+    String key,
+    String label, {
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextFormField(
+        initialValue: (row[key] ?? '').toString(),
+        maxLines: maxLines,
+        decoration: InputDecoration(labelText: label),
+        onChanged: (value) => row[key] = value.trim(),
+      ),
+    );
+  }
+
+  Widget _yearCellField(
+    Map<String, dynamic> row,
+    String yearKey,
+    String cellKey,
+    String label,
+  ) {
+    final cells = _asMap(row[yearKey]);
+    row[yearKey] = cells;
+    return Expanded(
+      child: TextFormField(
+        initialValue: (cells[cellKey] ?? '').toString(),
+        decoration: InputDecoration(labelText: label),
+        onChanged: (value) => cells[cellKey] = value.trim(),
+      ),
+    );
+  }
+
+  Widget _section({
+    required String title,
+    required List<Widget> children,
+    String helper = '',
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InfoCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+            if (helper.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                helper,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _immunizationEditor() {
+    return _section(
+      title: 'Immunization History',
+      helper: 'Every vaccine row from the website health-record table.',
+      children: _immunizations.map((row) {
+        return ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(readText(row, const ['vaccine'], fallback: 'Vaccine')),
+          subtitle: Text(
+            'Minimum age: ${readText(row, const ['minimumAge'], fallback: '-')}',
+          ),
+          children: [
+            _mapField(row, 'ageReceived', 'Age received'),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: row['notReceived'] == true,
+              onChanged: (value) {
+                setState(() => row['notReceived'] = value ?? false);
+              },
+              title: const Text('Not received'),
+            ),
+            _mapField(row, 'remarks', 'Remarks', maxLines: 2),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _familyHistoryEditor() {
+    return _section(
+      title: 'Family History',
+      children: _familyHistory.map((row) {
+        return ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(readText(row, const ['relation'], fallback: 'Relation')),
+          children: [
+            _mapField(row, 'ageIfLiving', 'Age if living'),
+            _mapField(row, 'disease', 'Disease if any'),
+            _mapField(row, 'ageAtDeath', 'Age at death'),
+            _mapField(row, 'causeOfDeath', 'Cause of death'),
+            _mapField(row, 'remarks', 'Remarks', maxLines: 2),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _sicknessEditor() {
+    return _section(
+      title: 'Sickness Details',
+      helper: 'Add as many sickness rows as needed.',
+      children: [
+        ...List.generate(_sicknessDetails.length, (index) {
+          final row = _sicknessDetails[index];
+          return ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            initiallyExpanded: index == 0,
+            title: Text('Sickness row ${index + 1}'),
+            subtitle: Text(readText(row, const ['date'], fallback: 'No date')),
+            children: [
+              _mapField(row, 'date', 'Date'),
+              _mapField(row, 'diagnosis', 'Diagnosis'),
+              _mapField(row, 'treatment', 'Treatment'),
+              _mapField(row, 'investigation', 'Investigation if any'),
+              _mapField(row, 'sickDays', 'No. of Sick Days'),
+              _mapField(row, 'signature', 'Signature'),
+              if (_sicknessDetails.length > 1)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      setState(() => _sicknessDetails.removeAt(index));
+                    },
+                    icon: const Icon(Icons.delete_rounded, size: 18),
+                    label: const Text('Remove Row'),
+                  ),
+                ),
+            ],
+          );
+        }),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                _sicknessDetails.add({
+                  'date': '',
+                  'diagnosis': '',
+                  'treatment': '',
+                  'investigation': '',
+                  'sickDays': '',
+                  'signature': '',
+                });
+              });
+            },
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add Sickness Row'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _monthlyRecordEditor() {
+    return _section(
+      title: 'Monthly Record',
+      helper: 'WT, BP, and LMP for each month and year.',
+      children: _monthlyRecords.map((row) {
+        return ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(readText(row, const ['month'], fallback: 'Month')),
+          children: _healthYears.map((year) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    year.label,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _yearCellField(row, year.key, 'wt', 'WT'),
+                      const SizedBox(width: 8),
+                      _yearCellField(row, year.key, 'bp', 'BP'),
+                      const SizedBox(width: 8),
+                      _yearCellField(row, year.key, 'lmp', 'LMP'),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _medicalExamEditor() {
+    return _section(
+      title: 'Medical Examination - Investigation',
+      children: _medicalExaminations.map((row) {
+        return ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(readText(row, const ['finding'], fallback: 'Finding')),
+          children: _healthYears.map((year) {
+            return _mapField(row, year.key, year.label);
+          }).toList(),
+        );
+      }).toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                widget.helper,
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              _section(
+                title: 'Identification Data',
+                children: _fieldsFor(_identificationKeys).map(_field).toList(),
+              ),
+              _section(
+                title: 'Personal History',
+                helper: 'Use comma-separated values for medical conditions.',
+                children: _fieldsFor(_personalHistoryKeys).map(_field).toList(),
+              ),
+              _section(
+                title: 'Vaccination Status',
+                children: healthVaccineStatus
+                    .map(
+                      (field) => _field(
+                        healthRecordFieldSpecs.firstWhere(
+                          (spec) => spec.key == field.key,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              _immunizationEditor(),
+              _familyHistoryEditor(),
+              _sicknessEditor(),
+              _monthlyRecordEditor(),
+              _medicalExamEditor(),
+              _section(
+                title: 'Final Remarks and Recommendations',
+                children: [
+                  _field(
+                    healthRecordFieldSpecs.firstWhere(
+                      (field) => field.key == 'finalRemarks',
+                    ),
+                  ),
+                  ..._fieldsFor(_signatureKeys).map(_field),
+                ],
+              ),
+              if (_error.isNotEmpty) ...[
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Saving...' : widget.saveLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DocumentUploadSheet extends StatefulWidget {
