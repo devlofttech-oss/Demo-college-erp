@@ -9,6 +9,8 @@ class MobileScaffold extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.showBack = true,
+    this.showHome = false,
+    this.onHome,
     this.bottom,
     this.onRefresh,
   });
@@ -17,6 +19,8 @@ class MobileScaffold extends StatelessWidget {
   final Widget body;
   final List<Widget> actions;
   final bool showBack;
+  final bool showHome;
+  final VoidCallback? onHome;
   final Widget? bottom;
   final Future<void> Function()? onRefresh;
 
@@ -25,7 +29,13 @@ class MobileScaffold extends StatelessWidget {
     final content = SafeArea(
       child: Column(
         children: [
-          _Header(title: title, actions: actions, showBack: showBack),
+          _Header(
+            title: title,
+            actions: actions,
+            showBack: showBack,
+            showHome: showHome,
+            onHome: onHome,
+          ),
           Expanded(
             child: onRefresh == null
                 ? body
@@ -48,11 +58,15 @@ class _Header extends StatelessWidget {
     required this.title,
     required this.actions,
     required this.showBack,
+    required this.showHome,
+    required this.onHome,
   });
 
   final String title;
   final List<Widget> actions;
   final bool showBack;
+  final bool showHome;
+  final VoidCallback? onHome;
 
   @override
   Widget build(BuildContext context) {
@@ -85,12 +99,18 @@ class _Header extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(
-              width: 40 + (actions.length > 1 ? (actions.length - 1) * 40 : 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: actions,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showHome)
+                  IconButton(
+                    tooltip: 'Home',
+                    icon: const Icon(Icons.home_rounded),
+                    onPressed: onHome,
+                  ),
+                ...actions,
+              ],
             ),
           ],
         ),
@@ -286,11 +306,17 @@ class EmptyState extends StatelessWidget {
     required this.title,
     required this.message,
     this.icon = Icons.inbox_rounded,
+    this.actionLabel,
+    this.actionIcon = Icons.home_rounded,
+    this.onAction,
   });
 
   final String title;
   final String message;
   final IconData icon;
+  final String? actionLabel;
+  final IconData actionIcon;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +339,14 @@ class EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.muted, fontSize: 13),
             ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: onAction,
+                icon: Icon(actionIcon, size: 18),
+                label: Text(actionLabel!),
+              ),
+            ],
           ],
         ),
       ),

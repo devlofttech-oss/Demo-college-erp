@@ -6,6 +6,7 @@ import '../data/role_permissions.dart';
 import '../models/app_user.dart';
 import '../models/erp_module.dart';
 import '../models/erp_role.dart';
+import '../navigation/app_routes.dart';
 import '../services/erp_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/field_reader.dart';
@@ -60,6 +61,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Widget build(BuildContext context) {
     return MobileScaffold(
       title: widget.module.label,
+      showHome: true,
+      onHome: () => AppRoutes.goHome(context),
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -81,31 +84,41 @@ class _ModuleScreenState extends State<ModuleScreen> {
               title: 'Unable to load ${widget.module.label}',
               message: snapshot.error.toString(),
               icon: Icons.cloud_off_rounded,
+              actionLabel: 'Retry',
+              actionIcon: Icons.refresh_rounded,
+              onAction: _refresh,
             );
           }
           final data =
               snapshot.data ?? const <String, List<Map<String, dynamic>>>{};
-          return ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            children: [
-              SearchBox(
-                hint: 'Search ${widget.module.label}',
-                onChanged: (value) => setState(() => _query = value),
-              ),
-              const SizedBox(height: 12),
-              _AcademicYearField(
-                value: _academicYear,
-                onChanged: (value) {
-                  setState(() {
-                    _academicYear = value;
-                    _future = _load();
-                  });
-                },
-              ),
-              const SizedBox(height: 4),
-              _buildBody(data),
-            ],
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: ListView(
+              key: ValueKey('${widget.module.id}-$_academicYear'),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              children: [
+                SearchBox(
+                  hint: 'Search ${widget.module.label}',
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+                const SizedBox(height: 12),
+                _AcademicYearField(
+                  value: _academicYear,
+                  onChanged: (value) {
+                    setState(() {
+                      _academicYear = value;
+                      _future = _load();
+                    });
+                  },
+                ),
+                _ModuleActionBar(actions: _actionsForModule(data)),
+                const SizedBox(height: 4),
+                _buildBody(data),
+              ],
+            ),
           );
         },
       ),
@@ -153,6 +166,291 @@ class _ModuleScreenState extends State<ModuleScreen> {
     String key,
   ) {
     return data[key] ?? const [];
+  }
+
+  List<_ModuleAction> _actionsForModule(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    switch (widget.module.id) {
+      case 'students':
+        return [
+          if (_can('students.create'))
+            _ModuleAction(
+              label: 'Add Student',
+              icon: Icons.person_add_alt_1_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Student',
+                collectionName: 'students',
+                fields: const [
+                  _FieldSpec('name', 'Student name', isRequired: true),
+                  _FieldSpec('studentId', 'Student ID', isRequired: true),
+                  _FieldSpec('className', 'Class / Standard'),
+                  _FieldSpec('courseName', 'Course'),
+                  _FieldSpec('phone', 'Phone'),
+                  _FieldSpec('email', 'Email'),
+                ],
+                defaults: {'status': 'Active'},
+              ),
+            ),
+          if (_can('students.documents'))
+            _ModuleAction(
+              label: 'Student Doc',
+              icon: Icons.note_add_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Student Document',
+                collectionName: 'studentDocuments',
+                fields: const [
+                  _FieldSpec('studentId', 'Student ID', isRequired: true),
+                  _FieldSpec('studentName', 'Student name'),
+                  _FieldSpec('documentType', 'Document type', isRequired: true),
+                  _FieldSpec('fileName', 'File name / reference'),
+                ],
+                defaults: {'status': 'Uploaded'},
+              ),
+            ),
+        ];
+      case 'faculty-staff':
+        return [
+          if (_can('staff.create'))
+            _ModuleAction(
+              label: 'Add Staff',
+              icon: Icons.group_add_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Faculty / Staff',
+                collectionName: 'staffMembers',
+                fields: const [
+                  _FieldSpec('name', 'Staff name', isRequired: true),
+                  _FieldSpec('employeeId', 'Employee ID', isRequired: true),
+                  _FieldSpec('staffType', 'Staff type'),
+                  _FieldSpec('department', 'Department'),
+                  _FieldSpec('designation', 'Designation'),
+                  _FieldSpec('phone', 'Phone'),
+                  _FieldSpec('email', 'Email'),
+                ],
+                defaults: {'status': 'Active'},
+              ),
+            ),
+        ];
+      case 'attendance':
+        return [
+          if (_can('attendance.markStudents') || _can('attendance.markStaff'))
+            _ModuleAction(
+              label: 'Mark',
+              icon: Icons.add_task_rounded,
+              onTap: () => _showAttendanceSheet(data),
+            ),
+        ];
+      case 'timetable':
+        return [
+          if (_can('timetable.create'))
+            _ModuleAction(
+              label: 'Add Class',
+              icon: Icons.calendar_month_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Timetable Class',
+                collectionName: 'timetableEntries',
+                fields: const [
+                  _FieldSpec('day', 'Day', isRequired: true),
+                  _FieldSpec('subject', 'Subject', isRequired: true),
+                  _FieldSpec('teacherName', 'Teacher'),
+                  _FieldSpec('className', 'Class / Standard'),
+                  _FieldSpec('division', 'Division'),
+                  _FieldSpec('startTime', 'Start time'),
+                  _FieldSpec('endTime', 'End time'),
+                ],
+                defaults: {'status': 'Draft'},
+              ),
+            ),
+        ];
+      case 'examination-results':
+        return [
+          if (_can('exams.schedule'))
+            _ModuleAction(
+              label: 'Schedule',
+              icon: Icons.event_note_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Schedule Exam',
+                collectionName: 'examSchedules',
+                fields: const [
+                  _FieldSpec('examName', 'Exam name', isRequired: true),
+                  _FieldSpec('subject', 'Subject', isRequired: true),
+                  _FieldSpec('className', 'Class / Standard'),
+                  _FieldSpec('examDate', 'Exam date YYYY-MM-DD'),
+                  _FieldSpec('maxMarks', 'Max marks', numeric: true),
+                ],
+                defaults: {'status': 'Scheduled'},
+              ),
+            ),
+          if (_can('exams.marks'))
+            _ModuleAction(
+              label: 'Marks',
+              icon: Icons.assignment_turned_in_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Enter Marks',
+                collectionName: 'marksEntries',
+                fields: const [
+                  _FieldSpec('studentId', 'Student ID', isRequired: true),
+                  _FieldSpec('studentName', 'Student name'),
+                  _FieldSpec('examName', 'Exam name'),
+                  _FieldSpec('subject', 'Subject', isRequired: true),
+                  _FieldSpec('marks', 'Marks', isRequired: true, numeric: true),
+                  _FieldSpec('maxMarks', 'Max marks', numeric: true),
+                ],
+              ),
+            ),
+        ];
+      case 'fees':
+        return [
+          if (_can('fees.assign'))
+            _ModuleAction(
+              label: 'Assign',
+              icon: Icons.receipt_long_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Assign Fee',
+                collectionName: 'feeAssignments',
+                fields: const [
+                  _FieldSpec('studentId', 'Student ID', isRequired: true),
+                  _FieldSpec('studentName', 'Student name'),
+                  _FieldSpec('feeName', 'Fee name', isRequired: true),
+                  _FieldSpec(
+                    'amount',
+                    'Amount',
+                    isRequired: true,
+                    numeric: true,
+                  ),
+                  _FieldSpec('balanceAmount', 'Unpaid amount', numeric: true),
+                ],
+                defaults: {'status': 'Assigned'},
+              ),
+            ),
+          if (_can('fees.collect'))
+            _ModuleAction(
+              label: 'Collect',
+              icon: Icons.payments_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Record Fee Collection',
+                collectionName: 'feeCollections',
+                fields: const [
+                  _FieldSpec('studentId', 'Student ID', isRequired: true),
+                  _FieldSpec('studentName', 'Student name'),
+                  _FieldSpec('receiptNo', 'Receipt number'),
+                  _FieldSpec(
+                    'amount',
+                    'Amount',
+                    isRequired: true,
+                    numeric: true,
+                  ),
+                  _FieldSpec('paymentMode', 'Payment mode'),
+                ],
+                defaults: {'status': 'Paid'},
+              ),
+            ),
+        ];
+      case 'communication':
+        return [
+          if (_can('notices.create'))
+            _ModuleAction(
+              label: 'Notice',
+              icon: Icons.campaign_rounded,
+              onTap: _showNoticeSheet,
+            ),
+        ];
+      case 'document-management':
+        return [
+          if (_can('documents.upload'))
+            _ModuleAction(
+              label: 'Add Doc',
+              icon: Icons.upload_file_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Document Record',
+                collectionName: 'managedDocuments',
+                fields: const [
+                  _FieldSpec('title', 'Title', isRequired: true),
+                  _FieldSpec('ownerName', 'Owner name'),
+                  _FieldSpec('ownerId', 'Owner ID'),
+                  _FieldSpec('ownerType', 'Owner type'),
+                  _FieldSpec('documentType', 'Document type'),
+                  _FieldSpec('fileName', 'File name / reference'),
+                ],
+                defaults: {'verificationStatus': 'Pending'},
+              ),
+            ),
+        ];
+      case 'hostel-management':
+        return [
+          if (_can('hostel.manage'))
+            _ModuleAction(
+              label: 'Add Room',
+              icon: Icons.bed_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Hostel Room',
+                collectionName: 'hostelRooms',
+                fields: const [
+                  _FieldSpec('roomNumber', 'Room number', isRequired: true),
+                  _FieldSpec('block', 'Block'),
+                  _FieldSpec('capacity', 'Capacity', numeric: true),
+                  _FieldSpec('roomType', 'Room type'),
+                ],
+                defaults: {'status': 'Available'},
+              ),
+            ),
+        ];
+      case 'academics':
+      case 'calendar':
+        return [
+          if (_can('academics.manage'))
+            _ModuleAction(
+              label: 'Subject',
+              icon: Icons.menu_book_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Academic Subject',
+                collectionName: 'academicSubjects',
+                fields: const [
+                  _FieldSpec('subjectName', 'Subject name', isRequired: true),
+                  _FieldSpec('code', 'Subject code'),
+                  _FieldSpec('program', 'Program'),
+                  _FieldSpec('className', 'Class / Standard'),
+                ],
+                defaults: {'status': 'Active'},
+              ),
+            ),
+          if (_can('academics.manage'))
+            _ModuleAction(
+              label: 'Event',
+              icon: Icons.event_available_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Add Academic Event',
+                collectionName: 'academicCalendarEvents',
+                fields: const [
+                  _FieldSpec('title', 'Event title', isRequired: true),
+                  _FieldSpec('date', 'Date YYYY-MM-DD'),
+                  _FieldSpec('description', 'Description'),
+                ],
+                defaults: {'status': 'Active'},
+              ),
+            ),
+        ];
+      case 'reports':
+      case 'dashboard':
+        return [
+          if (_can('financialReports.snapshots'))
+            _ModuleAction(
+              label: 'Snapshot',
+              icon: Icons.save_alt_rounded,
+              onTap: () => _showCreateRecordSheet(
+                title: 'Save Report Snapshot',
+                collectionName: 'financialReportSnapshots',
+                fields: const [
+                  _FieldSpec('title', 'Snapshot title', isRequired: true),
+                  _FieldSpec('notes', 'Notes'),
+                ],
+                defaults: {'status': 'Saved'},
+              ),
+            ),
+        ];
+      default:
+        return const [];
+    }
   }
 
   Widget _students(Map<String, List<Map<String, dynamic>>> data) {
@@ -1298,6 +1596,42 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
   }
 
+  Future<void> _showCreateRecordSheet({
+    required String title,
+    required String collectionName,
+    required List<_FieldSpec> fields,
+    Map<String, dynamic> defaults = const {},
+  }) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: title,
+        fields: fields,
+        onSave: (values) async {
+          await widget.repository.createDocument(collectionName, {
+            ...defaults,
+            ...values,
+            if (_academicYear.trim().isNotEmpty)
+              'academicYear': _academicYear.trim(),
+            'createdBy': widget.user.uid,
+          });
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$title saved'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
   Future<void> _showAttendanceSheet(
     Map<String, List<Map<String, dynamic>>> data,
   ) async {
@@ -1478,6 +1812,231 @@ class _ModuleScreenState extends State<ModuleScreen> {
           student: student,
           data: data,
           controller: controller,
+        ),
+      ),
+    );
+  }
+}
+
+class _ModuleActionBar extends StatelessWidget {
+  const _ModuleActionBar({required this.actions});
+
+  final List<_ModuleAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (actions.isEmpty) return const SizedBox(height: 8);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 2),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: actions
+              .map(
+                (action) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.tonalIcon(
+                    onPressed: action.onTap,
+                    icon: Icon(action.icon, size: 18),
+                    label: Text(action.label),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      foregroundColor: AppColors.primaryDark,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModuleAction {
+  const _ModuleAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+}
+
+class _FieldSpec {
+  const _FieldSpec(
+    this.key,
+    this.label, {
+    this.isRequired = false,
+    this.numeric = false,
+  });
+
+  final String key;
+  final String label;
+  final bool isRequired;
+  final bool numeric;
+}
+
+class _RecordFormSheet extends StatefulWidget {
+  const _RecordFormSheet({
+    required this.title,
+    required this.fields,
+    required this.onSave,
+  });
+
+  final String title;
+  final List<_FieldSpec> fields;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_RecordFormSheet> createState() => _RecordFormSheetState();
+}
+
+class _RecordFormSheetState extends State<_RecordFormSheet> {
+  late final Map<String, TextEditingController> _controllers;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = {
+      for (final field in widget.fields) field.key: TextEditingController(),
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final values = <String, dynamic>{};
+    for (final field in widget.fields) {
+      final text = _controllers[field.key]?.text.trim() ?? '';
+      if (field.isRequired && text.isEmpty) {
+        setState(() => _error = '${field.label} is required.');
+        return;
+      }
+      if (text.isEmpty) continue;
+      values[field.key] = field.numeric ? (num.tryParse(text) ?? text) : text;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(values);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ...widget.fields.map(
+                (field) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: TextField(
+                    controller: _controllers[field.key],
+                    keyboardType: field.numeric
+                        ? TextInputType.number
+                        : TextInputType.text,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: field.isRequired
+                          ? '${field.label} *'
+                          : field.label,
+                    ),
+                  ),
+                ),
+              ),
+              if (_error.isNotEmpty) ...[
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Saving...' : 'Save'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

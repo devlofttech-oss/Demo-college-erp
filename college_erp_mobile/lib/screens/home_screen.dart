@@ -6,11 +6,11 @@ import '../models/app_user.dart';
 import '../models/dashboard_snapshot.dart';
 import '../models/erp_module.dart';
 import '../models/erp_role.dart';
+import '../navigation/app_routes.dart';
 import '../services/erp_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/field_reader.dart';
 import '../widgets/mobile_chrome.dart';
-import 'module_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -192,15 +192,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   itemBuilder: (context, index) => _ModuleTile(
                     module: entry.value[index],
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ModuleScreen(
-                          module: entry.value[index],
-                          user: widget.user,
-                          roles: widget.roles,
-                          repository: widget.repository,
-                        ),
-                      ),
+                    onTap: () => AppRoutes.openModule<void>(
+                      context: context,
+                      module: entry.value[index],
+                      user: widget.user,
+                      roles: widget.roles,
+                      repository: widget.repository,
                     ),
                   ),
                 ),

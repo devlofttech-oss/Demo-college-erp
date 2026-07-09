@@ -268,6 +268,9 @@ The source of truth remains Firestore `roles`. The Dart defaults exist so the ap
 - Users and roles list.
 - Institute/settings view.
 - Pull to refresh on mobile screens.
+- Named module routes with smooth slide/fade transitions.
+- Home action on module screens so every module can return to the dashboard without depending on back-stack history.
+- Firestore-backed quick action forms for common operations such as adding students/staff, marking attendance, scheduling exams, entering marks, assigning/collecting fees, creating notices, adding document metadata, adding hostel rooms, and saving academic records.
 
 ## Firebase Configuration
 
@@ -357,6 +360,15 @@ Current tests cover:
 - Super admin permission completeness.
 - Default admin/faculty/parent access expectations.
 - Email and phone alias resolution.
+
+To verify a real Firebase Auth login without committing credentials:
+
+```powershell
+cd C:\STORAGE\Code\ERP\Demo\CollegeERP
+.\college_erp_mobile\tool\verify_firebase_auth.ps1 -Email "user@example.com" -Password "password"
+```
+
+The helper checks Firebase Auth through the public identity endpoint, then confirms the matching Firestore `users/{uid}` profile through the local ignored service account. It prints only success/failure, role, and status.
 
 ## Important Safety Notes
 
