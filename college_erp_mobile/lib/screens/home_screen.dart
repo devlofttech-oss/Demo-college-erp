@@ -181,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: IconButton(
-                  tooltip: 'Notices and events',
+                  tooltip: 'Communication',
                   onPressed: () => _openModuleById('communication'),
                   icon: const Icon(
                     Icons.notifications_none_rounded,
@@ -221,18 +221,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         onTap: () => _openModuleById('students'),
                       ),
                       StatTile(
-                        label: 'Staff',
+                        label: 'Faculty',
                         value: data.staff.toString(),
                         icon: Icons.groups_rounded,
                         color: const Color(0xFFE5835A),
                         onTap: () => _openModuleById('faculty-staff'),
                       ),
                       StatTile(
-                        label: 'Collected',
+                        label: 'Collection',
                         value: formatMoney(data.feeCollected),
                         icon: Icons.payments_rounded,
                         color: const Color(0xFFF0A93B),
                         onTap: () => _openModuleById('fees'),
+                      ),
+                      StatTile(
+                        label: 'Exams',
+                        value: data.exams.toString(),
+                        icon: Icons.assignment_turned_in_rounded,
+                        color: const Color(0xFF8357C5),
+                        onTap: () => _openModuleById('examination-results'),
                       ),
                       StatTile(
                         label: 'Documents',
