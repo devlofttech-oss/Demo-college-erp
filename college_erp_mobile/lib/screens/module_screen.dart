@@ -90,6 +90,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _attendanceSubjectCode = '';
   var _attendanceSelectedEntityId = '';
   DateTime _attendanceSelectedDate = DateTime.now();
+  var _timetableStatusView = 'active';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -276,22 +277,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('timetable.create'))
             _ModuleAction(
-              label: 'Add Class',
+              label: 'New Entry',
               icon: Icons.calendar_month_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Timetable Class',
-                collectionName: 'timetableEntries',
-                fields: const [
-                  _FieldSpec('day', 'Day', isRequired: true),
-                  _FieldSpec('subject', 'Subject', isRequired: true),
-                  _FieldSpec('teacherName', 'Teacher'),
-                  _FieldSpec('className', 'Class / Standard'),
-                  _FieldSpec('division', 'Division'),
-                  _FieldSpec('startTime', 'Start time'),
-                  _FieldSpec('endTime', 'End time'),
-                ],
-                defaults: {'status': 'Draft'},
-              ),
+              onTap: () => _showTimetableEntrySheet(data: data),
             ),
         ];
       case 'examination-results':
@@ -2015,33 +2003,109 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _timetable(Map<String, List<Map<String, dynamic>>> data) {
-    final entries = _items(data, 'entries')
+    final canCreate = _can('timetable.create');
+    final canEdit = _can('timetable.edit');
+    final statusView = canEdit ? _timetableStatusView : 'active';
+    final allEntries = _timetableScopedEntries(data);
+    final visibleEntries = allEntries
+        .where(
+          (entry) => statusView == 'archived'
+              ? _isArchivedTimetableEntry(entry)
+              : !_isArchivedTimetableEntry(entry),
+        )
+        .toList();
+    final entries = visibleEntries
         .where(
           (item) => containsQuery(item, _query, const [
             'subject',
             'subjectName',
+            'classKey',
+            'facultyName',
+            'classroomName',
             'teacherName',
             'day',
             'className',
             'division',
+            'timeSlot',
           ]),
         )
         .toList();
-    final days = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-    ];
+    final activeEntries = allEntries
+        .where((entry) => !_isArchivedTimetableEntry(entry))
+        .toList();
+    final archivedEntries = allEntries.where(_isArchivedTimetableEntry).length;
+    final slots = _timetableTimeSlotOptions(
+      _query.trim().isEmpty ? visibleEntries : entries,
+      includeDefaults: canCreate && statusView != 'archived',
+    );
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Academics / Timetable Management',
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Timetable Management',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Class timetable creation and schedule management.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (canEdit) ...[
+          const SizedBox(height: 12),
+          _SegmentedFilter(
+            value: statusView,
+            options: const {
+              'active': 'Active Timetable',
+              'archived': 'Archive',
+            },
+            onChanged: (value) => setState(() => _timetableStatusView = value),
+          ),
+        ],
         _SummaryRow(
           stats: [
             _Stat(
-              'Entries',
-              entries.length.toString(),
+              'Active',
+              activeEntries.length.toString(),
               Icons.calendar_month_rounded,
               AppColors.primary,
             ),
@@ -2052,35 +2116,515 @@ class _ModuleScreenState extends State<ModuleScreen> {
               const Color(0xFF2196C9),
             ),
             _Stat(
-              'Published',
-              _items(data, 'publications').length.toString(),
-              Icons.publish_rounded,
-              AppColors.accent,
+              canEdit ? 'Archived' : 'Published',
+              canEdit
+                  ? archivedEntries.toString()
+                  : _items(data, 'publications').length.toString(),
+              canEdit ? Icons.archive_rounded : Icons.publish_rounded,
+              canEdit ? AppColors.danger : AppColors.accent,
             ),
           ],
         ),
         const SectionTitle('Time Table'),
         if (entries.isEmpty)
-          const EmptyState(
-            title: 'No timetable entries',
-            message: 'Published and draft timetable records will appear here.',
+          EmptyState(
+            title: _query.trim().isEmpty
+                ? 'No timetable entries'
+                : 'No timetable entries matched',
+            message: _query.trim().isEmpty
+                ? 'Published and draft timetable records will appear here.'
+                : 'Try a different subject, faculty, classroom, or day.',
+            actionLabel: canCreate && statusView != 'archived'
+                ? 'New Entry'
+                : null,
+            actionIcon: Icons.add_rounded,
+            onAction: canCreate && statusView != 'archived'
+                ? () => _showTimetableEntrySheet(data: data)
+                : null,
           )
         else
-          ...days.map((day) {
-            final dayEntries = entries
-                .where(
-                  (entry) =>
-                      readText(entry, const [
-                        'day',
-                        'weekday',
-                      ], fallback: '').toLowerCase() ==
-                      day.toLowerCase(),
-                )
-                .toList();
-            return _DayPanel(day: day, entries: dayEntries);
-          }),
+          _TimetableBoard(
+            entries: entries,
+            slots: slots,
+            statusView: statusView,
+            canCreate: canCreate,
+            canEdit: canEdit,
+            canArchive: canEdit,
+            onCreate: (defaults) =>
+                _showTimetableEntrySheet(data: data, defaults: defaults),
+            onEdit: (entry) =>
+                _showTimetableEntrySheet(data: data, entry: entry),
+            onArchive: _archiveTimetableEntry,
+            onRestore: _restoreTimetableEntry,
+          ),
+        const SectionTitle('Classroom Allocation'),
+        if (_items(data, 'classrooms').isEmpty)
+          const EmptyState(
+            title: 'No classrooms',
+            message: 'Classroom records from the web ERP will appear here.',
+          )
+        else
+          ..._items(data, 'classrooms')
+              .take(8)
+              .map(
+                (room) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _CompactRow(
+                    title:
+                        'Room ${readText(room, const ['roomNo', 'roomNumber', 'name'])}',
+                    subtitle:
+                        '${readText(room, const ['building', 'block'], fallback: 'Classroom')} / ${readText(room, const ['capacity'], fallback: '-')} seats',
+                    trailing: const Icon(
+                      Icons.meeting_room_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
       ],
     );
+  }
+
+  List<Map<String, dynamic>> _timetableScopedEntries(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final entries = _items(data, 'entries');
+    if (!widget.user.isParent) return entries;
+    final linkedCourseCodes = _items(data, 'students')
+        .map((student) => readText(student, const ['courseCode'], fallback: ''))
+        .where((code) => code.isNotEmpty)
+        .toSet();
+    if (linkedCourseCodes.isEmpty) return entries;
+    return entries
+        .where(
+          (entry) => linkedCourseCodes.contains(
+            readText(entry, const ['courseCode'], fallback: ''),
+          ),
+        )
+        .toList();
+  }
+
+  bool _isArchivedTimetableEntry(Map<String, dynamic> entry) =>
+      readText(entry, const ['status'], fallback: '').toLowerCase() ==
+      'archived';
+
+  List<String> _timetableClassOptions(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final options =
+        _items(data, 'students')
+            .where(
+              (student) =>
+                  readText(student, const [
+                    'status',
+                  ], fallback: '').toLowerCase() !=
+                  'archived',
+            )
+            .map(_timetableClassKey)
+            .where((item) => item.trim().isNotEmpty && item != '- - -')
+            .toSet()
+            .toList()
+          ..sort();
+    return options;
+  }
+
+  String _timetableClassKey(Map<String, dynamic> student) {
+    final className = readText(student, const [
+      'className',
+      'courseYear',
+      'courseName',
+      'program',
+    ], fallback: '');
+    final section = readText(student, const [
+      'section',
+      'division',
+      'admissionType',
+    ], fallback: '');
+    if (className.isEmpty) return section;
+    if (section.isEmpty) return className;
+    return '$className - $section';
+  }
+
+  List<Map<String, dynamic>> _timetableFaculty(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'staff')
+        .where(
+          (member) =>
+              readText(member, const ['staffType'], fallback: '') ==
+                  'Faculty' &&
+              readText(member, const ['status'], fallback: '').toLowerCase() !=
+                  'archived',
+        )
+        .toList();
+  }
+
+  List<_TimetableSlotOption> _timetableTimeSlotOptions(
+    List<Map<String, dynamic>> entries, {
+    bool includeArchived = false,
+    bool includeDefaults = false,
+  }) {
+    final byLabel = <String, _TimetableSlotOption>{};
+    if (includeDefaults) {
+      for (final label in _defaultTimetableSlots) {
+        final parsed = _parseTimetableSlot(label);
+        byLabel[label] = _TimetableSlotOption(
+          label: label,
+          startTime: parsed.startTime,
+          endTime: parsed.endTime,
+        );
+      }
+    }
+    for (final rawEntry in entries) {
+      if (!includeArchived && _isArchivedTimetableEntry(rawEntry)) continue;
+      final entry = _normalizeTimetableSlotFields(rawEntry);
+      final label = _timetableSlotLabel(entry);
+      if (label.isEmpty) continue;
+      byLabel[label] = _TimetableSlotOption(
+        label: label,
+        startTime: readText(entry, const ['startTime'], fallback: ''),
+        endTime: readText(entry, const ['endTime'], fallback: ''),
+      );
+    }
+    final values = byLabel.values.toList()
+      ..sort(
+        (first, second) =>
+            _timeToMinutes(
+              first.startTime.isEmpty
+                  ? first.label.split('-').first
+                  : first.startTime,
+            ).compareTo(
+              _timeToMinutes(
+                second.startTime.isEmpty
+                    ? second.label.split('-').first
+                    : second.startTime,
+              ),
+            ),
+      );
+    return values;
+  }
+
+  static const _defaultTimetableSlots = [
+    '09:00 - 10:00',
+    '10:00 - 11:00',
+    '11:00 - 12:00',
+    '11:15 - 12:15',
+    '12:00 - 01:00',
+    '12:15 - 01:15',
+    '01:00 - 02:00',
+    '02:00 - 03:00',
+    '03:00 - 04:00',
+    '04:00 - 05:00',
+  ];
+
+  static const _timetableWeekDays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+
+  _TimetableSlotParts _parseTimetableSlot(String timeSlot) {
+    final parts = timeSlot.split(RegExp(r'\s*-\s*'));
+    return _TimetableSlotParts(
+      startTime: _parseTimetableTimePart(parts.isNotEmpty ? parts.first : ''),
+      endTime: _parseTimetableTimePart(parts.length > 1 ? parts[1] : ''),
+    );
+  }
+
+  String _parseTimetableTimePart(String value) {
+    final match = RegExp(
+      r'^(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?$',
+      caseSensitive: false,
+    ).firstMatch(value.trim());
+    if (match == null) return '';
+    var hours = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minutes = int.tryParse(match.group(2) ?? '0') ?? 0;
+    final meridiem = (match.group(3) ?? '').toLowerCase();
+    if (meridiem == 'pm' && hours < 12) hours += 12;
+    if (meridiem == 'am' && hours == 12) hours = 0;
+    if (meridiem.isEmpty && hours >= 1 && hours <= 5) hours += 12;
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+  }
+
+  int _timeToMinutes(String value) {
+    final parsed = _parseTimetableTimePart(value);
+    if (parsed.isEmpty) return 1 << 30;
+    final pieces = parsed.split(':').map((piece) => int.parse(piece)).toList();
+    return pieces[0] * 60 + pieces[1];
+  }
+
+  String _timetableSlotLabel(Map<String, dynamic> entry) {
+    final slot = readText(entry, const ['timeSlot'], fallback: '');
+    if (slot.isNotEmpty) return slot;
+    final start = readText(entry, const ['startTime'], fallback: '');
+    final end = readText(entry, const ['endTime'], fallback: '');
+    if (start.isNotEmpty && end.isNotEmpty) return '$start - $end';
+    return '';
+  }
+
+  Map<String, dynamic> _normalizeTimetableSlotFields(
+    Map<String, dynamic> entry,
+  ) {
+    final label = _timetableSlotLabel(entry);
+    final parsed = _parseTimetableSlot(label);
+    return {
+      ...entry,
+      'timeSlot': label,
+      'startTime': readText(entry, const [
+        'startTime',
+      ], fallback: parsed.startTime),
+      'endTime': readText(entry, const ['endTime'], fallback: parsed.endTime),
+    };
+  }
+
+  bool _hasTimetableConflict(
+    List<Map<String, dynamic>> entries,
+    Map<String, dynamic> candidate, {
+    String ignoreId = '',
+  }) {
+    final candidateSlot = _timetableSlotLabel(candidate);
+    for (final entry in entries) {
+      if (readText(entry, const ['id'], fallback: '') == ignoreId ||
+          _isArchivedTimetableEntry(entry)) {
+        continue;
+      }
+      final sameSlot =
+          readText(entry, const ['day'], fallback: '') ==
+              readText(candidate, const ['day'], fallback: '') &&
+          _timetableSlotLabel(entry) == candidateSlot;
+      if (!sameSlot) continue;
+      if (readText(entry, const ['classKey'], fallback: '') ==
+              readText(candidate, const ['classKey'], fallback: '') ||
+          readText(entry, const ['facultyId'], fallback: '') ==
+              readText(candidate, const ['facultyId'], fallback: '') ||
+          readText(entry, const ['classroomId'], fallback: '') ==
+              readText(candidate, const ['classroomId'], fallback: '')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _showTimetableEntrySheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? entry,
+    Map<String, dynamic> defaults = const {},
+  }) async {
+    final isEdit = entry != null;
+    final classOptions = _timetableClassOptions(data);
+    final faculty = _timetableFaculty(data);
+    final classrooms = _items(data, 'classrooms');
+    final slotOptions = _timetableTimeSlotOptions(
+      _timetableScopedEntries(data),
+      includeDefaults: true,
+    );
+    final initial = {
+      if (classOptions.isNotEmpty) 'classKey': classOptions.first,
+      if (faculty.isNotEmpty)
+        'facultyId': readText(faculty.first, const ['id'], fallback: ''),
+      if (classrooms.isNotEmpty)
+        'classroomId': readText(classrooms.first, const ['id'], fallback: ''),
+      'day': _timetableWeekDays.first,
+      if (slotOptions.isNotEmpty) 'timeSlot': slotOptions.first.label,
+      if (slotOptions.isNotEmpty) 'startTime': slotOptions.first.startTime,
+      if (slotOptions.isNotEmpty) 'endTime': slotOptions.first.endTime,
+      ...defaults,
+      ...?entry,
+    };
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _TimetableEntrySheet(
+        initialValues: initial,
+        classOptions: classOptions,
+        faculty: faculty,
+        classrooms: classrooms,
+        timeSlotOptions: slotOptions,
+        isEdit: isEdit,
+        onSave: (form) async {
+          final validation = _validateTimetableForm(form);
+          if (validation.isNotEmpty) throw ArgumentError(validation);
+          final payload = _buildTimetableEntryPayload(data, form);
+          final id = readText(entry ?? const {}, const ['id'], fallback: '');
+          if (_hasTimetableConflict(
+            _timetableScopedEntries(data),
+            payload,
+            ignoreId: id,
+          )) {
+            throw StateError(
+              'Conflict detected for class, faculty, or classroom in the same slot.',
+            );
+          }
+          if (isEdit) {
+            if (!_can('timetable.edit')) {
+              throw StateError(
+                'You do not have permission to edit timetable entries.',
+              );
+            }
+            await widget.repository.updateDocument('timetableEntries', id, {
+              ...payload,
+              'updatedAtText': _displayDateNow(),
+            });
+          } else {
+            if (!_can('timetable.create')) {
+              throw StateError(
+                'You do not have permission to create timetable entries.',
+              );
+            }
+            await widget.repository.createDocument('timetableEntries', {
+              ...payload,
+              if (_academicYear.trim().isNotEmpty)
+                'academicYear': _academicYear.trim(),
+              'createdAtText': _displayDateNow(),
+              'createdBy': widget.user.uid,
+            });
+          }
+        },
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEdit ? 'Timetable entry updated' : 'Timetable entry saved',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  String _validateTimetableForm(Map<String, dynamic> form) {
+    for (final required in const [
+      ['classKey', 'Class'],
+      ['subject', 'Subject'],
+      ['facultyId', 'Faculty'],
+      ['classroomId', 'Classroom'],
+      ['day', 'Day'],
+      ['timeSlot', 'Time slot'],
+    ]) {
+      if (readText(form, [required[0]], fallback: '').trim().isEmpty) {
+        return '${required[1]} is required.';
+      }
+    }
+    return '';
+  }
+
+  Map<String, dynamic> _buildTimetableEntryPayload(
+    Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic> form,
+  ) {
+    final normalizedForm = _normalizeTimetableSlotFields(form);
+    final faculty = _timetableFaculty(data);
+    final classrooms = _items(data, 'classrooms');
+    final classStudent = _items(data, 'students')
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (student) =>
+              student != null &&
+              _timetableClassKey(student) == form['classKey'],
+          orElse: () => null,
+        );
+    final facultyMember = faculty.cast<Map<String, dynamic>?>().firstWhere(
+      (member) =>
+          member != null &&
+          readText(member, const ['id'], fallback: '') ==
+              readText(form, const ['facultyId'], fallback: ''),
+      orElse: () => null,
+    );
+    final classroom = classrooms.cast<Map<String, dynamic>?>().firstWhere(
+      (room) =>
+          room != null &&
+          readText(room, const ['id'], fallback: '') ==
+              readText(form, const ['classroomId'], fallback: ''),
+      orElse: () => null,
+    );
+    return {
+      ...form,
+      ...normalizedForm,
+      'subject': readText(form, const ['subject'], fallback: '').trim(),
+      'facultyName': facultyMember == null
+          ? ''
+          : readText(facultyMember, const ['name'], fallback: ''),
+      'classroomName': classroom == null
+          ? ''
+          : readText(classroom, const [
+              'roomNo',
+              'roomNumber',
+              'name',
+            ], fallback: ''),
+      'courseCode': classStudent == null
+          ? readText(form, const ['courseCode'], fallback: '')
+          : readText(classStudent, const ['courseCode'], fallback: ''),
+      'courseName': classStudent == null
+          ? readText(form, const ['courseName'], fallback: '')
+          : readText(classStudent, const [
+              'courseName',
+              'program',
+            ], fallback: ''),
+      'status': 'Draft',
+    };
+  }
+
+  Future<void> _archiveTimetableEntry(Map<String, dynamic> entry) async {
+    if (!_can('timetable.edit')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to archive entries.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final id = readText(entry, const ['id'], fallback: '');
+    if (id.isEmpty) return;
+    await widget.repository.updateDocument('timetableEntries', id, {
+      'status': 'Archived',
+      'archivedAt': FieldValue.serverTimestamp(),
+      'archivedAtText': _displayDateNow(),
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Timetable entry archived'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _refresh();
+  }
+
+  Future<void> _restoreTimetableEntry(Map<String, dynamic> entry) async {
+    if (!_can('timetable.edit')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to restore entries.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final id = readText(entry, const ['id'], fallback: '');
+    if (id.isEmpty) return;
+    await widget.repository.updateDocument('timetableEntries', id, {
+      'status': 'Draft',
+      'restoredAt': FieldValue.serverTimestamp(),
+      'restoredAtText': _displayDateNow(),
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Timetable entry restored'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    setState(() => _timetableStatusView = 'active');
+    await _refresh();
   }
 
   Widget _results(Map<String, List<Map<String, dynamic>>> data) {
@@ -5469,6 +6013,25 @@ class _AttendanceSummary {
   final int percentage;
 }
 
+class _TimetableSlotOption {
+  const _TimetableSlotOption({
+    required this.label,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  final String label;
+  final String startTime;
+  final String endTime;
+}
+
+class _TimetableSlotParts {
+  const _TimetableSlotParts({required this.startTime, required this.endTime});
+
+  final String startTime;
+  final String endTime;
+}
+
 class _SegmentedFilter extends StatelessWidget {
   const _SegmentedFilter({
     required this.value,
@@ -5810,6 +6373,678 @@ class _AttendanceRosterCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TimetableBoard extends StatelessWidget {
+  const _TimetableBoard({
+    required this.entries,
+    required this.slots,
+    required this.statusView,
+    required this.canCreate,
+    required this.canEdit,
+    required this.canArchive,
+    required this.onCreate,
+    required this.onEdit,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  static const _days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+
+  final List<Map<String, dynamic>> entries;
+  final List<_TimetableSlotOption> slots;
+  final String statusView;
+  final bool canCreate;
+  final bool canEdit;
+  final bool canArchive;
+  final ValueChanged<Map<String, dynamic>> onCreate;
+  final ValueChanged<Map<String, dynamic>> onEdit;
+  final ValueChanged<Map<String, dynamic>> onArchive;
+  final ValueChanged<Map<String, dynamic>> onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    if (slots.isEmpty) {
+      return const EmptyState(
+        title: 'No time slots',
+        message: 'Create a timetable entry to start the timetable grid.',
+      );
+    }
+    return Column(
+      children: _days.map((day) {
+        final dayEntries = entries
+            .where(
+              (entry) =>
+                  readText(entry, const ['day', 'weekday'], fallback: '') ==
+                  day,
+            )
+            .toList();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: InfoCard(
+            padding: const EdgeInsets.all(0),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              initiallyExpanded: dayEntries.isNotEmpty,
+              title: Text(
+                day,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(
+                '${dayEntries.length} entries',
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              children: slots.map((slot) {
+                final slotEntries = dayEntries
+                    .where((entry) => _slotLabel(entry) == slot.label)
+                    .toList();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.page,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          slot.label,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (slotEntries.isEmpty &&
+                            canCreate &&
+                            statusView != 'archived')
+                          OutlinedButton.icon(
+                            onPressed: () => onCreate({
+                              'day': day,
+                              'timeSlot': slot.label,
+                              'startTime': slot.startTime,
+                              'endTime': slot.endTime,
+                            }),
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('Add class'),
+                          )
+                        else if (slotEntries.isEmpty)
+                          const Text(
+                            'No class scheduled.',
+                            style: TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          )
+                        else
+                          ...slotEntries.map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _TimetableEntryCard(
+                                entry: entry,
+                                isArchiveView: statusView == 'archived',
+                                canEdit: canEdit,
+                                canArchive: canArchive,
+                                onEdit: () => onEdit(entry),
+                                onArchive: () => onArchive(entry),
+                                onRestore: () => onRestore(entry),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  String _slotLabel(Map<String, dynamic> entry) {
+    final slot = readText(entry, const ['timeSlot'], fallback: '');
+    if (slot.isNotEmpty) return slot;
+    final start = readText(entry, const ['startTime'], fallback: '');
+    final end = readText(entry, const ['endTime'], fallback: '');
+    if (start.isNotEmpty && end.isNotEmpty) return '$start - $end';
+    return '';
+  }
+}
+
+enum _TimetableEntryAction { edit, archive, restore }
+
+class _TimetableEntryCard extends StatelessWidget {
+  const _TimetableEntryCard({
+    required this.entry,
+    required this.isArchiveView,
+    required this.canEdit,
+    required this.canArchive,
+    required this.onEdit,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final Map<String, dynamic> entry;
+  final bool isArchiveView;
+  final bool canEdit;
+  final bool canArchive;
+  final VoidCallback onEdit;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  readText(entry, const ['subject', 'subjectName']),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  readText(entry, const ['classKey', 'className']),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${readText(entry, const ['facultyName', 'teacherName'], fallback: 'Faculty')} / ${readText(entry, const ['classroomName', 'roomNo'], fallback: 'Classroom')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          StatusPill(
+            label: readText(entry, const ['status'], fallback: 'Draft'),
+          ),
+          if (canEdit || canArchive)
+            PopupMenuButton<_TimetableEntryAction>(
+              tooltip: 'Timetable actions',
+              onSelected: (action) {
+                switch (action) {
+                  case _TimetableEntryAction.edit:
+                    onEdit();
+                    break;
+                  case _TimetableEntryAction.archive:
+                    onArchive();
+                    break;
+                  case _TimetableEntryAction.restore:
+                    onRestore();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (canEdit && !isArchiveView)
+                  const PopupMenuItem(
+                    value: _TimetableEntryAction.edit,
+                    child: ListTile(
+                      leading: Icon(Icons.edit_rounded),
+                      title: Text('Edit'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                if (canArchive && !isArchiveView)
+                  const PopupMenuItem(
+                    value: _TimetableEntryAction.archive,
+                    child: ListTile(
+                      leading: Icon(Icons.archive_rounded),
+                      title: Text('Archive'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                if (canArchive && isArchiveView)
+                  const PopupMenuItem(
+                    value: _TimetableEntryAction.restore,
+                    child: ListTile(
+                      leading: Icon(Icons.unarchive_rounded),
+                      title: Text('Restore'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimetableEntrySheet extends StatefulWidget {
+  const _TimetableEntrySheet({
+    required this.initialValues,
+    required this.classOptions,
+    required this.faculty,
+    required this.classrooms,
+    required this.timeSlotOptions,
+    required this.isEdit,
+    required this.onSave,
+  });
+
+  final Map<String, dynamic> initialValues;
+  final List<String> classOptions;
+  final List<Map<String, dynamic>> faculty;
+  final List<Map<String, dynamic>> classrooms;
+  final List<_TimetableSlotOption> timeSlotOptions;
+  final bool isEdit;
+  final Future<void> Function(Map<String, dynamic> form) onSave;
+
+  @override
+  State<_TimetableEntrySheet> createState() => _TimetableEntrySheetState();
+}
+
+class _TimetableEntrySheetState extends State<_TimetableEntrySheet> {
+  static const _days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+
+  late final TextEditingController _classController;
+  late final TextEditingController _subjectController;
+  late final TextEditingController _facultyController;
+  late final TextEditingController _classroomController;
+  late final TextEditingController _slotController;
+  late final TextEditingController _startController;
+  late final TextEditingController _endController;
+  late String _classKey;
+  late String _facultyId;
+  late String _classroomId;
+  late String _day;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialValues;
+    _classKey = _initialFromOptions(
+      widget.classOptions,
+      readText(initial, const ['classKey'], fallback: ''),
+    );
+    _facultyId = _initialRecordId(
+      widget.faculty,
+      readText(initial, const ['facultyId'], fallback: ''),
+    );
+    _classroomId = _initialRecordId(
+      widget.classrooms,
+      readText(initial, const ['classroomId'], fallback: ''),
+    );
+    _day = _days.contains(readText(initial, const ['day'], fallback: ''))
+        ? readText(initial, const ['day'], fallback: '')
+        : _days.first;
+    _classController = TextEditingController(
+      text: readText(initial, const ['classKey'], fallback: _classKey),
+    );
+    _subjectController = TextEditingController(
+      text: readText(initial, const ['subject', 'subjectName'], fallback: ''),
+    );
+    _facultyController = TextEditingController(
+      text: readText(initial, const ['facultyId'], fallback: _facultyId),
+    );
+    _classroomController = TextEditingController(
+      text: readText(initial, const ['classroomId'], fallback: _classroomId),
+    );
+    _slotController = TextEditingController(
+      text: readText(initial, const ['timeSlot'], fallback: ''),
+    );
+    _startController = TextEditingController(
+      text: readText(initial, const ['startTime'], fallback: ''),
+    );
+    _endController = TextEditingController(
+      text: readText(initial, const ['endTime'], fallback: ''),
+    );
+  }
+
+  @override
+  void dispose() {
+    _classController.dispose();
+    _subjectController.dispose();
+    _facultyController.dispose();
+    _classroomController.dispose();
+    _slotController.dispose();
+    _startController.dispose();
+    _endController.dispose();
+    super.dispose();
+  }
+
+  String _initialFromOptions(List<String> options, String value) {
+    if (options.isEmpty) return value;
+    return options.contains(value) ? value : options.first;
+  }
+
+  String _initialRecordId(List<Map<String, dynamic>> items, String value) {
+    if (items.isEmpty) return value;
+    final ids = items
+        .map((item) => readText(item, const ['id'], fallback: ''))
+        .toList();
+    return ids.contains(value) ? value : ids.first;
+  }
+
+  Future<void> _save() async {
+    final form = {
+      'classKey': widget.classOptions.isEmpty
+          ? _classController.text.trim()
+          : _classKey,
+      'subject': _subjectController.text.trim(),
+      'facultyId': widget.faculty.isEmpty
+          ? _facultyController.text.trim()
+          : _facultyId,
+      'classroomId': widget.classrooms.isEmpty
+          ? _classroomController.text.trim()
+          : _classroomId,
+      'day': _day,
+      'timeSlot': _slotController.text.trim(),
+      'startTime': _startController.text.trim(),
+      'endTime': _endController.text.trim(),
+    };
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(form);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.isEdit
+                    ? 'Edit Timetable Entry'
+                    : 'Create Timetable Entry',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Assign subject, faculty, classroom, day, and time slot.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              _classField(),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _subjectController,
+                decoration: const InputDecoration(labelText: 'Subject *'),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 10),
+              _facultyField(),
+              const SizedBox(height: 10),
+              _classroomField(),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _day,
+                decoration: const InputDecoration(labelText: 'Day *'),
+                items: _days
+                    .map(
+                      (day) => DropdownMenuItem(value: day, child: Text(day)),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _day = value ?? _day),
+              ),
+              const SizedBox(height: 10),
+              if (widget.timeSlotOptions.isNotEmpty) ...[
+                DropdownButtonFormField<String>(
+                  initialValue:
+                      widget.timeSlotOptions.any(
+                        (slot) => slot.label == _slotController.text,
+                      )
+                      ? _slotController.text
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Time Slot Preset',
+                  ),
+                  items: widget.timeSlotOptions
+                      .map(
+                        (slot) => DropdownMenuItem(
+                          value: slot.label,
+                          child: Text(slot.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    final selected = widget.timeSlotOptions.firstWhere(
+                      (slot) => slot.label == value,
+                      orElse: () => const _TimetableSlotOption(
+                        label: '',
+                        startTime: '',
+                        endTime: '',
+                      ),
+                    );
+                    setState(() {
+                      _slotController.text = selected.label;
+                      if (selected.startTime.isNotEmpty) {
+                        _startController.text = selected.startTime;
+                      }
+                      if (selected.endTime.isNotEmpty) {
+                        _endController.text = selected.endTime;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                controller: _slotController,
+                decoration: const InputDecoration(
+                  labelText: 'Time Slot *',
+                  hintText: '09:00 - 10:00',
+                ),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _startController,
+                      decoration: const InputDecoration(
+                        labelText: 'Start Time',
+                        hintText: '09:00',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _endController,
+                      decoration: const InputDecoration(
+                        labelText: 'End Time',
+                        hintText: '10:00',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Saving...' : 'Save Entry'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _classField() {
+    if (widget.classOptions.isEmpty) {
+      return TextField(
+        controller: _classController,
+        decoration: const InputDecoration(labelText: 'Class *'),
+        textInputAction: TextInputAction.next,
+      );
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: _classKey,
+      decoration: const InputDecoration(labelText: 'Class *'),
+      items: widget.classOptions
+          .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+          .toList(),
+      onChanged: (value) => setState(() => _classKey = value ?? _classKey),
+    );
+  }
+
+  Widget _facultyField() {
+    if (widget.faculty.isEmpty) {
+      return TextField(
+        controller: _facultyController,
+        decoration: const InputDecoration(labelText: 'Faculty ID *'),
+        textInputAction: TextInputAction.next,
+      );
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: _facultyId,
+      decoration: const InputDecoration(labelText: 'Faculty *'),
+      items: widget.faculty
+          .map(
+            (member) => DropdownMenuItem(
+              value: readText(member, const ['id'], fallback: ''),
+              child: Text(
+                readText(member, const ['name'], fallback: 'Faculty'),
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: (value) => setState(() => _facultyId = value ?? _facultyId),
+    );
+  }
+
+  Widget _classroomField() {
+    if (widget.classrooms.isEmpty) {
+      return TextField(
+        controller: _classroomController,
+        decoration: const InputDecoration(labelText: 'Classroom ID *'),
+        textInputAction: TextInputAction.next,
+      );
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: _classroomId,
+      decoration: const InputDecoration(labelText: 'Classroom *'),
+      items: widget.classrooms
+          .map(
+            (room) => DropdownMenuItem(
+              value: readText(room, const ['id'], fallback: ''),
+              child: Text(
+                readText(room, const [
+                  'roomNo',
+                  'roomNumber',
+                  'name',
+                ], fallback: 'Classroom'),
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: (value) =>
+          setState(() => _classroomId = value ?? _classroomId),
     );
   }
 }
