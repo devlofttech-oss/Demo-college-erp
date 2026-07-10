@@ -467,6 +467,7 @@ export default function FeesManagement({
         assignmentId: targetAssignment?.id || form.assignmentId,
         studentRecordId: student?.id || targetAssignment?.studentRecordId || form.studentRecordId,
         studentId: student?.studentId || targetAssignment?.studentId || form.studentId || '',
+        studentName: student?.name || targetAssignment?.studentName || form.studentName || '',
         feeStructureId: structure?.id || targetAssignment?.feeStructureId || form.feeStructureId,
       }, editingCollection?.id || '');
       const previousLedger = calculateAssignmentPaymentLedger(
@@ -537,6 +538,7 @@ export default function FeesManagement({
           assignmentId: nextAssignmentId,
           studentRecordId: assignmentBase.studentRecordId,
           studentId: assignmentBase.studentId,
+          studentName: assignmentBase.studentName,
           feeStructureId: assignmentBase.feeStructureId,
         };
 

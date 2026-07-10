@@ -146,6 +146,18 @@ assert.deepEqual(
 assert.deepEqual(
   getCollectionsForFeeContext(
     [
+      { id: 'p1', assignmentId: '', studentRecordId: 's1', studentName: 'Dhanush B V', feeStructureId: 'f1', amount: 50000 },
+      { id: 'p2', assignmentId: '', studentRecordId: 's2', studentName: 'Other Student', feeStructureId: 'f2', amount: 10000 },
+    ],
+    { studentRecordId: 's1', studentName: 'Dhanush B V' },
+    '',
+    { allowStudentOnly: true }
+  ).map((item) => item.id),
+  ['p1']
+);
+assert.deepEqual(
+  getCollectionsForFeeContext(
+    [
       { id: 'p1', assignmentId: 'a1', studentRecordId: 's1', feeStructureId: 'f1', amount: 50000 },
       { id: 'p2', assignmentId: '', studentRecordId: 's1', feeStructureId: 'f1', amount: 10000 },
     ],

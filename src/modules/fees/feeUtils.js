@@ -70,10 +70,16 @@ export function getCollectionsForAssignment(collections = [], assignmentId = '',
   ));
 }
 
-export function getCollectionsForFeeContext(collections = [], context = {}, excludeCollectionId = '') {
+function normalizeLookupText(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+export function getCollectionsForFeeContext(collections = [], context = {}, excludeCollectionId = '', options = {}) {
+  const { allowStudentOnly = false } = options;
   const assignmentId = context.assignmentId || context.id || '';
   const studentRecordId = context.studentRecordId || '';
   const studentId = context.studentId || '';
+  const studentName = normalizeLookupText(context.studentName);
   const feeStructureId = context.feeStructureId || '';
 
   return collections.filter((collection) => {
@@ -81,8 +87,10 @@ export function getCollectionsForFeeContext(collections = [], context = {}, excl
     if (assignmentId && collection.assignmentId === assignmentId) return true;
     const sameStudent = (
       (studentRecordId && collection.studentRecordId === studentRecordId) ||
-      (studentId && collection.studentId === studentId)
+      (studentId && collection.studentId === studentId) ||
+      (studentName && normalizeLookupText(collection.studentName) === studentName)
     );
+    if (sameStudent && allowStudentOnly && !feeStructureId) return true;
     return Boolean(sameStudent && feeStructureId && collection.feeStructureId === feeStructureId);
   });
 }

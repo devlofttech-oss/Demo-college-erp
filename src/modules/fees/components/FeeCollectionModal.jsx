@@ -88,20 +88,22 @@ export default function FeeCollectionModal({
     assignmentId: matchingAssignment?.id || form.assignmentId,
     studentRecordId: form.studentRecordId,
     studentId: selectedStudent?.studentId || matchingAssignment?.studentId || initialCollection?.studentId || '',
+    studentName: selectedStudent?.name || matchingAssignment?.studentName || initialCollection?.studentName || '',
     feeStructureId: form.feeStructureId,
   };
-  const paymentHistory = getCollectionsForFeeContext(collections, paymentContext)
+  const hasFeeContext = Boolean(paymentContext.assignmentId || paymentContext.feeStructureId);
+  const paymentHistory = getCollectionsForFeeContext(collections, paymentContext, '', { allowStudentOnly: true })
     .sort((first, second) => String(second.paidAt || `${second.paymentDate || ''}T${second.paymentTime || ''}`).localeCompare(String(first.paidAt || `${first.paymentDate || ''}T${first.paymentTime || ''}`)));
   const historyLedger = calculateAssignmentPaymentLedger(
     { ...(matchingAssignment || {}), totalAmount: editedTotal, adjustmentAmount: matchingAssignment?.adjustmentAmount || 0, admissionThroughAgent: form.admissionThroughAgent, agentFee: form.agentFee },
     paymentHistory,
     { useLegacyPaidFallback: !initialCollection }
   );
-  const previousPaymentsForLedger = getCollectionsForFeeContext(
+  const previousPaymentsForLedger = hasFeeContext ? getCollectionsForFeeContext(
     collections,
     paymentContext,
     initialCollection?.id || ''
-  );
+  ) : [];
   const previousLedger = calculateAssignmentPaymentLedger(
     { ...(matchingAssignment || {}), totalAmount: editedTotal, adjustmentAmount: matchingAssignment?.adjustmentAmount || 0, admissionThroughAgent: form.admissionThroughAgent, agentFee: form.agentFee },
     previousPaymentsForLedger,
@@ -337,7 +339,7 @@ export default function FeeCollectionModal({
                 <div className="text-xs font-bold uppercase text-slate-500">Payment History</div>
                 <div className="text-sm font-bold text-slate-900">{formatCurrency(historyLedger.paidAmount)} paid across {historyLedger.paymentCount} payment{historyLedger.paymentCount === 1 ? '' : 's'}</div>
               </div>
-              <div className="text-xs font-semibold text-rose-700">Current due: {formatCurrency(historyLedger.dueAmount)}</div>
+              <div className="text-xs font-semibold text-rose-700">{hasFeeContext ? `Current due: ${formatCurrency(historyLedger.dueAmount)}` : 'Select fee structure to calculate due'}</div>
             </div>
             {paymentHistory.length ? (
               <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-100">
