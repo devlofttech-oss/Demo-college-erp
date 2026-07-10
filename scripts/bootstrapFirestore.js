@@ -170,11 +170,11 @@ const collections = {
   },
   feeAssignments: {
     purpose: 'Student fee assignment and due tracking',
-    fields: ['feeStructureId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'academicYear', 'courseCode', 'courseName', 'admissionFee', 'applicationFee', 'pocketArticleFee', 'tuitionFee', 'libraryFee', 'labFee', 'transportFee', 'totalAmount', 'paidAmount', 'adjustmentAmount', 'dueAmount', 'dueDate', 'manualDueItems', 'status', 'feeYearLabel', 'seedSource', 'assignedAtText', 'updatedAtText'],
+    fields: ['feeStructureId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'academicYear', 'courseCode', 'courseName', 'admissionFee', 'applicationFee', 'pocketArticleFee', 'tuitionFee', 'libraryFee', 'labFee', 'transportFee', 'agentFee', 'admissionThroughAgent', 'agentFeePaid', 'pendingAgentFeeBalance', 'totalAmount', 'paidAmount', 'adjustmentAmount', 'dueAmount', 'dueDate', 'manualDueItems', 'status', 'feeYearLabel', 'seedSource', 'assignedAtText', 'updatedAtText'],
   },
   feeCollections: {
     purpose: 'Manual/offline fee collection records',
-    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'collectedBy', 'manualDueItems', 'status', 'createdAtText'],
+    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'collectedBy', 'manualDueItems', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status', 'createdAtText'],
   },
   feeAdjustments: {
     purpose: 'Fee concessions, waivers, and approved adjustments',

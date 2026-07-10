@@ -33,7 +33,14 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                 <td className="px-4 py-3 text-slate-600">{item.paymentDate || item.createdAtText || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{item.paymentMode || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{item.referenceNo || '-'}</td>
-                <td className="px-4 py-3 text-right font-bold text-emerald-700">{formatCurrency(item.amount)}</td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
+                  {item.admissionThroughAgent && (
+                    <div className="text-[11px] font-semibold text-cyan-700">
+                      Agent {formatCurrency(item.agentFeePaidAmount)} | Pending {formatCurrency(item.pendingAgentFeeBalance)}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
