@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import {
+  calculatePendingAgentFeeBalance,
   calculateDueAmount,
   calculateFeeStatus,
   formatManualDueItems,
   getFeeComponentValues,
   getDueBucket,
+  isAdmissionThroughAgent,
   normalizeManualDueItems,
   summarizeFees,
   totalFeeComponents,
@@ -26,8 +28,14 @@ assert.deepEqual(getFeeComponentValues({
   libraryFee: 0,
   labFee: 0,
   transportFee: 0,
+  agentFee: 0,
 });
 assert.equal(totalFeeComponents({ applicationFee: 500, pocketArticleFee: 750, tuitionFee: 2000 }), 3250);
+assert.equal(totalFeeComponents({ tuitionFee: 2000, agentFee: 5000 }), 2000);
+assert.equal(totalFeeComponents({ tuitionFee: 2000, agentFee: 5000, admissionThroughAgent: true }), 7000);
+assert.equal(isAdmissionThroughAgent({ admissionSource: 'Agent - Kerala desk' }), true);
+assert.equal(isAdmissionThroughAgent({ admissionSource: 'Direct Walk-in' }), false);
+assert.equal(calculatePendingAgentFeeBalance(25000, 10000), 15000);
 assert.deepEqual(normalizeManualDueItems(['application-fee', { id: 'pocket-article-fee' }, 'application-fee']), [
   { id: 'application-fee', label: 'Application Fee' },
   { id: 'pocket-article-fee', label: 'Pocket Article Fee' },

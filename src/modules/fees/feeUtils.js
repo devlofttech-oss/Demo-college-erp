@@ -8,7 +8,9 @@ export const feeComponentFields = [
   { label: 'Transport Fee', shortLabel: 'Transport', key: 'transportFee' },
 ];
 
-export const feeComponentKeys = feeComponentFields.map((field) => field.key);
+export const agentFeeComponentField = { label: 'Agent Fee', shortLabel: 'Agent', key: 'agentFee' };
+
+export const feeComponentKeys = [...feeComponentFields.map((field) => field.key), agentFeeComponentField.key];
 
 export const manualDueItemOptions = [
   { id: 'application-fee', label: 'Application Fee' },
@@ -29,7 +31,28 @@ export function getFeeComponentValues(source = {}) {
 }
 
 export function totalFeeComponents(source = {}) {
-  return feeComponentKeys.reduce((total, key) => total + Number(source[key] || 0), 0);
+  return feeComponentKeys.reduce((total, key) => {
+    if (key === agentFeeComponentField.key && !isAdmissionThroughAgent(source)) return total;
+    return total + Number(source[key] || 0);
+  }, 0);
+}
+
+export function isAdmissionThroughAgent(source = {}) {
+  if (!source || typeof source !== 'object') return false;
+  if (source.admissionThroughAgent === true || source.isAdmissionThroughAgent === true) return true;
+  return [
+    source.admissionThroughAgent,
+    source.isAdmissionThroughAgent,
+    source.admissionSource,
+    source.admissionThrough,
+    source.admittedThrough,
+    source.admissionChannel,
+    source.sourceOfAdmission,
+  ].some((value) => String(value || '').toLowerCase().includes('agent'));
+}
+
+export function calculatePendingAgentFeeBalance(agentFee = 0, agentFeePaid = 0) {
+  return Math.max(0, Number(agentFee || 0) - Number(agentFeePaid || 0));
 }
 
 export function normalizeManualDueItems(items = []) {

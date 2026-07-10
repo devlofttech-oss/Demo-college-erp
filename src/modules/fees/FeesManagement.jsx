@@ -15,6 +15,7 @@ import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { getClassOptions } from '../timetable/timetableUtils';
 import {
+  calculatePendingAgentFeeBalance,
   calculateDueAmount,
   calculateFeeStatus,
   formatManualDueItems,
@@ -22,6 +23,7 @@ import {
   formatDisplayDate,
   getFeeComponentValues,
   getStudentClassKey,
+  isAdmissionThroughAgent,
   normalizeManualDueItems,
   summarizeFees,
   validateFeeAdjustment,
@@ -406,9 +408,12 @@ export default function FeesManagement({
         ? courseAssignments.find((item) => item.id === editingCollection.assignmentId)
         : null;
       const previousCollectionAmount = Number(editingCollection?.amount || 0);
+      const previousAgentFeePaidAmount = Number(editingCollection?.agentFeePaidAmount || 0);
       const feeValues = getFeeValues(form);
       const totalAmount = Number(form.totalAmount || 0);
       const adjustmentAmount = Number(targetAssignment?.adjustmentAmount || 0);
+      const admissionThroughAgent = isAdmissionThroughAgent(form) || isAdmissionThroughAgent(targetAssignment) || isAdmissionThroughAgent(student);
+      const agentFee = admissionThroughAgent ? Number(form.agentFee || 0) : 0;
       const paidBeforeThisPayment = Math.max(
         0,
         Number(targetAssignment?.paidAmount || 0) - (
@@ -417,14 +422,38 @@ export default function FeesManagement({
             : 0
         )
       );
+      const agentFeePaidBeforeThisPayment = admissionThroughAgent ? Math.max(
+        0,
+        Number(targetAssignment?.agentFeePaid || 0) - (
+          editingCollection?.assignmentId && editingCollection.assignmentId === targetAssignment?.id
+            ? previousAgentFeePaidAmount
+            : 0
+        )
+      ) : 0;
+      const agentFeePaidAmount = admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+      const pendingAgentFeeBefore = admissionThroughAgent
+        ? calculatePendingAgentFeeBalance(agentFee, agentFeePaidBeforeThisPayment)
+        : 0;
       const dueBeforePayment = calculateDueAmount(totalAmount, paidBeforeThisPayment, adjustmentAmount);
       if (amount > dueBeforePayment) {
         toast.error('Collection amount cannot exceed outstanding due.');
         return;
       }
+      if (agentFeePaidAmount > amount) {
+        toast.error('Agent fee paid cannot exceed this payment amount.');
+        return;
+      }
+      if (agentFeePaidAmount > pendingAgentFeeBefore) {
+        toast.error('Agent fee paid cannot exceed pending agent fee balance.');
+        return;
+      }
 
       const nowText = formatDisplayDate();
       const classKey = structure?.classKey || targetAssignment?.classKey || getStudentClassKey(student);
+      const nextAgentFeePaid = admissionThroughAgent ? agentFeePaidBeforeThisPayment + agentFeePaidAmount : 0;
+      const nextPendingAgentFeeBalance = admissionThroughAgent
+        ? calculatePendingAgentFeeBalance(agentFee, nextAgentFeePaid)
+        : 0;
       const assignmentBase = {
         feeStructureId: structure?.id || targetAssignment?.feeStructureId || '',
         studentRecordId: student?.id || targetAssignment?.studentRecordId || '',
@@ -435,6 +464,8 @@ export default function FeesManagement({
         courseCode: structure?.courseCode || student?.courseCode || targetAssignment?.courseCode || '',
         courseName: structure?.courseName || student?.courseName || student?.program || targetAssignment?.courseName || '',
         ...feeValues,
+        admissionThroughAgent,
+        agentFee,
         totalAmount,
         dueDate: structure?.dueDate || targetAssignment?.dueDate || '',
         feeYearLabel: structure?.feeYearLabel || targetAssignment?.feeYearLabel || '',
@@ -449,6 +480,8 @@ export default function FeesManagement({
         paidAmount: nextPaid,
         adjustmentAmount,
         dueAmount: nextDue,
+        agentFeePaid: nextAgentFeePaid,
+        pendingAgentFeeBalance: nextPendingAgentFeeBalance,
         manualDueItems,
         status: calculateFeeStatus(totalAmount, nextPaid, adjustmentAmount),
         updatedAtText: nowText,
@@ -465,6 +498,8 @@ export default function FeesManagement({
             paidAmount: amount,
             adjustmentAmount: 0,
             dueAmount: calculateDueAmount(totalAmount, amount, 0),
+            agentFeePaid: agentFeePaidAmount,
+            pendingAgentFeeBalance: nextPendingAgentFeeBalance,
             manualDueItems,
             status: calculateFeeStatus(totalAmount, amount, 0),
             assignedAtText: nowText,
@@ -477,9 +512,15 @@ export default function FeesManagement({
         if (editingCollection && oldAssignment && oldAssignment.id !== nextAssignmentId) {
           const oldPaid = Math.max(0, Number(oldAssignment.paidAmount || 0) - previousCollectionAmount);
           const oldDue = calculateDueAmount(oldAssignment.totalAmount, oldPaid, oldAssignment.adjustmentAmount);
+          const oldAdmissionThroughAgent = isAdmissionThroughAgent(oldAssignment);
+          const oldAgentFeePaid = oldAdmissionThroughAgent ? Math.max(0, Number(oldAssignment.agentFeePaid || 0) - previousAgentFeePaidAmount) : 0;
           oldAssignmentUpdates = {
             paidAmount: oldPaid,
             dueAmount: oldDue,
+            agentFeePaid: oldAgentFeePaid,
+            pendingAgentFeeBalance: oldAdmissionThroughAgent
+              ? calculatePendingAgentFeeBalance(oldAssignment.agentFee, oldAgentFeePaid)
+              : 0,
             status: calculateFeeStatus(oldAssignment.totalAmount, oldPaid, oldAssignment.adjustmentAmount),
             updatedAtText: nowText,
           };
@@ -495,6 +536,10 @@ export default function FeesManagement({
           studentName: assignmentBase.studentName,
           classKey,
           ...feeValues,
+          admissionThroughAgent,
+          agentFee,
+          agentFeePaidAmount,
+          pendingAgentFeeBalance: nextPendingAgentFeeBalance,
           totalAmount,
           dueBeforePayment,
           dueAfterPayment: calculateDueAmount(totalAmount, nextPaid, adjustmentAmount),
@@ -542,6 +587,13 @@ export default function FeesManagement({
     }
     if (form.entryMode === 'manual') {
       const student = courseStudents.find((item) => item.id === form.studentRecordId);
+      const admissionThroughAgent = isAdmissionThroughAgent(form) || isAdmissionThroughAgent(student);
+      const agentFee = admissionThroughAgent ? Number(form.agentFee || 0) : 0;
+      const agentFeePaidAmount = admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+      if (agentFeePaidAmount > amount) {
+        toast.error('Agent fee paid cannot exceed this payment amount.');
+        return;
+      }
       const collection = {
         assignmentId: '',
         studentRecordId: student?.id || '',
@@ -558,6 +610,10 @@ export default function FeesManagement({
         createdAtText: formatDisplayDate(),
         entryMode: 'Manual',
         manualDueItems,
+        admissionThroughAgent,
+        agentFee,
+        agentFeePaidAmount,
+        pendingAgentFeeBalance: admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, agentFeePaidAmount) : 0,
       };
       try {
         const id = await createFeeCollection(collection);
@@ -574,11 +630,27 @@ export default function FeesManagement({
       }
       return;
     }
+    const admissionThroughAgent = isAdmissionThroughAgent(assignment);
+    const agentFee = admissionThroughAgent ? Number(assignment.agentFee || 0) : 0;
+    const agentFeePaidAmount = admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+    const agentFeePaidBeforeThisPayment = admissionThroughAgent ? Number(assignment.agentFeePaid || 0) : 0;
+    const pendingAgentFeeBefore = admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, agentFeePaidBeforeThisPayment) : 0;
+    if (agentFeePaidAmount > amount) {
+      toast.error('Agent fee paid cannot exceed this payment amount.');
+      return;
+    }
+    if (agentFeePaidAmount > pendingAgentFeeBefore) {
+      toast.error('Agent fee paid cannot exceed pending agent fee balance.');
+      return;
+    }
     const nextPaid = Number(assignment.paidAmount || 0) + amount;
     const nextDue = calculateDueAmount(assignment.totalAmount, nextPaid, assignment.adjustmentAmount);
+    const nextAgentFeePaid = admissionThroughAgent ? agentFeePaidBeforeThisPayment + agentFeePaidAmount : 0;
     const assignmentUpdates = {
       paidAmount: nextPaid,
       dueAmount: nextDue,
+      agentFeePaid: nextAgentFeePaid,
+      pendingAgentFeeBalance: admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, nextAgentFeePaid) : 0,
       manualDueItems,
       status: calculateFeeStatus(assignment.totalAmount, nextPaid, assignment.adjustmentAmount),
       updatedAtText: formatDisplayDate(),
@@ -598,6 +670,10 @@ export default function FeesManagement({
       status: 'Posted',
       createdAtText: formatDisplayDate(),
       manualDueItems,
+      admissionThroughAgent,
+      agentFee,
+      agentFeePaidAmount,
+      pendingAgentFeeBalance: admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, nextAgentFeePaid) : 0,
     };
     try {
       const id = await createFeeCollection(collection);
@@ -680,10 +756,12 @@ export default function FeesManagement({
     }
     const parentName = student?.guardianName || 'Parent';
     const manualDueSummary = formatManualDueItems(assignment.manualDueItems);
+    const pendingAgentFeeBalance = Number(assignment.pendingAgentFeeBalance || 0);
     const message = [
       `Dear ${parentName},`,
       `This is a fee reminder for ${assignment.studentName}.`,
       `Outstanding due: ${formatCurrency(assignment.dueAmount)}.`,
+      ...(pendingAgentFeeBalance > 0 ? [`Pending agent fee balance: ${formatCurrency(pendingAgentFeeBalance)}.`] : []),
       ...(manualDueSummary ? [`Pending due items: ${manualDueSummary}.`] : []),
       `Due date: ${assignment.dueDate || 'Not specified'}.`,
       'Please complete the payment at the earliest.',
@@ -859,6 +937,21 @@ export default function FeesManagement({
                 <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 p-3 text-sm">
                   <div className="text-xs font-semibold text-amber-700">Pending Due Items</div>
                   <div className="mt-1 font-semibold text-slate-800">{formatManualDueItems(selectedAssignment.manualDueItems)}</div>
+                </div>
+              )}
+              {isAdmissionThroughAgent(selectedAssignment) && (
+                <div className="mt-3 rounded-lg bg-cyan-50 border border-cyan-100 p-3 text-sm">
+                  <div className="text-xs font-semibold text-cyan-700">Agent Fees</div>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="block text-xs text-slate-500">Agent Fee</span>
+                      <b>{formatCurrency(selectedAssignment.agentFee)}</b>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-slate-500">Pending Balance</span>
+                      <b>{formatCurrency(selectedAssignment.pendingAgentFeeBalance)}</b>
+                    </div>
+                  </div>
                 </div>
               )}
               {activeFeeBranch === 'collect-fee' && (

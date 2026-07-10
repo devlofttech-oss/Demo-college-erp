@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import SearchSelect from '../../../components/SearchSelect';
 import {
+  agentFeeComponentField,
+  calculatePendingAgentFeeBalance,
   calculateDueAmount,
   feeComponentFields,
   formatCurrency,
   getFeeComponentValues,
+  isAdmissionThroughAgent,
   manualDueItemOptions,
   normalizeManualDueItems,
   totalFeeComponents,
@@ -33,6 +36,8 @@ export default function FeeCollectionModal({
 }) {
   const initialAssignment = assignments.find((item) => item.id === (initialCollection?.assignmentId || initialAssignmentId));
   const initialStructure = structures.find((item) => item.id === (initialCollection?.feeStructureId || initialAssignment?.feeStructureId));
+  const initialStudent = students.find((item) => item.id === (initialCollection?.studentRecordId || initialAssignment?.studentRecordId));
+  const initialAdmissionThroughAgent = isAdmissionThroughAgent(initialCollection) || isAdmissionThroughAgent(initialAssignment) || isAdmissionThroughAgent(initialStudent);
   const initialFeeValues = getInitialFeeValues({
     assignment: initialAssignment,
     collection: initialCollection,
@@ -45,6 +50,9 @@ export default function FeeCollectionModal({
     studentRecordId: initialCollection?.studentRecordId || initialAssignment?.studentRecordId || '',
     feeStructureId: initialCollection?.feeStructureId || initialAssignment?.feeStructureId || '',
     ...initialFeeValues,
+    admissionThroughAgent: initialAdmissionThroughAgent,
+    agentFee: initialAdmissionThroughAgent ? initialFeeValues.agentFee : 0,
+    agentFeePaidAmount: initialCollection?.agentFeePaidAmount || 0,
     amount: initialCollection?.amount || '',
     paymentMode: initialCollection?.paymentMode || 'Cash',
     referenceNo: initialCollection?.referenceNo || '',
@@ -54,12 +62,28 @@ export default function FeeCollectionModal({
   });
 
   const selectedStructure = structures.find((item) => item.id === form.feeStructureId);
+  const selectedStudent = students.find((item) => item.id === form.studentRecordId);
   const matchingAssignment = assignments.find((item) => (
     item.id === form.assignmentId ||
     (item.studentRecordId === form.studentRecordId && item.feeStructureId === form.feeStructureId)
   ));
   const editedTotal = totalFromForm(form);
   const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems);
+  const agentFeePaidInThisPayment = form.admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+  const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? Math.max(
+    0,
+    Number(matchingAssignment?.agentFeePaid || 0) - (
+      initialCollection?.assignmentId && initialCollection.assignmentId === matchingAssignment?.id
+        ? Number(initialCollection.agentFeePaidAmount || 0)
+        : 0
+    )
+  ) : 0;
+  const pendingAgentFeeBefore = form.admissionThroughAgent
+    ? calculatePendingAgentFeeBalance(form.agentFee, agentFeePaidBeforeThisPayment)
+    : 0;
+  const pendingAgentFeeAfter = form.admissionThroughAgent
+    ? calculatePendingAgentFeeBalance(form.agentFee, agentFeePaidBeforeThisPayment + agentFeePaidInThisPayment)
+    : 0;
   const paidBeforeThisPayment = Math.max(
     0,
     Number(matchingAssignment?.paidAmount || 0) - (
@@ -83,11 +107,16 @@ export default function FeeCollectionModal({
   const applyFeeSource = (nextForm, nextStructureId = nextForm.feeStructureId, nextStudentId = nextForm.studentRecordId) => {
     const nextAssignment = assignments.find((item) => item.studentRecordId === nextStudentId && item.feeStructureId === nextStructureId);
     const nextStructure = structures.find((item) => item.id === nextStructureId);
+    const nextStudent = students.find((item) => item.id === nextStudentId);
     const feeValues = getInitialFeeValues({ assignment: nextAssignment, structure: nextStructure });
+    const nextAdmissionThroughAgent = isAdmissionThroughAgent(nextAssignment) || isAdmissionThroughAgent(nextStudent);
     return {
       ...nextForm,
       assignmentId: nextAssignment?.id || '',
       ...feeValues,
+      admissionThroughAgent: nextAdmissionThroughAgent,
+      agentFee: nextAdmissionThroughAgent ? feeValues.agentFee : 0,
+      agentFeePaidAmount: 0,
       manualDueItems: normalizeManualDueItems(nextAssignment?.manualDueItems || []),
     };
   };
@@ -124,6 +153,10 @@ export default function FeeCollectionModal({
       totalAmount: editedTotal,
       feeStructureName: selectedStructure?.name || '',
       manualDueItems: normalizeManualDueItems(form.manualDueItems),
+      admissionThroughAgent: Boolean(form.admissionThroughAgent),
+      agentFee: form.admissionThroughAgent ? Number(form.agentFee || 0) : 0,
+      agentFeePaidAmount: agentFeePaidInThisPayment,
+      pendingAgentFeeBalance: pendingAgentFeeAfter,
     });
   };
 
@@ -158,6 +191,20 @@ export default function FeeCollectionModal({
               placeholder="Search fee structure..."
             />
           </label>
+          <label className="sm:col-span-2 min-h-11 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={Boolean(form.admissionThroughAgent)}
+              onChange={(event) => setForm((prev) => ({
+                ...prev,
+                admissionThroughAgent: event.target.checked,
+                agentFee: event.target.checked ? prev.agentFee : 0,
+                agentFeePaidAmount: event.target.checked ? prev.agentFeePaidAmount : 0,
+              }))}
+              className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
+            />
+            <span>Admission through agent{selectedStudent?.name ? ` - ${selectedStudent.name}` : ''}</span>
+          </label>
 
           {selectedStructure && (
             <div className="erp-fee-selected-structure sm:col-span-2 rounded-lg border border-emerald-100 bg-emerald-50/60 p-4">
@@ -190,6 +237,39 @@ export default function FeeCollectionModal({
               <div className="text-lg font-extrabold text-slate-900">{formatCurrency(editedTotal)}</div>
             </div>
           </div>
+
+          {form.admissionThroughAgent && (
+            <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3 rounded-lg border border-cyan-100 bg-cyan-50/70 p-4">
+              <label className="erp-fee-field">
+                <span className="block text-xs font-semibold text-cyan-700 mb-1.5">{agentFeeComponentField.label}</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.agentFee}
+                  onChange={(event) => updateFeeComponent(agentFeeComponentField.key, event.target.value)}
+                  placeholder="Enter agent fee"
+                  className="w-full h-10 rounded-lg border border-cyan-100 bg-white px-3 text-sm"
+                />
+              </label>
+              <label className="erp-fee-field">
+                <span className="block text-xs font-semibold text-cyan-700 mb-1.5">Agent Fee Paid Now</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={Math.min(Number(form.amount || 0), pendingAgentFeeBefore)}
+                  value={form.agentFeePaidAmount}
+                  onChange={(event) => setForm((prev) => ({ ...prev, agentFeePaidAmount: event.target.value }))}
+                  placeholder="Amount from this payment"
+                  className="w-full h-10 rounded-lg border border-cyan-100 bg-white px-3 text-sm"
+                />
+              </label>
+              <div className="rounded-lg bg-white p-3">
+                <div className="text-xs font-semibold text-cyan-700">Pending Agent Fee Balance</div>
+                <div className="text-lg font-extrabold text-slate-900">{formatCurrency(pendingAgentFeeAfter)}</div>
+                <div className="text-[11px] font-semibold text-slate-500">Before payment: {formatCurrency(pendingAgentFeeBefore)}</div>
+              </div>
+            </div>
+          )}
 
           <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3 text-sm">
             <div className="erp-fee-summary-card rounded-lg bg-[#f5f5f6] p-3">
