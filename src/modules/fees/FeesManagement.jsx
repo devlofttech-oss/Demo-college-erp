@@ -23,6 +23,7 @@ import {
   formatDisplayDate,
   getFeeComponentValues,
   getCollectionsForAssignment,
+  getCollectionsForFeeContext,
   getStudentClassKey,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
@@ -397,8 +398,8 @@ export default function FeesManagement({
     };
   };
 
-  const getProjectedCollections = (assignmentId, collection = null, excludeCollectionId = '') => {
-    const baseCollections = getCollectionsForAssignment(courseCollections, assignmentId, excludeCollectionId);
+  const getProjectedCollections = (context, collection = null, excludeCollectionId = '') => {
+    const baseCollections = getCollectionsForFeeContext(courseCollections, context, excludeCollectionId);
     return collection ? [...baseCollections, collection] : baseCollections;
   };
 
@@ -462,9 +463,12 @@ export default function FeesManagement({
         admissionThroughAgent,
         agentFee,
       };
-      const previousCollections = targetAssignment
-        ? getCollectionsForAssignment(courseCollections, targetAssignment.id, editingCollection?.id || '')
-        : [];
+      const previousCollections = getCollectionsForFeeContext(courseCollections, {
+        assignmentId: targetAssignment?.id || form.assignmentId,
+        studentRecordId: student?.id || targetAssignment?.studentRecordId || form.studentRecordId,
+        studentId: student?.studentId || targetAssignment?.studentId || form.studentId || '',
+        feeStructureId: structure?.id || targetAssignment?.feeStructureId || form.feeStructureId,
+      }, editingCollection?.id || '');
       const previousLedger = calculateAssignmentPaymentLedger(
         baseAssignmentForLedger,
         previousCollections,
@@ -508,6 +512,7 @@ export default function FeesManagement({
       let nextAssignmentId = targetAssignment?.id || '';
       let nextAssignment = null;
       let oldAssignmentUpdates = null;
+      let nextPaymentContext = null;
 
       try {
         if (!targetAssignment) {
@@ -528,6 +533,12 @@ export default function FeesManagement({
         } else {
           nextAssignment = { ...targetAssignment, ...assignmentBase };
         }
+        nextPaymentContext = {
+          assignmentId: nextAssignmentId,
+          studentRecordId: assignmentBase.studentRecordId,
+          studentId: assignmentBase.studentId,
+          feeStructureId: assignmentBase.feeStructureId,
+        };
 
         const collectionBase = {
           assignmentId: nextAssignmentId,
@@ -557,7 +568,7 @@ export default function FeesManagement({
           ...(editingCollection ? { updatedAtText: nowText } : { createdAtText: nowText }),
         };
         const projectedCollection = { id: editingCollection?.id || '__pending__', ...collectionBase };
-        const projectedCollections = getProjectedCollections(nextAssignmentId, projectedCollection, editingCollection?.id || '');
+        const projectedCollections = getProjectedCollections(nextPaymentContext, projectedCollection, editingCollection?.id || '');
         const projectedLedger = calculateAssignmentPaymentLedger(
           { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems },
           projectedCollections
@@ -585,7 +596,7 @@ export default function FeesManagement({
           manualDueItems,
           ...getLedgerAssignmentUpdates(
             { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems },
-            getProjectedCollections(nextAssignmentId, { id: collection.id || editingCollection.id, ...collection }, editingCollection?.id || ''),
+            getProjectedCollections(nextPaymentContext, { id: collection.id || editingCollection.id, ...collection }, editingCollection?.id || ''),
             nowText
           ),
         };

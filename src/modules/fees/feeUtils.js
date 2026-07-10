@@ -70,6 +70,23 @@ export function getCollectionsForAssignment(collections = [], assignmentId = '',
   ));
 }
 
+export function getCollectionsForFeeContext(collections = [], context = {}, excludeCollectionId = '') {
+  const assignmentId = context.assignmentId || context.id || '';
+  const studentRecordId = context.studentRecordId || '';
+  const studentId = context.studentId || '';
+  const feeStructureId = context.feeStructureId || '';
+
+  return collections.filter((collection) => {
+    if (collection.id === excludeCollectionId || !isPostedFeeCollection(collection)) return false;
+    if (assignmentId && collection.assignmentId === assignmentId) return true;
+    const sameStudent = (
+      (studentRecordId && collection.studentRecordId === studentRecordId) ||
+      (studentId && collection.studentId === studentId)
+    );
+    return Boolean(sameStudent && feeStructureId && collection.feeStructureId === feeStructureId);
+  });
+}
+
 export function sumCollectionAmounts(collections = [], amountKey = 'amount') {
   return collections
     .filter(isPostedFeeCollection)

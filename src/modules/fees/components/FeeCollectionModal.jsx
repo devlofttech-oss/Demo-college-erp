@@ -9,7 +9,7 @@ import {
   feeComponentFields,
   formatCurrency,
   getFeeComponentValues,
-  getCollectionsForAssignment,
+  getCollectionsForFeeContext,
   getManualDueItemOptions,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
@@ -21,9 +21,9 @@ function totalFromForm(form = {}) {
 }
 
 function getInitialFeeValues({ assignment, collection, structure }) {
-  if (collection?.feeStructureId || collection?.totalAmount) return getFeeComponentValues(collection);
   if (assignment) return getFeeComponentValues(assignment);
   if (structure) return getFeeComponentValues(structure);
+  if (collection?.totalAmount) return getFeeComponentValues(collection);
   return getFeeComponentValues({});
 }
 
@@ -84,11 +84,22 @@ export default function FeeCollectionModal({
   const editedTotal = totalFromForm(form);
   const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems, form);
   const dueItemOptions = getManualDueItemOptions(form);
-  const paymentHistory = getCollectionsForAssignment(collections, matchingAssignment?.id || form.assignmentId)
+  const paymentContext = {
+    assignmentId: matchingAssignment?.id || form.assignmentId,
+    studentRecordId: form.studentRecordId,
+    studentId: selectedStudent?.studentId || matchingAssignment?.studentId || initialCollection?.studentId || '',
+    feeStructureId: form.feeStructureId,
+  };
+  const paymentHistory = getCollectionsForFeeContext(collections, paymentContext)
     .sort((first, second) => String(second.paidAt || `${second.paymentDate || ''}T${second.paymentTime || ''}`).localeCompare(String(first.paidAt || `${first.paymentDate || ''}T${first.paymentTime || ''}`)));
-  const previousPaymentsForLedger = getCollectionsForAssignment(
+  const historyLedger = calculateAssignmentPaymentLedger(
+    { ...(matchingAssignment || {}), totalAmount: editedTotal, adjustmentAmount: matchingAssignment?.adjustmentAmount || 0, admissionThroughAgent: form.admissionThroughAgent, agentFee: form.agentFee },
+    paymentHistory,
+    { useLegacyPaidFallback: !initialCollection }
+  );
+  const previousPaymentsForLedger = getCollectionsForFeeContext(
     collections,
-    matchingAssignment?.id || form.assignmentId,
+    paymentContext,
     initialCollection?.id || ''
   );
   const previousLedger = calculateAssignmentPaymentLedger(
@@ -324,9 +335,9 @@ export default function FeeCollectionModal({
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
               <div>
                 <div className="text-xs font-bold uppercase text-slate-500">Payment History</div>
-                <div className="text-sm font-bold text-slate-900">{formatCurrency(previousLedger.paidAmount)} paid across {previousLedger.paymentCount} payment{previousLedger.paymentCount === 1 ? '' : 's'}</div>
+                <div className="text-sm font-bold text-slate-900">{formatCurrency(historyLedger.paidAmount)} paid across {historyLedger.paymentCount} payment{historyLedger.paymentCount === 1 ? '' : 's'}</div>
               </div>
-              <div className="text-xs font-semibold text-rose-700">Current due: {formatCurrency(dueBeforeThisPayment)}</div>
+              <div className="text-xs font-semibold text-rose-700">Current due: {formatCurrency(historyLedger.dueAmount)}</div>
             </div>
             {paymentHistory.length ? (
               <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-100">

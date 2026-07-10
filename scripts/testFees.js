@@ -5,6 +5,7 @@ import {
   calculateDueAmount,
   calculateFeeStatus,
   formatManualDueItems,
+  getCollectionsForFeeContext,
   getFeeComponentValues,
   getDueBucket,
   getManualDueItemOptions,
@@ -130,6 +131,28 @@ assert.deepEqual(
     agentFeePaid: 7500,
     pendingAgentFeeBalance: 7500,
   }
+);
+assert.deepEqual(
+  getCollectionsForFeeContext(
+    [
+      { id: 'p1', assignmentId: '', studentRecordId: 's1', feeStructureId: 'f1', amount: 50000 },
+      { id: 'p2', assignmentId: 'a2', studentRecordId: 's1', feeStructureId: 'f2', amount: 10000 },
+      { id: 'p3', assignmentId: '', studentRecordId: 's2', feeStructureId: 'f1', amount: 8000 },
+    ],
+    { assignmentId: 'a1', studentRecordId: 's1', feeStructureId: 'f1' }
+  ).map((item) => item.id),
+  ['p1']
+);
+assert.deepEqual(
+  getCollectionsForFeeContext(
+    [
+      { id: 'p1', assignmentId: 'a1', studentRecordId: 's1', feeStructureId: 'f1', amount: 50000 },
+      { id: 'p2', assignmentId: '', studentRecordId: 's1', feeStructureId: 'f1', amount: 10000 },
+    ],
+    { assignmentId: 'a1', studentRecordId: 's1', feeStructureId: 'f1' },
+    'p1'
+  ).map((item) => item.id),
+  ['p2']
 );
 
 assert.equal(validateFeeStructure({}), 'Fee structure name is required.');
