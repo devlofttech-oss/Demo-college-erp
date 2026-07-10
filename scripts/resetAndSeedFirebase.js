@@ -149,7 +149,7 @@ function buildPdfAdmissionSeed() {
       admissionDate: student.admissionDate,
       seatType: student.seatType,
       actualCategory: student.actualCategory,
-      status: 'Approved',
+      status: student.status === 'Archived' ? 'Archived' : 'Approved',
       submittedAtText: student.admissionDate || student.createdAtText,
       sourcePdf: student.sourcePdf,
       sourcePage: student.sourcePage,
