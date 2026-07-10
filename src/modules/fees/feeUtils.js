@@ -23,6 +23,8 @@ export const manualDueItemOptions = [
   { id: 'other-due', label: 'Other Due' },
 ];
 
+export const agentManualDueItemOption = { id: 'agent-fee', label: 'Agent Fee' };
+
 export function getFeeComponentValues(source = {}) {
   return feeComponentKeys.reduce((values, key) => ({
     ...values,
@@ -55,9 +57,19 @@ export function calculatePendingAgentFeeBalance(agentFee = 0, agentFeePaid = 0) 
   return Math.max(0, Number(agentFee || 0) - Number(agentFeePaid || 0));
 }
 
-export function normalizeManualDueItems(items = []) {
+export function getManualDueItemOptions(source = {}) {
+  return isAdmissionThroughAgent(source)
+    ? [...manualDueItemOptions, agentManualDueItemOption]
+    : manualDueItemOptions;
+}
+
+export function normalizeManualDueItems(items = [], source = {}) {
   if (!Array.isArray(items)) return [];
-  const optionsById = manualDueItemOptions.reduce((map, item) => ({ ...map, [item.id]: item }), {});
+  const shouldIncludeAgent = isAdmissionThroughAgent(source) || items.some((item) => (
+    (typeof item === 'string' ? item : item?.id) === agentManualDueItemOption.id
+  ));
+  const options = shouldIncludeAgent ? [...manualDueItemOptions, agentManualDueItemOption] : manualDueItemOptions;
+  const optionsById = options.reduce((map, item) => ({ ...map, [item.id]: item }), {});
   const seen = new Set();
 
   return items.reduce((normalized, item) => {

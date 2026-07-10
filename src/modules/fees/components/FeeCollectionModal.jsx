@@ -8,8 +8,8 @@ import {
   feeComponentFields,
   formatCurrency,
   getFeeComponentValues,
+  getManualDueItemOptions,
   isAdmissionThroughAgent,
-  manualDueItemOptions,
   normalizeManualDueItems,
   totalFeeComponents,
 } from '../feeUtils';
@@ -23,6 +23,16 @@ function getInitialFeeValues({ assignment, collection, structure }) {
   if (assignment) return getFeeComponentValues(assignment);
   if (structure) return getFeeComponentValues(structure);
   return getFeeComponentValues({});
+}
+
+function syncAgentDueItem(items = [], admissionThroughAgent = false) {
+  const normalized = normalizeManualDueItems(items, { admissionThroughAgent: true });
+  if (admissionThroughAgent) {
+    return normalized.some((item) => item.id === 'agent-fee')
+      ? normalized
+      : [...normalized, { id: 'agent-fee', label: 'Agent Fee' }];
+  }
+  return normalized.filter((item) => item.id !== 'agent-fee');
 }
 
 export default function FeeCollectionModal({
@@ -58,7 +68,7 @@ export default function FeeCollectionModal({
     referenceNo: initialCollection?.referenceNo || '',
     paymentDate: initialCollection?.paymentDate || new Date().toISOString().slice(0, 10),
     collectedBy: initialCollection?.collectedBy || 'Admin Office',
-    manualDueItems: normalizeManualDueItems(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || []),
+    manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
   });
 
   const selectedStructure = structures.find((item) => item.id === form.feeStructureId);
@@ -68,7 +78,8 @@ export default function FeeCollectionModal({
     (item.studentRecordId === form.studentRecordId && item.feeStructureId === form.feeStructureId)
   ));
   const editedTotal = totalFromForm(form);
-  const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems);
+  const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems, form);
+  const dueItemOptions = getManualDueItemOptions(form);
   const agentFeePaidInThisPayment = form.admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
   const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? Math.max(
     0,
@@ -117,7 +128,7 @@ export default function FeeCollectionModal({
       admissionThroughAgent: nextAdmissionThroughAgent,
       agentFee: nextAdmissionThroughAgent ? feeValues.agentFee : 0,
       agentFeePaidAmount: 0,
-      manualDueItems: normalizeManualDueItems(nextAssignment?.manualDueItems || []),
+      manualDueItems: syncAgentDueItem(nextAssignment?.manualDueItems || [], nextAdmissionThroughAgent),
     };
   };
 
@@ -152,7 +163,7 @@ export default function FeeCollectionModal({
       ...form,
       totalAmount: editedTotal,
       feeStructureName: selectedStructure?.name || '',
-      manualDueItems: normalizeManualDueItems(form.manualDueItems),
+      manualDueItems: syncAgentDueItem(form.manualDueItems, form.admissionThroughAgent),
       admissionThroughAgent: Boolean(form.admissionThroughAgent),
       agentFee: form.admissionThroughAgent ? Number(form.agentFee || 0) : 0,
       agentFeePaidAmount: agentFeePaidInThisPayment,
@@ -200,6 +211,7 @@ export default function FeeCollectionModal({
                 admissionThroughAgent: event.target.checked,
                 agentFee: event.target.checked ? prev.agentFee : 0,
                 agentFeePaidAmount: event.target.checked ? prev.agentFeePaidAmount : 0,
+                manualDueItems: syncAgentDueItem(prev.manualDueItems, event.target.checked),
               }))}
               className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
             />
@@ -289,7 +301,7 @@ export default function FeeCollectionModal({
           <div className="erp-due-picker sm:col-span-2 rounded-lg border border-amber-100 bg-amber-50/60 p-4">
             <div className="erp-due-picker-title text-xs font-bold uppercase text-amber-700 mb-3">Pending Due Items</div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-              {manualDueItemOptions.map((item) => {
+              {dueItemOptions.map((item) => {
                 const checked = selectedManualDueItems.some((currentItem) => currentItem.id === item.id);
                 return (
                   <label key={item.id} className={`erp-due-chip min-h-10 rounded-lg bg-white border border-amber-100 px-3 py-2 text-xs font-semibold text-slate-700 flex items-center gap-2 ${checked ? 'is-selected' : ''}`}>

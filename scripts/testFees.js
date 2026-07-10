@@ -6,6 +6,7 @@ import {
   formatManualDueItems,
   getFeeComponentValues,
   getDueBucket,
+  getManualDueItemOptions,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
   summarizeFees,
@@ -36,11 +37,17 @@ assert.equal(totalFeeComponents({ tuitionFee: 2000, agentFee: 5000, admissionThr
 assert.equal(isAdmissionThroughAgent({ admissionSource: 'Agent - Kerala desk' }), true);
 assert.equal(isAdmissionThroughAgent({ admissionSource: 'Direct Walk-in' }), false);
 assert.equal(calculatePendingAgentFeeBalance(25000, 10000), 15000);
+assert.equal(getManualDueItemOptions({ admissionThroughAgent: true }).some((item) => item.id === 'agent-fee'), true);
+assert.equal(getManualDueItemOptions({ admissionThroughAgent: false }).some((item) => item.id === 'agent-fee'), false);
 assert.deepEqual(normalizeManualDueItems(['application-fee', { id: 'pocket-article-fee' }, 'application-fee']), [
   { id: 'application-fee', label: 'Application Fee' },
   { id: 'pocket-article-fee', label: 'Pocket Article Fee' },
 ]);
+assert.deepEqual(normalizeManualDueItems(['agent-fee']), [
+  { id: 'agent-fee', label: 'Agent Fee' },
+]);
 assert.equal(formatManualDueItems(['application-fee', 'pocket-article-fee']), 'Application Fee, Pocket Article Fee');
+assert.equal(formatManualDueItems(['agent-fee']), 'Agent Fee');
 
 assert.equal(calculateDueAmount(10000, 4000, 1000), 5000);
 assert.equal(calculateDueAmount(10000, 12000, 0), 0);
