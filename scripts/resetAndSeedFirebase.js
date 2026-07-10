@@ -50,7 +50,7 @@ const schemas = {
   reportCards: ['studentRecordId', 'studentId', 'examName', 'academicYear', 'status', 'generatedAtText'],
   feeStructures: ['name', 'classKey', 'academicYear', 'admissionFee', 'applicationFee', 'pocketArticleFee', 'tuitionFee', 'libraryFee', 'labFee', 'transportFee', 'totalAmount', 'dueDate', 'status', 'courseCode', 'courseName', 'feeYearLabel', 'courseTotalAmount', 'extraChargesNote', 'seedSource'],
   feeAssignments: ['feeStructureId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'academicYear', 'courseCode', 'courseName', 'admissionFee', 'applicationFee', 'pocketArticleFee', 'tuitionFee', 'libraryFee', 'labFee', 'transportFee', 'agentFee', 'admissionThroughAgent', 'agentFeePaid', 'pendingAgentFeeBalance', 'totalAmount', 'paidAmount', 'adjustmentAmount', 'dueAmount', 'dueDate', 'manualDueItems', 'status', 'feeYearLabel', 'seedSource'],
-  feeCollections: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'manualDueItems', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status'],
+  feeCollections: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'paymentTime', 'paidAt', 'collectedBy', 'manualDueItems', 'dueBeforePayment', 'totalPaidAfterPayment', 'dueAfterPayment', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status'],
   feeAdjustments: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'reason', 'status'],
   hostelRooms: ['roomNo', 'hostelName', 'blockName', 'floor', 'capacity', 'occupiedCount', 'wardenName', 'academicYear', 'status', 'createdAtText'],
   hostelAllocations: ['studentRecordId', 'studentId', 'studentName', 'courseCode', 'courseName', 'roomNo', 'hostelName', 'allocatedOn', 'academicYear', 'status', 'guardianPhone', 'createdAtText'],
@@ -275,7 +275,7 @@ const seed = {
     'seed-fee-vivek': { feeStructureId: 'seed-fee-xii-a', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', classKey: 'Class XII - A', academicYear: '2026-2027', totalAmount: 65000, paidAmount: 40000, adjustmentAmount: 0, dueAmount: 25000, dueDate: '2026-07-15', status: 'Partially Paid', assignedAtText: '02 Jun 2026' },
   },
   feeCollections: {
-    'seed-fee-collection-vivek': { assignmentId: 'seed-fee-vivek', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', amount: 40000, academicYear: '2026-2027', paymentMode: 'Cash', referenceNo: 'OFF-1001', paymentDate: '2026-06-10', collectedBy: 'Admin Office', status: 'Posted', createdAtText: '10 Jun 2026' },
+    'seed-fee-collection-vivek': { assignmentId: 'seed-fee-vivek', studentRecordId: 'seed-student-vivek', studentId: 'STU-4449', studentName: 'Vivek Sharma', amount: 40000, academicYear: '2026-2027', paymentMode: 'Cash', referenceNo: 'OFF-1001', paymentDate: '2026-06-10', paymentTime: '10:30', paidAt: '2026-06-10T10:30:00.000Z', collectedBy: 'Admin Office', dueBeforePayment: 65000, totalPaidAfterPayment: 40000, dueAfterPayment: 25000, status: 'Posted', createdAtText: '10 Jun 2026' },
   },
   feeAdjustments: {},
   hostelRooms: {

@@ -4398,6 +4398,36 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   color:#64748b!important;
 }
 
+.erp-shell .erp-payment-history {
+  background:rgba(255,255,255,.04)!important;
+  border-color:rgba(255,255,255,.10)!important;
+  color:#dce7eb!important;
+}
+
+.erp-shell .erp-payment-history table thead {
+  background:rgba(255,255,255,.05)!important;
+  color:#aab7c2!important;
+}
+
+.erp-shell .erp-payment-history tbody {
+  color:#dce7eb!important;
+}
+
+.erp-shell.light-mode .erp-payment-history {
+  background:#ffffff!important;
+  border-color:#dde6ef!important;
+  color:#334155!important;
+}
+
+.erp-shell.light-mode .erp-payment-history table thead {
+  background:#f8fafc!important;
+  color:#64748b!important;
+}
+
+.erp-shell.light-mode .erp-payment-history tbody {
+  color:#334155!important;
+}
+
 .erp-shell .erp-due-picker {
   background:rgba(245,158,11,.08)!important;
   border-color:rgba(245,158,11,.24)!important;

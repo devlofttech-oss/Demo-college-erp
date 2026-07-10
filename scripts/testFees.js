@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  calculateAssignmentPaymentLedger,
   calculatePendingAgentFeeBalance,
   calculateDueAmount,
   calculateFeeStatus,
@@ -75,6 +76,59 @@ assert.deepEqual(
     totalAdjusted: 1000,
     totalOutstanding: 10000,
     dueStudents: 2,
+  }
+);
+
+assert.deepEqual(
+  calculateAssignmentPaymentLedger(
+    { id: 'a1', totalAmount: 10000, adjustmentAmount: 1000, paidAmount: 2500 },
+    [
+      { id: 'p1', assignmentId: 'a1', amount: 3000, status: 'Posted' },
+      { id: 'p2', assignmentId: 'a1', amount: 2000, status: 'Posted' },
+    ]
+  ),
+  {
+    paymentCount: 2,
+    paidAmount: 5000,
+    adjustmentAmount: 1000,
+    dueAmount: 4000,
+    status: 'Partially Paid',
+    agentFeePaid: 0,
+    pendingAgentFeeBalance: 0,
+  }
+);
+assert.deepEqual(
+  calculateAssignmentPaymentLedger(
+    { id: 'a1', totalAmount: 10000, adjustmentAmount: 0, paidAmount: 7000 },
+    [{ id: 'p2', assignmentId: 'a1', amount: 3000, status: 'Posted' }],
+    { useLegacyPaidFallback: false }
+  ),
+  {
+    paymentCount: 1,
+    paidAmount: 3000,
+    adjustmentAmount: 0,
+    dueAmount: 7000,
+    status: 'Partially Paid',
+    agentFeePaid: 0,
+    pendingAgentFeeBalance: 0,
+  }
+);
+assert.deepEqual(
+  calculateAssignmentPaymentLedger(
+    { id: 'a2', totalAmount: 50000, admissionThroughAgent: true, agentFee: 15000 },
+    [
+      { id: 'p1', assignmentId: 'a2', amount: 20000, agentFeePaidAmount: 5000, status: 'Posted' },
+      { id: 'p2', assignmentId: 'a2', amount: 10000, agentFeePaidAmount: 2500, status: 'Posted' },
+    ]
+  ),
+  {
+    paymentCount: 2,
+    paidAmount: 30000,
+    adjustmentAmount: 0,
+    dueAmount: 20000,
+    status: 'Partially Paid',
+    agentFeePaid: 7500,
+    pendingAgentFeeBalance: 7500,
   }
 );
 

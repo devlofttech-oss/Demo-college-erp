@@ -3,11 +3,13 @@ import { X } from 'lucide-react';
 import SearchSelect from '../../../components/SearchSelect';
 import {
   agentFeeComponentField,
+  calculateAssignmentPaymentLedger,
   calculatePendingAgentFeeBalance,
   calculateDueAmount,
   feeComponentFields,
   formatCurrency,
   getFeeComponentValues,
+  getCollectionsForAssignment,
   getManualDueItemOptions,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
@@ -41,6 +43,7 @@ export default function FeeCollectionModal({
   initialCollection = null,
   onClose,
   onSave,
+  collections = [],
   students = [],
   structures = [],
 }) {
@@ -67,6 +70,7 @@ export default function FeeCollectionModal({
     paymentMode: initialCollection?.paymentMode || 'Cash',
     referenceNo: initialCollection?.referenceNo || '',
     paymentDate: initialCollection?.paymentDate || new Date().toISOString().slice(0, 10),
+    paymentTime: initialCollection?.paymentTime || new Date().toTimeString().slice(0, 5),
     collectedBy: initialCollection?.collectedBy || 'Admin Office',
     manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
   });
@@ -80,29 +84,27 @@ export default function FeeCollectionModal({
   const editedTotal = totalFromForm(form);
   const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems, form);
   const dueItemOptions = getManualDueItemOptions(form);
+  const paymentHistory = getCollectionsForAssignment(collections, matchingAssignment?.id || form.assignmentId)
+    .sort((first, second) => String(second.paidAt || `${second.paymentDate || ''}T${second.paymentTime || ''}`).localeCompare(String(first.paidAt || `${first.paymentDate || ''}T${first.paymentTime || ''}`)));
+  const previousPaymentsForLedger = getCollectionsForAssignment(
+    collections,
+    matchingAssignment?.id || form.assignmentId,
+    initialCollection?.id || ''
+  );
+  const previousLedger = calculateAssignmentPaymentLedger(
+    { ...(matchingAssignment || {}), totalAmount: editedTotal, adjustmentAmount: matchingAssignment?.adjustmentAmount || 0, admissionThroughAgent: form.admissionThroughAgent, agentFee: form.agentFee },
+    previousPaymentsForLedger,
+    { useLegacyPaidFallback: !initialCollection }
+  );
   const agentFeePaidInThisPayment = form.admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
-  const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? Math.max(
-    0,
-    Number(matchingAssignment?.agentFeePaid || 0) - (
-      initialCollection?.assignmentId && initialCollection.assignmentId === matchingAssignment?.id
-        ? Number(initialCollection.agentFeePaidAmount || 0)
-        : 0
-    )
-  ) : 0;
+  const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? previousLedger.agentFeePaid : 0;
   const pendingAgentFeeBefore = form.admissionThroughAgent
     ? calculatePendingAgentFeeBalance(form.agentFee, agentFeePaidBeforeThisPayment)
     : 0;
   const pendingAgentFeeAfter = form.admissionThroughAgent
     ? calculatePendingAgentFeeBalance(form.agentFee, agentFeePaidBeforeThisPayment + agentFeePaidInThisPayment)
     : 0;
-  const paidBeforeThisPayment = Math.max(
-    0,
-    Number(matchingAssignment?.paidAmount || 0) - (
-      initialCollection?.assignmentId && initialCollection.assignmentId === matchingAssignment?.id
-        ? Number(initialCollection.amount || 0)
-        : 0
-    )
-  );
+  const paidBeforeThisPayment = previousLedger.paidAmount;
   const dueBeforeThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment, matchingAssignment?.adjustmentAmount);
   const dueAfterThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment + Number(form.amount || 0), matchingAssignment?.adjustmentAmount);
 
@@ -318,6 +320,42 @@ export default function FeeCollectionModal({
             </div>
           </div>
 
+          <div className="erp-payment-history sm:col-span-2 rounded-lg border border-slate-100 bg-white p-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div>
+                <div className="text-xs font-bold uppercase text-slate-500">Payment History</div>
+                <div className="text-sm font-bold text-slate-900">{formatCurrency(previousLedger.paidAmount)} paid across {previousLedger.paymentCount} payment{previousLedger.paymentCount === 1 ? '' : 's'}</div>
+              </div>
+              <div className="text-xs font-semibold text-rose-700">Current due: {formatCurrency(dueBeforeThisPayment)}</div>
+            </div>
+            {paymentHistory.length ? (
+              <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-100">
+                <table className="w-full text-xs">
+                  <thead className="bg-[#f5f5f6] text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">Date & Time</th>
+                      <th className="px-3 py-2 text-left font-semibold">Mode</th>
+                      <th className="px-3 py-2 text-left font-semibold">Reference</th>
+                      <th className="px-3 py-2 text-right font-semibold">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paymentHistory.map((payment) => (
+                      <tr key={payment.id || `${payment.paymentDate}-${payment.amount}`}>
+                        <td className="px-3 py-2 text-slate-700">{payment.paymentDate || payment.createdAtText || '-'} {payment.paymentTime || ''}</td>
+                        <td className="px-3 py-2 text-slate-600">{payment.paymentMode || '-'}</td>
+                        <td className="px-3 py-2 text-slate-600">{payment.referenceNo || '-'}</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700">{formatCurrency(payment.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">No payment history for this fee assignment yet.</div>
+            )}
+          </div>
+
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Amount</span>
             <input
@@ -338,6 +376,10 @@ export default function FeeCollectionModal({
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Date</span>
             <input type="date" value={form.paymentDate} onChange={(event) => setForm((prev) => ({ ...prev, paymentDate: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
+          </label>
+          <label>
+            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Time</span>
+            <input type="time" value={form.paymentTime} onChange={(event) => setForm((prev) => ({ ...prev, paymentTime: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
           </label>
           <label>
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Reference No.</span>

@@ -30,7 +30,10 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                   <div className="text-xs text-slate-500">{item.feeStructureId || ''}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{item.classKey || '-'}</td>
-                <td className="px-4 py-3 text-slate-600">{item.paymentDate || item.createdAtText || '-'}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  <div>{item.paymentDate || item.createdAtText || '-'}</div>
+                  {item.paymentTime && <div className="text-xs text-slate-500">{item.paymentTime}</div>}
+                </td>
                 <td className="px-4 py-3 text-slate-600">{item.paymentMode || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{item.referenceNo || '-'}</td>
                 <td className="px-4 py-3 text-right">

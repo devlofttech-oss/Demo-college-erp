@@ -57,6 +57,53 @@ export function calculatePendingAgentFeeBalance(agentFee = 0, agentFeePaid = 0) 
   return Math.max(0, Number(agentFee || 0) - Number(agentFeePaid || 0));
 }
 
+export function isPostedFeeCollection(collection = {}) {
+  return !['Cancelled', 'Voided', 'Deleted'].includes(collection.status);
+}
+
+export function getCollectionsForAssignment(collections = [], assignmentId = '', excludeCollectionId = '') {
+  if (!assignmentId) return [];
+  return collections.filter((collection) => (
+    collection.assignmentId === assignmentId &&
+    collection.id !== excludeCollectionId &&
+    isPostedFeeCollection(collection)
+  ));
+}
+
+export function sumCollectionAmounts(collections = [], amountKey = 'amount') {
+  return collections
+    .filter(isPostedFeeCollection)
+    .reduce((total, collection) => total + Number(collection[amountKey] || 0), 0);
+}
+
+export function calculateAssignmentPaymentLedger(assignment = {}, collections = [], options = {}) {
+  const { useLegacyPaidFallback = true } = options;
+  const postedCollections = collections.filter(isPostedFeeCollection);
+  const hasCollectionHistory = postedCollections.length > 0;
+  const paidAmount = hasCollectionHistory || !useLegacyPaidFallback
+    ? sumCollectionAmounts(postedCollections)
+    : Number(assignment.paidAmount || 0);
+  const adjustmentAmount = Number(assignment.adjustmentAmount || 0);
+  const totalAmount = Number(assignment.totalAmount || 0);
+  const dueAmount = calculateDueAmount(totalAmount, paidAmount, adjustmentAmount);
+  const admissionThroughAgent = isAdmissionThroughAgent(assignment);
+  const agentFeePaid = admissionThroughAgent
+    ? (hasCollectionHistory || !useLegacyPaidFallback ? sumCollectionAmounts(postedCollections, 'agentFeePaidAmount') : Number(assignment.agentFeePaid || 0))
+    : 0;
+
+  return {
+    paymentCount: postedCollections.length,
+    paidAmount,
+    adjustmentAmount,
+    dueAmount,
+    status: calculateFeeStatus(totalAmount, paidAmount, adjustmentAmount),
+    agentFeePaid,
+    pendingAgentFeeBalance: admissionThroughAgent
+      ? calculatePendingAgentFeeBalance(assignment.agentFee, agentFeePaid)
+      : 0,
+  };
+}
+
 export function getManualDueItemOptions(source = {}) {
   return isAdmissionThroughAgent(source)
     ? [...manualDueItemOptions, agentManualDueItemOption]
@@ -130,8 +177,9 @@ export function getDueBucket(dueDate, status, now = new Date()) {
 }
 
 export function summarizeFees(assignments = [], collections = [], adjustments = []) {
-  const paidByAssignment = collections.reduce((map, item) => {
-    map[item.assignmentId] = (map[item.assignmentId] || 0) + Number(item.amount || 0);
+  const collectionsByAssignment = collections.reduce((map, item) => {
+    if (!item.assignmentId || !isPostedFeeCollection(item)) return map;
+    map[item.assignmentId] = [...(map[item.assignmentId] || []), item];
     return map;
   }, {});
   const adjustedByAssignment = adjustments.reduce((map, item) => {
@@ -140,15 +188,17 @@ export function summarizeFees(assignments = [], collections = [], adjustments = 
   }, {});
 
   return assignments.reduce((summary, assignment) => {
-    const paid = paidByAssignment[assignment.id] || Number(assignment.paidAmount || 0);
     const adjusted = adjustedByAssignment[assignment.id] || Number(assignment.adjustmentAmount || 0);
-    const due = calculateDueAmount(assignment.totalAmount, paid, adjusted);
+    const ledger = calculateAssignmentPaymentLedger(
+      { ...assignment, adjustmentAmount: adjusted },
+      collectionsByAssignment[assignment.id] || []
+    );
     return {
       totalAssigned: summary.totalAssigned + Number(assignment.totalAmount || 0),
-      totalCollected: summary.totalCollected + paid,
+      totalCollected: summary.totalCollected + ledger.paidAmount,
       totalAdjusted: summary.totalAdjusted + adjusted,
-      totalOutstanding: summary.totalOutstanding + due,
-      dueStudents: summary.dueStudents + (due > 0 ? 1 : 0),
+      totalOutstanding: summary.totalOutstanding + ledger.dueAmount,
+      dueStudents: summary.dueStudents + (ledger.dueAmount > 0 ? 1 : 0),
     };
   }, {
     totalAssigned: 0,

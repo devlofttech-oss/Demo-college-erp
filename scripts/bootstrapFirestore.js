@@ -174,7 +174,7 @@ const collections = {
   },
   feeCollections: {
     purpose: 'Manual/offline fee collection records',
-    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'collectedBy', 'manualDueItems', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status', 'createdAtText'],
+    fields: ['assignmentId', 'studentRecordId', 'studentId', 'studentName', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'paymentTime', 'paidAt', 'collectedBy', 'manualDueItems', 'dueBeforePayment', 'totalPaidAfterPayment', 'dueAfterPayment', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status', 'createdAtText', 'updatedAtText'],
   },
   feeAdjustments: {
     purpose: 'Fee concessions, waivers, and approved adjustments',
