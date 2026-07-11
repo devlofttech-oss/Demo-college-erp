@@ -121,6 +121,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _documentCategoryFilter = '';
   var _documentStatusFilter = '';
   var _curriculumSelectedEventId = '';
+  var _reportCategory = 'students';
+  var _attendanceReportScope = 'daily';
+  var _financialReportTab = 'collections';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -131,6 +134,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   void _applyInitialState() {
+    if (widget.module.id == 'reports') {
+      final category = widget.initialState['reportCategory'];
+      if (category != null && category.isNotEmpty) {
+        _reportCategory = category;
+      }
+      return;
+    }
+
     if (widget.module.id != 'fees') return;
 
     const branchesByTask = {
@@ -493,19 +504,18 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return const [];
       case 'reports':
         return [
-          if (_can('financialReports.snapshots'))
+          if (_reportCategory == 'financial' &&
+              _can('financialReports.snapshots'))
             _ModuleAction(
-              label: 'Snapshot',
+              label: 'Save Summary',
               icon: Icons.save_alt_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Save Report Snapshot',
-                collectionName: 'financialReportSnapshots',
-                fields: const [
-                  _FieldSpec('title', 'Snapshot title', isRequired: true),
-                  _FieldSpec('notes', 'Notes'),
-                ],
-                defaults: {'status': 'Saved'},
-              ),
+              onTap: () => _saveFinancialSnapshot(data),
+            ),
+          if (_canExportReportCategory(_reportCategory))
+            _ModuleAction(
+              label: 'Export',
+              icon: Icons.download_rounded,
+              onTap: () => _exportActiveReport(data),
             ),
         ];
       default:
@@ -7775,120 +7785,1203 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _reports(Map<String, List<Map<String, dynamic>>> data) {
-    final fees = _items(data, 'fees');
-    final collections = _items(data, 'collections');
-    final due = fees.fold<num>(
-      0,
-      (total, item) =>
-          total +
-          readNumber(item, const [
-            'balanceAmount',
-            'unpaid',
-            'dueAmount',
-            'amountDue',
-          ]),
-    );
-    final collected = collections.fold<num>(
-      0,
-      (total, item) =>
-          total +
-          readNumber(item, const [
-            'paidAmount',
-            'amount',
-            'totalPaid',
-            'collectedAmount',
-          ]),
-    );
+    final categories = _reportCategories();
+    if (categories.isEmpty) {
+      return const EmptyState(
+        title: 'Reports unavailable',
+        message: 'You do not have permission to view reports.',
+        icon: Icons.bar_chart_rounded,
+      );
+    }
+    final activeCategory = categories.any((item) => item.id == _reportCategory)
+        ? _reportCategory
+        : categories.first.id;
+
     return Column(
+      key: ValueKey(
+        'reports-$activeCategory-$_attendanceReportScope-$_financialReportTab-$_query',
+      ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.bar_chart_rounded,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ERP / Reports',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Reports',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Category-wise reports for the modules available to your role.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SectionTitle('Report Categories'),
+        ...categories.map(
+          (category) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ReportCategoryCard(
+              option: category,
+              selected: category.id == activeCategory,
+              onTap: () => setState(() => _reportCategory = category.id),
+            ),
+          ),
+        ),
+        SectionTitle(
+          categories.firstWhere((item) => item.id == activeCategory).label,
+        ),
+        if (activeCategory == 'students')
+          _studentReportsPanel(data)
+        else if (activeCategory == 'attendance')
+          _attendanceReportsPanel(data)
+        else if (activeCategory == 'documents')
+          _documentReportsPanel(data)
+        else if (activeCategory == 'exams')
+          _examReportsPanel(data)
+        else
+          _financialReportsPanel(data),
+      ],
+    );
+  }
+
+  List<_ReportCategoryOption> _reportCategories() {
+    return [
+      if (_can('students.view'))
+        const _ReportCategoryOption(
+          id: 'students',
+          label: 'Student Reports',
+          description: 'Admissions and approval queue',
+          icon: Icons.school_rounded,
+          color: AppColors.accent,
+        ),
+      if (_can('attendance.reports'))
+        const _ReportCategoryOption(
+          id: 'attendance',
+          label: 'Attendance Reports',
+          description: 'Daily, monthly, yearly',
+          icon: Icons.fact_check_rounded,
+          color: AppColors.primary,
+        ),
+      if (_can('documents.view') || _can('students.documents'))
+        const _ReportCategoryOption(
+          id: 'documents',
+          label: 'Document Reports',
+          description: 'Verification reports',
+          icon: Icons.folder_copy_rounded,
+          color: Color(0xFF12A6A6),
+        ),
+      if (_can('exams.view') || _can('exams.results'))
+        const _ReportCategoryOption(
+          id: 'exams',
+          label: 'Exam Reports',
+          description: 'Marks and results',
+          icon: Icons.assignment_turned_in_rounded,
+          color: Color(0xFF8357C5),
+        ),
+      if (_can('financialReports.view'))
+        const _ReportCategoryOption(
+          id: 'financial',
+          label: 'Financial Reports',
+          description: 'Collections and dues',
+          icon: Icons.account_balance_wallet_rounded,
+          color: AppColors.warning,
+        ),
+    ];
+  }
+
+  bool _canExportReportCategory(String category) {
+    if (category == 'financial') return _can('financialReports.export');
+    return _reportCategories().any((item) => item.id == category);
+  }
+
+  Widget _studentReportsPanel(Map<String, List<Map<String, dynamic>>> data) {
+    final students = _items(data, 'students')
+        .where(
+          (student) => containsQuery(student, _query, const [
+            'name',
+            'studentId',
+            'admissionNo',
+            'className',
+            'section',
+            'program',
+            'guardianName',
+            'status',
+          ]),
+        )
+        .toList();
+    final allStudents = _items(data, 'students');
+    final documents = _reportDocuments(data);
+    final activeStudents = allStudents.where(
+      (item) => !_isArchivedStudent(item),
+    );
+    final archivedStudents = allStudents.where(_isArchivedStudent);
+    final pendingStudents = allStudents.where((student) {
+      final status = readText(student, const ['status'], fallback: '');
+      return status == 'Pending Approval' || status == 'Admission Review';
+    });
+    final approvedStudents = allStudents.where((student) {
+      final status = readText(student, const ['status'], fallback: '');
+      return status == 'Active' || status == 'Approved' || status == 'Admitted';
+    });
+    final classBreakdown = _countBy(allStudents, (student) {
+      final className = readText(student, const [
+        'className',
+        'standard',
+      ], fallback: 'Unassigned');
+      final section = readText(student, const ['section'], fallback: '-');
+      return '$className - $section';
+    });
+    final pendingDocuments = documents.where(
+      (item) =>
+          readText(item, const [
+            'verificationStatus',
+            'status',
+          ], fallback: '') ==
+          'Pending Review',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SummaryRow(
           stats: [
             _Stat(
               'Students',
-              _items(data, 'students').length.toString(),
+              allStudents.length.toString(),
               Icons.school_rounded,
               AppColors.accent,
             ),
             _Stat(
-              'Staff',
-              _items(data, 'staff').length.toString(),
-              Icons.groups_rounded,
+              'Active',
+              activeStudents.length.toString(),
+              Icons.verified_rounded,
               AppColors.primary,
             ),
             _Stat(
-              'Due',
-              formatMoney(due),
-              Icons.warning_rounded,
+              'Pending',
+              pendingStudents.length.toString(),
+              Icons.pending_actions_rounded,
+              AppColors.warning,
+            ),
+          ],
+        ),
+        const SectionTitle('Report Categories'),
+        _ReportBreakdownCard(
+          rows: [
+            MapEntry('Approved', approvedStudents.length),
+            MapEntry('Archived', archivedStudents.length),
+            MapEntry('Admissions', _items(data, 'admissions').length),
+            MapEntry('Documents', documents.length),
+            MapEntry('Pending Documents', pendingDocuments.length),
+            MapEntry('Promotions', _items(data, 'promotions').length),
+            MapEntry('Classes', classBreakdown.length),
+          ],
+        ),
+        const SectionTitle('Students'),
+        if (students.isEmpty)
+          EmptyState(
+            title: _query.trim().isEmpty
+                ? 'No students'
+                : 'No matching students',
+            message: _query.trim().isEmpty
+                ? 'Student report rows will appear here.'
+                : 'Try another search term.',
+            icon: Icons.school_rounded,
+          )
+        else
+          ...students
+              .take(40)
+              .map(
+                (student) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ReportDataCard(
+                    icon: Icons.school_rounded,
+                    color: AppColors.accent,
+                    title: readText(student, const ['name']),
+                    subtitle:
+                        '${readText(student, const ['admissionNo'], fallback: '-')} / ${readText(student, const ['studentId'], fallback: '-')}',
+                    meta: [
+                      '${readText(student, const ['className', 'standard'], fallback: 'Class')} - ${readText(student, const ['section'], fallback: '-')}',
+                      readText(student, const ['program'], fallback: 'Program'),
+                    ],
+                    trailing: StatusPill(
+                      label: readText(student, const [
+                        'status',
+                      ], fallback: 'Active'),
+                    ),
+                  ),
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _attendanceReportsPanel(Map<String, List<Map<String, dynamic>>> data) {
+    final records =
+        [
+          ..._items(data, 'attendance'),
+          ..._items(data, 'staffAttendance'),
+        ].where((record) {
+          return containsQuery(record, _query, const [
+            'entityName',
+            'studentName',
+            'staffName',
+            'name',
+            'subjectName',
+            'subject',
+            'status',
+            'dateText',
+          ]);
+        }).toList();
+    final grouped = _attendanceReportRows(records);
+    final present = records
+        .where((record) => _attendanceStatus(record) == 'Present')
+        .length;
+    final absent = records
+        .where((record) => _attendanceStatus(record) == 'Absent')
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SegmentedFilter(
+          value: _attendanceReportScope,
+          options: const {
+            'daily': 'Daily',
+            'monthly': 'Monthly',
+            'yearly': 'Yearly',
+          },
+          onChanged: (value) => setState(() => _attendanceReportScope = value),
+        ),
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Records',
+              records.length.toString(),
+              Icons.fact_check_rounded,
+              AppColors.primary,
+            ),
+            _Stat(
+              'Present',
+              present.toString(),
+              Icons.check_circle_rounded,
+              AppColors.accent,
+            ),
+            _Stat(
+              'Absent',
+              absent.toString(),
+              Icons.cancel_rounded,
               AppColors.danger,
             ),
           ],
         ),
-        const SectionTitle('Financial Snapshot'),
-        InfoCard(
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: LabelValue(
-                      label: 'Collected',
-                      value: formatMoney(collected),
+        const SectionTitle('Attendance Summary'),
+        if (grouped.isEmpty)
+          EmptyState(
+            title: _query.trim().isEmpty
+                ? 'No attendance reports'
+                : 'No matching attendance reports',
+            message: 'Attendance summaries will appear when records exist.',
+            icon: Icons.fact_check_rounded,
+          )
+        else
+          ...grouped.map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: InfoCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.label,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                  ),
-                  Expanded(
-                    child: LabelValue(
-                      label: 'Outstanding',
-                      value: formatMoney(due),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: LabelValue(
+                            label: 'Present',
+                            value: row.present.toString(),
+                          ),
+                        ),
+                        Expanded(
+                          child: LabelValue(
+                            label: 'Absent',
+                            value: row.absent.toString(),
+                          ),
+                        ),
+                        Expanded(
+                          child: LabelValue(
+                            label: 'Total',
+                            value: row.total.toString(),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: LabelValue(
-                      label: 'Documents',
-                      value: _items(data, 'documents').length.toString(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _documentReportsPanel(Map<String, List<Map<String, dynamic>>> data) {
+    final documents = _reportDocuments(data)
+        .where(
+          (document) => containsQuery(document, _query, const [
+            'title',
+            'documentName',
+            'documentType',
+            'category',
+            'ownerName',
+            'studentName',
+            'verificationStatus',
+            'status',
+          ]),
+        )
+        .toList();
+    final byStatus = _countBy(
+      documents,
+      (document) => readText(document, const [
+        'verificationStatus',
+        'status',
+      ], fallback: 'Pending Review'),
+    );
+    final byCategory = _countBy(
+      documents,
+      (document) => readText(document, const [
+        'category',
+        'documentType',
+      ], fallback: 'Uncategorized'),
+    );
+    final verified = documents.where((item) {
+      final status = readText(item, const [
+        'verificationStatus',
+        'status',
+      ], fallback: '');
+      return status == 'Verified' || status == 'Source PDF';
+    }).length;
+    final pending = documents
+        .where(
+          (item) =>
+              readText(item, const [
+                'verificationStatus',
+                'status',
+              ], fallback: '') ==
+              'Pending Review',
+        )
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Documents',
+              documents.length.toString(),
+              Icons.folder_copy_rounded,
+              const Color(0xFF12A6A6),
+            ),
+            _Stat(
+              'Verified',
+              verified.toString(),
+              Icons.verified_rounded,
+              AppColors.accent,
+            ),
+            _Stat(
+              'Pending',
+              pending.toString(),
+              Icons.pending_actions_rounded,
+              AppColors.warning,
+            ),
+          ],
+        ),
+        const SectionTitle('By Status'),
+        _ReportBreakdownCard(rows: byStatus.entries.toList()),
+        const SectionTitle('By Category'),
+        _ReportBreakdownCard(rows: byCategory.entries.toList()),
+        const SectionTitle('Documents'),
+        if (documents.isEmpty)
+          const EmptyState(
+            title: 'No document records',
+            message: 'Document report rows will appear here.',
+            icon: Icons.folder_copy_rounded,
+          )
+        else
+          ...documents
+              .take(30)
+              .map(
+                (document) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ReportDataCard(
+                    icon: Icons.description_rounded,
+                    color: const Color(0xFF12A6A6),
+                    title: readText(document, const [
+                      'title',
+                      'documentName',
+                      'documentType',
+                    ]),
+                    subtitle: readText(document, const [
+                      'ownerName',
+                      'studentName',
+                      'ownerId',
+                    ], fallback: 'Document owner'),
+                    meta: [
+                      readText(document, const [
+                        'category',
+                        'documentType',
+                      ], fallback: 'Uncategorized'),
+                      formatDateValue(
+                        document['createdAt'] ?? document['createdAtText'],
+                      ),
+                    ],
+                    trailing: StatusPill(
+                      label: readText(document, const [
+                        'verificationStatus',
+                        'status',
+                      ], fallback: 'Pending Review'),
                     ),
                   ),
-                  Expanded(
-                    child: LabelValue(
-                      label: 'Notices',
-                      value: _items(data, 'notices').length.toString(),
-                    ),
-                  ),
-                  Expanded(
-                    child: LabelValue(
-                      label: 'Exams',
-                      value: _items(data, 'exams').length.toString(),
-                    ),
-                  ),
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _examReportsPanel(Map<String, List<Map<String, dynamic>>> data) {
+    final marks = _items(data, 'marks');
+    final results = _items(data, 'results');
+    final reportCards = _items(data, 'reportCards');
+    final rows =
+        [
+          ...marks.map((item) => {'reportType': 'Marks Entry', ...item}),
+          ...results.map((item) => {'reportType': 'Student Result', ...item}),
+        ].where((row) {
+          return containsQuery(row, _query, const [
+            'reportType',
+            'examName',
+            'subject',
+            'subjectName',
+            'studentName',
+            'studentId',
+            'grade',
+            'status',
+          ]);
+        }).toList();
+    final subjectRows = _countBy(
+      rows,
+      (row) => readText(row, const [
+        'subject',
+        'subjectName',
+        'examName',
+      ], fallback: 'General'),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Marks',
+              marks.length.toString(),
+              Icons.edit_note_rounded,
+              const Color(0xFF8357C5),
+            ),
+            _Stat(
+              'Results',
+              results.length.toString(),
+              Icons.assignment_turned_in_rounded,
+              AppColors.accent,
+            ),
+            _Stat(
+              'Cards',
+              reportCards.length.toString(),
+              Icons.article_rounded,
+              AppColors.primary,
+            ),
+          ],
+        ),
+        const SectionTitle('Subjects / Exams'),
+        _ReportBreakdownCard(rows: subjectRows.entries.toList()),
+        const SectionTitle('Exam Report Rows'),
+        if (rows.isEmpty)
+          EmptyState(
+            title: _query.trim().isEmpty
+                ? 'No exam report records'
+                : 'No matching exam reports',
+            message: 'Marks and result rows will appear here.',
+            icon: Icons.assignment_turned_in_rounded,
+          )
+        else
+          ...rows.take(40).map((row) {
+            final score = readNumber(row, const ['percentage'], fallback: -1);
+            final maxMarks = readNumber(row, const ['maxMarks']);
+            final obtained = readNumber(row, const ['marksObtained', 'marks']);
+            final scoreText = score >= 0
+                ? '${score.round()}%'
+                : maxMarks > 0
+                ? '$obtained/$maxMarks'
+                : readText(row, const ['grade', 'status'], fallback: '-');
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ReportDataCard(
+                icon: Icons.assignment_turned_in_rounded,
+                color: const Color(0xFF8357C5),
+                title: readText(row, const ['reportType']),
+                subtitle: readText(row, const [
+                  'studentName',
+                  'name',
+                  'studentId',
+                ], fallback: 'Student'),
+                meta: [
+                  readText(row, const [
+                    'examName',
+                    'subject',
+                    'subjectName',
+                  ], fallback: 'Exam'),
+                  scoreText,
                 ],
+                trailing: StatusPill(
+                  label: readText(row, const [
+                    'grade',
+                    'status',
+                  ], fallback: 'Recorded'),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _financialReportsPanel(Map<String, List<Map<String, dynamic>>> data) {
+    final rows = _financialFeeRows(data);
+    final collections = _financialCollections(data, rows);
+    final totalAssigned = rows.fold<num>(0, (total, row) => total + row.total);
+    final totalCollected = rows.fold<num>(0, (total, row) => total + row.paid);
+    final totalOutstanding = rows.fold<num>(0, (total, row) => total + row.due);
+    final totalAdjusted = rows.fold<num>(
+      0,
+      (total, row) => total + row.adjusted,
+    );
+    final collectionRate = totalAssigned <= 0
+        ? 0
+        : ((totalCollected / totalAssigned) * 100).clamp(0, 100).round();
+    final outstandingRows = rows.where((row) => row.due > 0).toList();
+    final visibleCollections = collections
+        .where(
+          (collection) => containsQuery(collection, _query, const [
+            'studentName',
+            'studentId',
+            'classKey',
+            'paymentMode',
+            'referenceNo',
+            'receiptNo',
+          ]),
+        )
+        .toList();
+    final visibleOutstanding = outstandingRows
+        .where(
+          (row) =>
+              containsQuery(row.assignment, _query, const [
+                'studentName',
+                'studentId',
+                'classKey',
+                'className',
+                'feeName',
+                'feeStructureName',
+              ]) ||
+              row.title.toLowerCase().contains(_query.toLowerCase()),
+        )
+        .toList();
+    final analytics = _financialClassAnalytics(rows);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SummaryRow(
+          stats: [
+            _Stat(
+              'Assigned',
+              formatMoney(totalAssigned),
+              Icons.account_balance_wallet_rounded,
+              AppColors.primary,
+            ),
+            _Stat(
+              'Collected',
+              formatMoney(totalCollected),
+              Icons.payments_rounded,
+              AppColors.accent,
+            ),
+            _Stat(
+              'Outstanding',
+              formatMoney(totalOutstanding),
+              Icons.trending_up_rounded,
+              AppColors.danger,
+            ),
+          ],
+        ),
+        InfoCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Collection Rate',
+                  value: '$collectionRate%',
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Adjusted',
+                  value: formatMoney(totalAdjusted),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Due Students',
+                  value: outstandingRows.length.toString(),
+                ),
               ),
             ],
           ),
         ),
-        const SectionTitle('Recent Notices'),
-        ..._items(data, 'notices')
-            .take(8)
-            .map(
-              (notice) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _CompactRow(
-                  title: readText(notice, const ['title', 'subject']),
-                  subtitle: formatDateValue(
-                    notice['publishDate'] ?? notice['createdAt'],
+        const SizedBox(height: 12),
+        _SegmentedFilter(
+          value: _financialReportTab,
+          options: const {'collections': 'Collection', 'outstanding': 'Due'},
+          onChanged: (value) => setState(() => _financialReportTab = value),
+        ),
+        const SectionTitle('Class Analytics'),
+        _ReportBreakdownCard(
+          rows: analytics
+              .map(
+                (item) => MapEntry(
+                  '${item.label} (${item.rate}%)',
+                  formatMoney(item.outstanding),
+                ),
+              )
+              .toList(),
+        ),
+        if (_financialReportTab == 'collections') ...[
+          const SectionTitle('Collection Reports'),
+          if (visibleCollections.isEmpty)
+            const EmptyState(
+              title: 'No collections',
+              message: 'Collection report rows will appear here.',
+              icon: Icons.payments_rounded,
+            )
+          else
+            ...visibleCollections
+                .take(40)
+                .map(
+                  (collection) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _ReportDataCard(
+                      icon: Icons.payments_rounded,
+                      color: AppColors.accent,
+                      title: readText(collection, const [
+                        'studentName',
+                        'studentId',
+                      ], fallback: 'Collection'),
+                      subtitle: readText(
+                        collection,
+                        const ['paymentDate', 'createdAtText'],
+                        fallback: formatDateValue(collection['createdAt']),
+                      ),
+                      meta: [
+                        readText(collection, const [
+                          'classKey',
+                          'className',
+                        ], fallback: 'Class'),
+                        readText(collection, const [
+                          'paymentMode',
+                        ], fallback: 'Mode'),
+                      ],
+                      trailing: Text(
+                        formatMoney(_feeCollectionAmount(collection)),
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
                   ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.muted,
+                ),
+        ] else ...[
+          const SectionTitle('Outstanding Reports'),
+          if (visibleOutstanding.isEmpty)
+            const EmptyState(
+              title: 'No outstanding dues',
+              message: 'Outstanding fee rows will appear here.',
+              icon: Icons.receipt_long_rounded,
+            )
+          else
+            ...visibleOutstanding
+                .take(40)
+                .map(
+                  (row) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _ReportDataCard(
+                      icon: Icons.receipt_long_rounded,
+                      color: AppColors.danger,
+                      title: readText(row.assignment, const [
+                        'studentName',
+                        'studentId',
+                      ], fallback: row.title),
+                      subtitle: row.title,
+                      meta: [
+                        readText(row.assignment, const [
+                          'classKey',
+                          'className',
+                        ], fallback: 'Class'),
+                        row.dueBucket,
+                      ],
+                      trailing: Text(
+                        formatMoney(row.due),
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+        ],
+        const SectionTitle('Saved Financial Summaries'),
+        if (_items(data, 'snapshots').isEmpty)
+          const InfoCard(
+            child: Text(
+              'No saved financial summaries yet.',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
+          )
+        else
+          ..._items(data, 'snapshots')
+              .take(6)
+              .map(
+                (snapshot) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ReportDataCard(
+                    icon: Icons.save_alt_rounded,
+                    color: AppColors.primary,
+                    title: readText(snapshot, const [
+                      'reportName',
+                      'title',
+                    ], fallback: 'Financial Summary'),
+                    subtitle: readText(snapshot, const [
+                      'createdAtText',
+                    ], fallback: formatDateValue(snapshot['createdAt'])),
+                    meta: [
+                      formatMoney(
+                        readNumber(snapshot, const ['filteredCollected']),
+                      ),
+                      formatMoney(
+                        readNumber(snapshot, const ['totalOutstanding']),
+                      ),
+                    ],
+                    trailing: StatusPill(
+                      label: readText(snapshot, const [
+                        'status',
+                      ], fallback: 'Generated'),
+                    ),
                   ),
                 ),
               ),
-            ),
       ],
     );
+  }
+
+  List<Map<String, dynamic>> _reportDocuments(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return [..._items(data, 'documents'), ..._items(data, 'studentDocuments')];
+  }
+
+  Map<String, int> _countBy(
+    Iterable<Map<String, dynamic>> items,
+    String Function(Map<String, dynamic> item) keyOf,
+  ) {
+    final counts = <String, int>{};
+    for (final item in items) {
+      final key = keyOf(item).trim().isEmpty ? 'Unassigned' : keyOf(item);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  List<_AttendanceReportSummary> _attendanceReportRows(
+    List<Map<String, dynamic>> records,
+  ) {
+    final grouped = <String, _AttendanceReportSummary>{};
+    for (final record in records) {
+      final date = _attendanceRecordDate(record);
+      final label = switch (_attendanceReportScope) {
+        'monthly' =>
+          date == null
+              ? readText(record, const ['dateText'], fallback: 'Unknown')
+              : DateFormat('MMM yyyy').format(date),
+        'yearly' =>
+          date == null
+              ? readText(record, const ['dateText'], fallback: 'Unknown')
+              : DateFormat('yyyy').format(date),
+        _ =>
+          date == null
+              ? readText(record, const ['dateText'], fallback: 'Unknown')
+              : _attendanceDisplayDate(date),
+      };
+      final existing = grouped[label] ?? _AttendanceReportSummary(label);
+      grouped[label] = existing.add(_attendanceStatus(record));
+    }
+    final rows = grouped.values.toList()
+      ..sort((first, second) => first.label.compareTo(second.label));
+    return rows;
+  }
+
+  String _attendanceStatus(Map<String, dynamic> record) {
+    final status = readText(record, const [
+      'status',
+      'attendanceStatus',
+    ], fallback: 'Present');
+    final normalized = status.toLowerCase();
+    if (normalized.contains('absent')) return 'Absent';
+    if (normalized.contains('late')) return 'Late';
+    if (normalized.contains('leave')) return 'Leave';
+    return 'Present';
+  }
+
+  List<_FeeAssignmentSnapshot> _financialFeeRows(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final students = _feeStudents(data);
+    final structures = _feeStructures(data);
+    final assignments = _feeAssignments(data, students);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    return assignments
+        .map(
+          (assignment) =>
+              _feeSnapshot(assignment, collections, adjustments, structures),
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _financialCollections(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<_FeeAssignmentSnapshot> rows,
+  ) {
+    final students = _feeStudents(data);
+    final assignments = rows.map((row) => row.assignment).toList();
+    return _feeCollections(data, assignments, students);
+  }
+
+  List<_FinancialClassSummary> _financialClassAnalytics(
+    List<_FeeAssignmentSnapshot> rows,
+  ) {
+    final grouped = <String, _FinancialClassSummary>{};
+    for (final row in rows) {
+      final label = readText(row.assignment, const [
+        'classKey',
+        'className',
+        'program',
+      ], fallback: 'Unassigned');
+      final current = grouped[label] ?? _FinancialClassSummary(label: label);
+      grouped[label] = current.add(row);
+    }
+    final analytics = grouped.values.toList()
+      ..sort(
+        (first, second) => second.outstanding.compareTo(first.outstanding),
+      );
+    return analytics;
+  }
+
+  Future<void> _saveFinancialSnapshot(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('financialReports.snapshots')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to save report summaries.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final rows = _financialFeeRows(data);
+    final totalAssigned = rows.fold<num>(0, (total, row) => total + row.total);
+    final totalCollected = rows.fold<num>(0, (total, row) => total + row.paid);
+    final totalOutstanding = rows.fold<num>(0, (total, row) => total + row.due);
+    final totalAdjusted = rows.fold<num>(
+      0,
+      (total, row) => total + row.adjusted,
+    );
+    final collectionRate = totalAssigned <= 0
+        ? 0
+        : ((totalCollected / totalAssigned) * 100).clamp(0, 100).round();
+    await widget.repository.createDocument('financialReportSnapshots', {
+      'reportName': 'Finance Summary ${_displayDateNow()}',
+      'totalAssigned': totalAssigned,
+      'lifetimeCollected': totalCollected,
+      'filteredCollected': totalCollected,
+      'totalAdjusted': totalAdjusted,
+      'totalOutstanding': totalOutstanding,
+      'collectionRate': collectionRate,
+      'dueStudentCount': rows.where((row) => row.due > 0).length,
+      'classCount': _financialClassAnalytics(rows).length,
+      'status': 'Generated',
+      'createdAtText': _displayDateNow(),
+      if (_academicYear.trim().isNotEmpty) 'academicYear': _academicYear.trim(),
+      'createdBy': widget.user.uid,
+    });
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Financial summary saved'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _exportActiveReport(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_canExportReportCategory(_reportCategory)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to export this report.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final csv = _reportCsv(data, _reportCategory);
+    await Clipboard.setData(ClipboardData(text: csv));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${_reportExportLabel(_reportCategory)} CSV copied'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _reportExportLabel(String category) {
+    return _reportCategories()
+        .firstWhere(
+          (item) => item.id == category,
+          orElse: () => const _ReportCategoryOption(
+            id: 'reports',
+            label: 'Reports',
+            description: '',
+            icon: Icons.bar_chart_rounded,
+            color: AppColors.primary,
+          ),
+        )
+        .label;
+  }
+
+  String _csvValue(Object? value) {
+    return '"${(value ?? '').toString().replaceAll('"', '""')}"';
+  }
+
+  String _csvRows(List<List<Object?>> rows) {
+    return rows.map((row) => row.map(_csvValue).join(',')).join('\n');
+  }
+
+  String _reportCsv(
+    Map<String, List<Map<String, dynamic>>> data,
+    String category,
+  ) {
+    switch (category) {
+      case 'attendance':
+        return _csvRows([
+          ['Period', 'Present', 'Absent', 'Late', 'Leave', 'Total'],
+          ..._attendanceReportRows([
+            ..._items(data, 'attendance'),
+            ..._items(data, 'staffAttendance'),
+          ]).map(
+            (row) => [
+              row.label,
+              row.present,
+              row.absent,
+              row.late,
+              row.leave,
+              row.total,
+            ],
+          ),
+        ]);
+      case 'documents':
+        return _csvRows([
+          ['Document', 'Owner', 'Category', 'Status', 'Created'],
+          ..._reportDocuments(data).map(
+            (document) => [
+              readText(document, const [
+                'title',
+                'documentName',
+                'documentType',
+              ], fallback: ''),
+              readText(document, const [
+                'ownerName',
+                'studentName',
+                'ownerId',
+              ], fallback: ''),
+              readText(document, const [
+                'category',
+                'documentType',
+              ], fallback: ''),
+              readText(document, const [
+                'verificationStatus',
+                'status',
+              ], fallback: ''),
+              formatDateValue(
+                document['createdAt'] ?? document['createdAtText'],
+              ),
+            ],
+          ),
+        ]);
+      case 'exams':
+        return _csvRows([
+          ['Report Type', 'Student', 'Subject / Exam', 'Score', 'Status'],
+          ...[
+            ..._items(
+              data,
+              'marks',
+            ).map((item) => {'reportType': 'Marks Entry', ...item}),
+            ..._items(
+              data,
+              'results',
+            ).map((item) => {'reportType': 'Student Result', ...item}),
+          ].map(
+            (row) => [
+              readText(row, const ['reportType'], fallback: ''),
+              readText(row, const [
+                'studentName',
+                'name',
+                'studentId',
+              ], fallback: ''),
+              readText(row, const [
+                'examName',
+                'subject',
+                'subjectName',
+              ], fallback: ''),
+              readText(row, const [
+                'percentage',
+                'marksObtained',
+                'marks',
+              ], fallback: ''),
+              readText(row, const ['grade', 'status'], fallback: ''),
+            ],
+          ),
+        ]);
+      case 'financial':
+        final rows = _financialFeeRows(data);
+        if (_financialReportTab == 'outstanding') {
+          return _csvRows([
+            ['Student', 'Class', 'Fee', 'Aging', 'Outstanding'],
+            ...rows
+                .where((row) => row.due > 0)
+                .map(
+                  (row) => [
+                    readText(row.assignment, const [
+                      'studentName',
+                      'studentId',
+                    ], fallback: ''),
+                    readText(row.assignment, const [
+                      'classKey',
+                      'className',
+                    ], fallback: ''),
+                    row.title,
+                    row.dueBucket,
+                    row.due,
+                  ],
+                ),
+          ]);
+        }
+        return _csvRows([
+          ['Student', 'Class', 'Date', 'Mode', 'Reference', 'Amount'],
+          ..._financialCollections(data, rows).map(
+            (collection) => [
+              readText(collection, const [
+                'studentName',
+                'studentId',
+              ], fallback: ''),
+              readText(collection, const [
+                'classKey',
+                'className',
+              ], fallback: ''),
+              readText(collection, const [
+                'paymentDate',
+                'createdAtText',
+              ], fallback: ''),
+              readText(collection, const ['paymentMode'], fallback: ''),
+              readText(collection, const [
+                'referenceNo',
+                'receiptNo',
+              ], fallback: ''),
+              _feeCollectionAmount(collection),
+            ],
+          ),
+        ]);
+      default:
+        return _csvRows([
+          [
+            'Student Name',
+            'Student ID',
+            'Admission No',
+            'Class',
+            'Program',
+            'Guardian',
+            'Status',
+            'Created On',
+          ],
+          ..._items(data, 'students').map(
+            (student) => [
+              readText(student, const ['name'], fallback: ''),
+              readText(student, const ['studentId'], fallback: ''),
+              readText(student, const ['admissionNo'], fallback: ''),
+              '${readText(student, const ['className'], fallback: '')} ${readText(student, const ['section'], fallback: '')}'
+                  .trim(),
+              readText(student, const ['program'], fallback: ''),
+              readText(student, const ['guardianName'], fallback: ''),
+              readText(student, const ['status'], fallback: ''),
+              readText(student, const ['createdAtText'], fallback: ''),
+            ],
+          ),
+        ]);
+    }
   }
 
   Future<void> _showCreateRecordSheet({
@@ -14450,6 +15543,278 @@ class _Stat {
   final String value;
   final IconData icon;
   final Color color;
+}
+
+class _ReportCategoryOption {
+  const _ReportCategoryOption({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.color,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color color;
+}
+
+class _ReportCategoryCard extends StatelessWidget {
+  const _ReportCategoryCard({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ReportCategoryOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            height: 42,
+            width: 42,
+            decoration: BoxDecoration(
+              color: option.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(option.icon, color: option.color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  option.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  option.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            selected
+                ? Icons.radio_button_checked_rounded
+                : Icons.radio_button_off_rounded,
+            color: selected ? option.color : AppColors.muted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportBreakdownCard extends StatelessWidget {
+  const _ReportBreakdownCard({required this.rows});
+
+  final Iterable<MapEntry<String, Object?>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = rows.toList();
+    if (entries.isEmpty) {
+      return const InfoCard(
+        child: Text(
+          'No report rows available.',
+          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+      );
+    }
+    return InfoCard(
+      child: Column(
+        children: entries
+            .map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        row.key,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      row.value.toString(),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _ReportDataCard extends StatelessWidget {
+  const _ReportDataCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    required this.trailing,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final List<String> meta;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 42,
+            width: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: meta
+                        .where((item) => item.trim().isNotEmpty)
+                        .map(
+                          (item) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.page,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              item,
+                              style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendanceReportSummary {
+  const _AttendanceReportSummary(
+    this.label, {
+    this.present = 0,
+    this.absent = 0,
+    this.late = 0,
+    this.leave = 0,
+  });
+
+  final String label;
+  final int present;
+  final int absent;
+  final int late;
+  final int leave;
+
+  int get total => present + absent + late + leave;
+
+  _AttendanceReportSummary add(String status) {
+    return _AttendanceReportSummary(
+      label,
+      present: present + (status == 'Present' ? 1 : 0),
+      absent: absent + (status == 'Absent' ? 1 : 0),
+      late: late + (status == 'Late' ? 1 : 0),
+      leave: leave + (status == 'Leave' ? 1 : 0),
+    );
+  }
+}
+
+class _FinancialClassSummary {
+  const _FinancialClassSummary({
+    required this.label,
+    this.assigned = 0,
+    this.collected = 0,
+    this.adjusted = 0,
+    this.outstanding = 0,
+    this.students = 0,
+  });
+
+  final String label;
+  final num assigned;
+  final num collected;
+  final num adjusted;
+  final num outstanding;
+  final int students;
+
+  int get rate => assigned <= 0 ? 0 : ((collected / assigned) * 100).round();
+
+  _FinancialClassSummary add(_FeeAssignmentSnapshot row) {
+    return _FinancialClassSummary(
+      label: label,
+      assigned: assigned + row.total,
+      collected: collected + row.paid,
+      adjusted: adjusted + row.adjusted,
+      outstanding: outstanding + row.due,
+      students: students + 1,
+    );
+  }
 }
 
 class _CurriculumEventCard extends StatelessWidget {

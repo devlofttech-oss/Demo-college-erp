@@ -486,8 +486,6 @@ class ErpRepository {
           'colleges': await listCollection('colleges'),
         };
       case 'reports':
-      case 'dashboard':
-      default:
         final students = user.isParent
             ? await linkedParentStudents(user, academicYear: academicYear)
             : await listCollection('students', academicYear: academicYear);
@@ -501,6 +499,10 @@ class ErpRepository {
             'studentAdmissions',
             academicYear: academicYear,
           ),
+          'promotions': await listCollection(
+            'studentPromotions',
+            academicYear: academicYear,
+          ),
           'staff': user.isParent
               ? const <Map<String, dynamic>>[]
               : await listCollection('staffMembers'),
@@ -510,6 +512,77 @@ class ErpRepository {
           ),
           'assignments': feeAssignments,
           'fees': feeAssignments,
+          'collections': await listCollection(
+            'feeCollections',
+            academicYear: academicYear,
+          ),
+          'adjustments': await listCollection(
+            'feeAdjustments',
+            academicYear: academicYear,
+          ),
+          'documents': await listCollection(
+            'managedDocuments',
+            academicYear: academicYear,
+          ),
+          'studentDocuments': await listCollection(
+            'studentDocuments',
+            academicYear: academicYear,
+          ),
+          'exams': await listCollection(
+            'examSchedules',
+            academicYear: academicYear,
+          ),
+          'marks': await listCollection(
+            'marksEntries',
+            academicYear: academicYear,
+          ),
+          'results': await listCollection(
+            'studentResults',
+            academicYear: academicYear,
+          ),
+          'reportCards': await listCollection(
+            'reportCards',
+            academicYear: academicYear,
+          ),
+          'attendance': await listCollection(
+            'studentAttendanceRecords',
+            academicYear: academicYear,
+          ),
+          'staffAttendance': user.isParent
+              ? const <Map<String, dynamic>>[]
+              : await listCollection(
+                  'staffAttendanceRecords',
+                  academicYear: academicYear,
+                ),
+          'snapshots': await listCollection(
+            'financialReportSnapshots',
+            academicYear: academicYear,
+          ),
+        };
+      case 'dashboard':
+      default:
+        final dashboardStudents = user.isParent
+            ? await linkedParentStudents(user, academicYear: academicYear)
+            : await listCollection('students', academicYear: academicYear);
+        final dashboardFeeAssignments = await listCollection(
+          'feeAssignments',
+          academicYear: academicYear,
+        );
+        return {
+          'students': dashboardStudents,
+          'admissions': await listCollection(
+            'studentAdmissions',
+            academicYear: academicYear,
+          ),
+          'staff': user.isParent
+              ? const <Map<String, dynamic>>[]
+              : await listCollection('staffMembers'),
+          'structures': await listCollection(
+            'feeStructures',
+            academicYear: academicYear,
+          ),
+          'assignments': dashboardFeeAssignments,
+          'fees': dashboardFeeAssignments,
           'collections': await listCollection(
             'feeCollections',
             academicYear: academicYear,
