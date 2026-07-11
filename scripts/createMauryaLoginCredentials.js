@@ -11,6 +11,7 @@ import { demoStaffMembers } from '../src/modules/facultyStaff/demoFacultyStaff.j
 const OUTPUT_JSON = new URL('../tmp/pdfs/maurya-login-credentials-data.json', import.meta.url);
 const CREDENTIAL_SEED = 'maurya-login-credentials-2026-06-30';
 const MANAGED_BY = 'maurya-credential-seed';
+const destructiveCleanupUnlocked = process.env.FIRESTORE_DESTRUCTIVE_CLEANUP_UNLOCK === 'YES_I_ACCEPT_CREDENTIAL_DATA_DELETION';
 const OLD_SEED_EMAILS = new Set([
   'superadmin@college.edu',
   'admin@college.edu',
@@ -262,6 +263,11 @@ function isStaleProfile(doc, targetAuthEmails) {
 }
 
 async function deleteStaleFirestoreCredentials(targetAuthEmails) {
+  if (!destructiveCleanupUnlocked) {
+    console.log('Credential cleanup deletes are locked; stale Firestore profiles and parent links were preserved.');
+    return { deletedProfiles: 0, deletedLinks: 0, staleEmails: new Set() };
+  }
+
   const usersSnapshot = await db.collection('users').get();
   const staleProfiles = usersSnapshot.docs.filter((doc) => isStaleProfile(doc, targetAuthEmails));
   const staleEmails = new Set(
@@ -301,6 +307,11 @@ async function deleteStaleFirestoreCredentials(targetAuthEmails) {
 }
 
 async function deleteStaleAuthUsers(targetAuthEmails, staleProfileEmails) {
+  if (!destructiveCleanupUnlocked) {
+    console.log('Credential cleanup auth deletes are locked; stale Firebase Auth users were preserved.');
+    return 0;
+  }
+
   const staleUids = [];
   let pageToken;
   do {

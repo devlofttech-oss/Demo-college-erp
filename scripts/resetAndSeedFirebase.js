@@ -23,6 +23,7 @@ initializeApp({
 const db = getFirestore();
 const shouldReset = process.argv.includes('--reset');
 const confirmed = process.argv.includes('--yes-i-understand-this-deletes-data');
+const destructiveResetUnlocked = process.env.FIRESTORE_DESTRUCTIVE_RESET_UNLOCK === 'YES_I_ACCEPT_IRREVERSIBLE_DATA_LOSS';
 
 const schemas = {
   colleges: ['id', 'name', 'code', 'location', 'logoUrl', 'logoFileName', 'status'],
@@ -385,6 +386,7 @@ for (const collectionName of Object.keys(schemas)) {
   seed[collectionName] = clientReadySeed[collectionName] || {};
 }
 
+const RESET_PRESERVED_COLLECTIONS = new Set(['users']);
 const collectionNames = Object.keys(schemas);
 
 async function deleteCollection(collectionName) {
@@ -432,12 +434,22 @@ async function writeSeedData() {
   return count;
 }
 
+if (shouldReset && !destructiveResetUnlocked) {
+  throw new Error(
+    'Firestore destructive reset is locked. Remove --reset for merge-only seeding, or set FIRESTORE_DESTRUCTIVE_RESET_UNLOCK=YES_I_ACCEPT_IRREVERSIBLE_DATA_LOSS only after a fresh verified backup.'
+  );
+}
+
 if (shouldReset && !confirmed) {
   throw new Error('Reset requested without confirmation. Re-run with --yes-i-understand-this-deletes-data.');
 }
 
 if (shouldReset) {
   for (const collectionName of collectionNames) {
+    if (RESET_PRESERVED_COLLECTIONS.has(collectionName)) {
+      console.log(`Preserved ${collectionName}`);
+      continue;
+    }
     await deleteCollection(collectionName);
   }
 }
