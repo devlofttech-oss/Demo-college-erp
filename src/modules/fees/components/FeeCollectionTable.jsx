@@ -9,6 +9,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
           <thead className="bg-[#f5f5f6] text-slate-500">
             <tr>
               <th className="text-left px-4 py-3 font-semibold">Student</th>
+              <th className="text-left px-4 py-3 font-semibold">No.</th>
               <th className="text-left px-4 py-3 font-semibold">Fee Structure</th>
               <th className="text-left px-4 py-3 font-semibold">Class</th>
               <th className="text-left px-4 py-3 font-semibold">Date</th>
@@ -24,6 +25,12 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                 <td className="px-4 py-3">
                   <div className="font-semibold text-slate-900">{item.studentName}</div>
                   <div className="text-xs text-slate-500">{item.studentId || '-'}</div>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <div className="font-bold text-slate-800">
+                    {item.installmentNo ? `${item.installmentNo}/${item.installmentCount || item.installmentNo}` : '-'}
+                  </div>
+                  {item.batchPaymentId && <div className="text-[11px] text-slate-500">Batch</div>}
                 </td>
                 <td className="px-4 py-3 text-slate-600">
                   <div className="font-semibold text-slate-800">{item.feeStructureName || '-'}</div>
@@ -57,7 +64,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
             ))}
             {!collections.length && (
               <tr>
-                <td colSpan="8" className="px-4 py-10 text-center text-slate-500">No fee collections found.</td>
+                <td colSpan="9" className="px-4 py-10 text-center text-slate-500">No fee collections found.</td>
               </tr>
             )}
           </tbody>

@@ -101,6 +101,22 @@ export function sumCollectionAmounts(collections = [], amountKey = 'amount') {
     .reduce((total, collection) => total + Number(collection[amountKey] || 0), 0);
 }
 
+export function normalizePaymentEntries(entries = [], fallback = {}) {
+  const sourceEntries = Array.isArray(entries) && entries.length ? entries : [fallback];
+  return sourceEntries.map((entry, index) => ({
+    rowKey: entry.rowKey || entry.id || `payment-${index + 1}`,
+    amount: Number(entry.amount || 0),
+    paymentMode: entry.paymentMode || fallback.paymentMode || 'Cash',
+    referenceNo: String(entry.referenceNo ?? fallback.referenceNo ?? '').trim(),
+    paymentDate: entry.paymentDate || fallback.paymentDate || '',
+    paymentTime: entry.paymentTime || fallback.paymentTime || '',
+  }));
+}
+
+export function sumPaymentEntries(entries = []) {
+  return entries.reduce((total, entry) => total + Number(entry.amount || 0), 0);
+}
+
 export function calculateAssignmentPaymentLedger(assignment = {}, collections = [], options = {}) {
   const { useLegacyPaidFallback = true } = options;
   const postedCollections = collections.filter(isPostedFeeCollection);
@@ -244,13 +260,19 @@ export function validateFeeStructure(form) {
 }
 
 export function validateFeeCollection(form, assignment) {
+  const paymentEntries = normalizePaymentEntries(form.paymentEntries, form);
+  const amount = sumPaymentEntries(paymentEntries);
+  const hasInvalidEntryAmount = paymentEntries.some((entry) => Number(entry.amount || 0) <= 0);
+  const hasMissingEntryDate = paymentEntries.some((entry) => !entry.paymentDate);
+  const hasMissingEntryMode = paymentEntries.some((entry) => !entry.paymentMode);
+
   if (form.entryMode === 'structure') {
     if (!form.studentRecordId) return 'Student is required.';
     if (!form.feeStructureId) return 'Fee structure is required.';
     if (Number(form.totalAmount || 0) <= 0) return 'Fee total must be greater than zero.';
-    if (!form.paymentDate) return 'Payment date is required.';
-    if (!form.paymentMode) return 'Payment mode is required.';
-    if (Number(form.amount || 0) <= 0) return 'Collection amount must be greater than zero.';
+    if (hasMissingEntryDate) return 'Payment date is required for each payment.';
+    if (hasMissingEntryMode) return 'Payment mode is required for each payment.';
+    if (hasInvalidEntryAmount) return 'Each payment amount must be greater than zero.';
     return '';
   }
   if (form.entryMode === 'manual') {
@@ -258,10 +280,10 @@ export function validateFeeCollection(form, assignment) {
   } else if (!form.assignmentId) {
     return 'Student fee assignment is required.';
   }
-  if (!form.paymentDate) return 'Payment date is required.';
-  if (!form.paymentMode) return 'Payment mode is required.';
-  if (Number(form.amount || 0) <= 0) return 'Collection amount must be greater than zero.';
-  if (form.entryMode !== 'manual' && assignment && Number(form.amount || 0) > Number(assignment.dueAmount || assignment.totalAmount || 0)) {
+  if (hasMissingEntryDate) return 'Payment date is required for each payment.';
+  if (hasMissingEntryMode) return 'Payment mode is required for each payment.';
+  if (hasInvalidEntryAmount) return 'Each payment amount must be greater than zero.';
+  if (form.entryMode !== 'manual' && assignment && amount > Number(assignment.dueAmount || assignment.totalAmount || 0)) {
     return 'Collection amount cannot exceed outstanding due.';
   }
   return '';

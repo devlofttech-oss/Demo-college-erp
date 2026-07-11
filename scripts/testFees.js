@@ -11,7 +11,9 @@ import {
   getManualDueItemOptions,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
+  normalizePaymentEntries,
   summarizeFees,
+  sumPaymentEntries,
   totalFeeComponents,
   validateFeeAdjustment,
   validateFeeCollection,
@@ -50,6 +52,15 @@ assert.deepEqual(normalizeManualDueItems(['agent-fee']), [
 ]);
 assert.equal(formatManualDueItems(['application-fee', 'pocket-article-fee']), 'Application Fee, Pocket Article Fee');
 assert.equal(formatManualDueItems(['agent-fee']), 'Agent Fee');
+const normalizedPaymentEntries = normalizePaymentEntries([
+  { amount: '20000', paymentMode: 'Cash', referenceNo: 'B-001', paymentDate: '2026-07-01', paymentTime: '10:00' },
+  { amount: '40000', paymentMode: 'UPI Manual Entry', referenceNo: 'B-002', paymentDate: '2026-07-05', paymentTime: '11:30' },
+]);
+assert.equal(sumPaymentEntries(normalizedPaymentEntries), 60000);
+assert.deepEqual(normalizedPaymentEntries.map((entry) => [entry.amount, entry.referenceNo, entry.paymentTime]), [
+  [20000, 'B-001', '10:00'],
+  [40000, 'B-002', '11:30'],
+]);
 
 assert.equal(calculateDueAmount(10000, 4000, 1000), 5000);
 assert.equal(calculateDueAmount(10000, 12000, 0), 0);
@@ -187,15 +198,17 @@ assert.equal(validateFeeCollection({
   studentRecordId: 'student-1',
   feeStructureId: 'fee-1',
   totalAmount: 65000,
-  amount: 5000,
-  paymentDate: '2026-06-19',
-  paymentMode: 'Cash',
+  paymentEntries: [
+    { amount: 2000, paymentDate: '2026-06-19', paymentTime: '10:00', paymentMode: 'Cash' },
+    { amount: 3000, paymentDate: '2026-06-20', paymentTime: '12:00', paymentMode: 'Bank Transfer' },
+  ],
 }), '');
 assert.equal(validateFeeCollection({
   assignmentId: 'a1',
-  amount: 6000,
-  paymentDate: '2026-06-19',
-  paymentMode: 'Cash',
+  paymentEntries: [
+    { amount: 3000, paymentDate: '2026-06-19', paymentTime: '10:00', paymentMode: 'Cash' },
+    { amount: 3000, paymentDate: '2026-06-20', paymentTime: '11:00', paymentMode: 'Cash' },
+  ],
 }, { dueAmount: 5000 }), 'Collection amount cannot exceed outstanding due.');
 
 assert.equal(validateFeeAdjustment({}), 'Student fee assignment is required.');

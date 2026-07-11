@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { CalendarDays, Clock3, Plus, Trash2, X } from 'lucide-react';
 import SearchSelect from '../../../components/SearchSelect';
 import {
   agentFeeComponentField,
@@ -13,8 +13,24 @@ import {
   getManualDueItemOptions,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
+  normalizePaymentEntries,
+  sumPaymentEntries,
   totalFeeComponents,
 } from '../feeUtils';
+
+const paymentModeOptions = ['Cash', 'Cheque', 'Bank Transfer', 'UPI Manual Entry', 'Card Swipe Offline'];
+
+function createPaymentEntry(overrides = {}) {
+  const now = new Date();
+  return {
+    rowKey: overrides.rowKey || `payment-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+    amount: overrides.amount ?? '',
+    paymentMode: overrides.paymentMode || 'Cash',
+    referenceNo: overrides.referenceNo || '',
+    paymentDate: overrides.paymentDate || now.toISOString().slice(0, 10),
+    paymentTime: overrides.paymentTime || now.toTimeString().slice(0, 5),
+  };
+}
 
 function totalFromForm(form = {}) {
   return totalFeeComponents(form);
@@ -72,6 +88,14 @@ export default function FeeCollectionModal({
     paymentDate: initialCollection?.paymentDate || new Date().toISOString().slice(0, 10),
     paymentTime: initialCollection?.paymentTime || new Date().toTimeString().slice(0, 5),
     collectedBy: initialCollection?.collectedBy || 'Admin Office',
+    paymentEntries: [createPaymentEntry({
+      rowKey: initialCollection?.id || undefined,
+      amount: initialCollection?.amount || '',
+      paymentMode: initialCollection?.paymentMode || 'Cash',
+      referenceNo: initialCollection?.referenceNo || '',
+      paymentDate: initialCollection?.paymentDate,
+      paymentTime: initialCollection?.paymentTime,
+    })],
     manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
   });
 
@@ -109,6 +133,9 @@ export default function FeeCollectionModal({
     previousPaymentsForLedger,
     { useLegacyPaidFallback: !initialCollection }
   );
+  const paymentEntries = form.paymentEntries?.length ? form.paymentEntries : [createPaymentEntry()];
+  const normalizedPaymentEntries = normalizePaymentEntries(paymentEntries, form);
+  const paymentEntriesTotal = sumPaymentEntries(normalizedPaymentEntries);
   const agentFeePaidInThisPayment = form.admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
   const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? previousLedger.agentFeePaid : 0;
   const pendingAgentFeeBefore = form.admissionThroughAgent
@@ -119,7 +146,7 @@ export default function FeeCollectionModal({
     : 0;
   const paidBeforeThisPayment = previousLedger.paidAmount;
   const dueBeforeThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment, matchingAssignment?.adjustmentAmount);
-  const dueAfterThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment + Number(form.amount || 0), matchingAssignment?.adjustmentAmount);
+  const dueAfterThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment + paymentEntriesTotal, matchingAssignment?.adjustmentAmount);
 
   const studentOptions = useMemo(() => students.map((item) => ({
     value: item.id,
@@ -172,10 +199,54 @@ export default function FeeCollectionModal({
     });
   };
 
+  const updatePaymentEntry = (rowKey, key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      paymentEntries: prev.paymentEntries.map((entry) => (
+        entry.rowKey === rowKey ? { ...entry, [key]: value } : entry
+      )),
+    }));
+  };
+
+  const addPaymentEntry = () => {
+    setForm((prev) => {
+      const lastEntry = prev.paymentEntries[prev.paymentEntries.length - 1] || {};
+      return {
+        ...prev,
+        paymentEntries: [
+          ...prev.paymentEntries,
+          createPaymentEntry({
+            amount: '',
+            paymentMode: lastEntry.paymentMode || 'Cash',
+            paymentDate: lastEntry.paymentDate,
+            paymentTime: lastEntry.paymentTime,
+          }),
+        ],
+      };
+    });
+  };
+
+  const removePaymentEntry = (rowKey) => {
+    setForm((prev) => ({
+      ...prev,
+      paymentEntries: prev.paymentEntries.length > 1
+        ? prev.paymentEntries.filter((entry) => entry.rowKey !== rowKey)
+        : prev.paymentEntries,
+    }));
+  };
+
   const submit = (event) => {
     event.preventDefault();
+    const normalizedEntries = normalizePaymentEntries(form.paymentEntries, form);
+    const firstPayment = normalizedEntries[0] || {};
     onSave({
       ...form,
+      amount: sumPaymentEntries(normalizedEntries),
+      paymentMode: firstPayment.paymentMode || form.paymentMode,
+      referenceNo: firstPayment.referenceNo || form.referenceNo,
+      paymentDate: firstPayment.paymentDate || form.paymentDate,
+      paymentTime: firstPayment.paymentTime || form.paymentTime,
+      paymentEntries: normalizedEntries,
       totalAmount: editedTotal,
       feeStructureName: selectedStructure?.name || '',
       manualDueItems: syncAgentDueItem(form.manualDueItems, form.admissionThroughAgent),
@@ -283,10 +354,10 @@ export default function FeeCollectionModal({
                 <input
                   type="number"
                   min="0"
-                  max={Math.min(Number(form.amount || 0), pendingAgentFeeBefore)}
+                  max={Math.min(paymentEntriesTotal, pendingAgentFeeBefore)}
                   value={form.agentFeePaidAmount}
                   onChange={(event) => setForm((prev) => ({ ...prev, agentFeePaidAmount: event.target.value }))}
-                  placeholder="Amount from this payment"
+                  placeholder="Amount from these payments"
                   className="w-full h-10 rounded-lg border border-cyan-100 bg-white px-3 text-sm"
                 />
               </label>
@@ -346,6 +417,7 @@ export default function FeeCollectionModal({
                 <table className="w-full text-xs">
                   <thead className="bg-[#f5f5f6] text-slate-500">
                     <tr>
+                      <th className="px-3 py-2 text-left font-semibold">No.</th>
                       <th className="px-3 py-2 text-left font-semibold">Date & Time</th>
                       <th className="px-3 py-2 text-left font-semibold">Mode</th>
                       <th className="px-3 py-2 text-left font-semibold">Reference</th>
@@ -353,8 +425,11 @@ export default function FeeCollectionModal({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {paymentHistory.map((payment) => (
+                    {paymentHistory.map((payment, index) => (
                       <tr key={payment.id || `${payment.paymentDate}-${payment.amount}`}>
+                        <td className="px-3 py-2 font-bold text-slate-500">
+                          {payment.installmentNo ? `${payment.installmentNo}/${payment.installmentCount || payment.installmentNo}` : index + 1}
+                        </td>
                         <td className="px-3 py-2 text-slate-700">{payment.paymentDate || payment.createdAtText || '-'} {payment.paymentTime || ''}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.paymentMode || '-'}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.referenceNo || '-'}</td>
@@ -369,35 +444,101 @@ export default function FeeCollectionModal({
             )}
           </div>
 
-          <label>
-            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Amount</span>
-            <input
-              type="number"
-              min="0"
-              value={form.amount}
-              onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))}
-              placeholder={dueBeforeThisPayment || 0}
-              className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-            />
-          </label>
-          <label>
-            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Mode</span>
-            <select value={form.paymentMode} onChange={(event) => setForm((prev) => ({ ...prev, paymentMode: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm">
-              {['Cash', 'Cheque', 'Bank Transfer', 'UPI Manual Entry', 'Card Swipe Offline'].map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-          <label>
-            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Date</span>
-            <input type="date" value={form.paymentDate} onChange={(event) => setForm((prev) => ({ ...prev, paymentDate: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
-          </label>
-          <label>
-            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Time</span>
-            <input type="time" value={form.paymentTime} onChange={(event) => setForm((prev) => ({ ...prev, paymentTime: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
-          </label>
-          <label>
-            <span className="block text-xs font-semibold text-slate-500 mb-1.5">Reference No.</span>
-            <input value={form.referenceNo} onChange={(event) => setForm((prev) => ({ ...prev, referenceNo: event.target.value }))} className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm" />
-          </label>
+          <div className="erp-payment-entry-panel sm:col-span-2 rounded-lg border border-slate-100 bg-white p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div>
+                <div className="text-xs font-bold uppercase text-slate-500">Payments to Post</div>
+                <div className="text-sm font-bold text-slate-900">{formatCurrency(paymentEntriesTotal)} across {paymentEntries.length} payment{paymentEntries.length === 1 ? '' : 's'}</div>
+              </div>
+              <div className="text-xs font-semibold text-emerald-700">Due after: {formatCurrency(dueAfterThisPayment)}</div>
+            </div>
+
+            <div className="space-y-3">
+              {paymentEntries.map((entry, index) => (
+                <div key={entry.rowKey} className="erp-payment-entry-card rounded-lg border border-dashed border-slate-300 bg-[#f8fafc] p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="erp-payment-entry-number h-7 w-7 rounded-full bg-[#026c36] text-white text-xs font-extrabold flex items-center justify-center">{index + 1}</div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-900">Payment {index + 1}</div>
+                        <div className="text-xs font-semibold text-slate-500">{formatCurrency(entry.amount)}</div>
+                      </div>
+                    </div>
+                    {!initialCollection && paymentEntries.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePaymentEntry(entry.rowKey)}
+                        className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-rose-700 inline-flex items-center justify-center"
+                        aria-label={`Remove payment ${index + 1}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label>
+                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Amount</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={entry.amount}
+                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'amount', event.target.value)}
+                        placeholder={dueBeforeThisPayment || 0}
+                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Mode</span>
+                      <select
+                        value={entry.paymentMode}
+                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentMode', event.target.value)}
+                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                      >
+                        {paymentModeOptions.map((item) => <option key={item}>{item}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><CalendarDays size={13} /> Payment Date</span>
+                      <input
+                        type="date"
+                        value={entry.paymentDate}
+                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentDate', event.target.value)}
+                        className="erp-payment-date-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                      />
+                    </label>
+                    <label>
+                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><Clock3 size={13} /> Payment Time</span>
+                      <input
+                        type="time"
+                        value={entry.paymentTime}
+                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentTime', event.target.value)}
+                        className="erp-payment-time-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                      />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Reference No.</span>
+                      <input
+                        value={entry.referenceNo}
+                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'referenceNo', event.target.value)}
+                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {!initialCollection && (
+              <button
+                type="button"
+                onClick={addPaymentEntry}
+                className="erp-add-payment-box mt-3 w-full min-h-12 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/70 text-emerald-800 text-sm font-extrabold flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> Add Payment
+              </button>
+            )}
+          </div>
         </div>
         <div className="erp-fee-modal-footer px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="h-10 px-5 rounded-lg bg-slate-100 text-slate-700 font-semibold text-sm">Cancel</button>

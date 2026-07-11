@@ -4428,6 +4428,83 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   color:#334155!important;
 }
 
+.erp-shell .erp-payment-entry-panel {
+  background:rgba(255,255,255,.04)!important;
+  border-color:rgba(255,255,255,.10)!important;
+  color:#dce7eb!important;
+}
+
+.erp-shell.light-mode .erp-payment-entry-panel {
+  background:#ffffff!important;
+  border-color:#dde6ef!important;
+  color:#334155!important;
+}
+
+.erp-shell .erp-payment-entry-card {
+  background:rgba(255,255,255,.035)!important;
+  border-color:rgba(125,211,252,.30)!important;
+}
+
+.erp-shell.light-mode .erp-payment-entry-card {
+  background:#f8fafc!important;
+  border-color:#b8d4b0!important;
+}
+
+.erp-shell .erp-payment-entry-panel .text-slate-900,
+.erp-shell .erp-payment-entry-card .text-slate-900 {
+  color:#eef6f7!important;
+}
+
+.erp-shell .erp-payment-entry-panel .text-slate-500,
+.erp-shell .erp-payment-entry-card .text-slate-500,
+.erp-shell .erp-payment-entry-card .text-slate-600 {
+  color:#aab7c2!important;
+}
+
+.erp-shell.light-mode .erp-payment-entry-panel .text-slate-900,
+.erp-shell.light-mode .erp-payment-entry-card .text-slate-900 {
+  color:#0f172a!important;
+}
+
+.erp-shell.light-mode .erp-payment-entry-panel .text-slate-500,
+.erp-shell.light-mode .erp-payment-entry-card .text-slate-500 {
+  color:#64748b!important;
+}
+
+.erp-shell .erp-payment-entry-number {
+  background:#026c36!important;
+  color:#ffffff!important;
+}
+
+.erp-shell .erp-add-payment-box {
+  background:rgba(0,255,136,.10)!important;
+  border-color:rgba(0,255,136,.38)!important;
+  color:#b9ffd9!important;
+}
+
+.erp-shell.light-mode .erp-add-payment-box {
+  background:#ecfdf3!important;
+  border-color:#86efac!important;
+  color:#026c36!important;
+}
+
+.erp-shell .erp-payment-date-input,
+.erp-shell .erp-payment-time-input {
+  color-scheme:light;
+}
+
+.erp-shell .erp-payment-date-input::-webkit-calendar-picker-indicator,
+.erp-shell .erp-payment-time-input::-webkit-calendar-picker-indicator {
+  cursor:pointer;
+  opacity:1!important;
+  filter:invert(18%) sepia(17%) saturate(642%) hue-rotate(171deg) brightness(91%) contrast(88%)!important;
+}
+
+.erp-shell:not(.light-mode) .erp-payment-date-input::-webkit-calendar-picker-indicator,
+.erp-shell:not(.light-mode) .erp-payment-time-input::-webkit-calendar-picker-indicator {
+  filter:invert(1)!important;
+}
+
 .erp-shell .erp-due-picker {
   background:rgba(245,158,11,.08)!important;
   border-color:rgba(245,158,11,.24)!important;

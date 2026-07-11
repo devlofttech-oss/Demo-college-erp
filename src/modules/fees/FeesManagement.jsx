@@ -27,7 +27,9 @@ import {
   getStudentClassKey,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
+  normalizePaymentEntries,
   summarizeFees,
+  sumPaymentEntries,
   validateFeeAdjustment,
   validateFeeCollection,
   validateFeeStructure,
@@ -398,11 +400,6 @@ export default function FeesManagement({
     };
   };
 
-  const getProjectedCollections = (context, collection = null, excludeCollectionId = '') => {
-    const baseCollections = getCollectionsForFeeContext(courseCollections, context, excludeCollectionId);
-    return collection ? [...baseCollections, collection] : baseCollections;
-  };
-
   const getLedgerAssignmentUpdates = (assignment, projectedCollections, nowText) => {
     const ledger = calculateAssignmentPaymentLedger(assignment, projectedCollections, { useLegacyPaidFallback: false });
     return {
@@ -415,11 +412,80 @@ export default function FeesManagement({
     };
   };
 
+  const createBatchPaymentId = (now = new Date()) => `fee-batch-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const buildInstallmentCollections = ({
+    paymentEntries,
+    collectionBase,
+    assignmentForLedger,
+    previousCollections,
+    agentFeePaidAmount = 0,
+    batchPaymentId,
+    now,
+    editingCollectionId = '',
+  }) => {
+    let runningCollections = [...previousCollections];
+    let remainingAgentFeePaid = Number(agentFeePaidAmount || 0);
+    return paymentEntries.map((entry, index) => {
+      const entryAmount = Number(entry.amount || 0);
+      const paymentDateTime = getPaymentDateTime(entry, now);
+      const entryAgentFeePaid = collectionBase.admissionThroughAgent
+        ? Math.min(entryAmount, remainingAgentFeePaid)
+        : 0;
+      remainingAgentFeePaid = Math.max(0, remainingAgentFeePaid - entryAgentFeePaid);
+      const beforeLedger = calculateAssignmentPaymentLedger(
+        assignmentForLedger,
+        runningCollections,
+        { useLegacyPaidFallback: false }
+      );
+      const pendingId = editingCollectionId || `__pending_payment_${index}`;
+      const installment = {
+        ...collectionBase,
+        amount: entryAmount,
+        paymentMode: entry.paymentMode,
+        referenceNo: entry.referenceNo,
+        paymentDate: paymentDateTime.paymentDate,
+        paymentTime: paymentDateTime.paymentTime,
+        paidAt: paymentDateTime.paidAt,
+        agentFeePaidAmount: entryAgentFeePaid,
+        batchPaymentId,
+        installmentNo: editingCollectionId ? (collectionBase.installmentNo || index + 1) : index + 1,
+        installmentCount: editingCollectionId ? (collectionBase.installmentCount || paymentEntries.length) : paymentEntries.length,
+        dueBeforePayment: beforeLedger.dueAmount,
+      };
+      const afterLedger = calculateAssignmentPaymentLedger(
+        assignmentForLedger,
+        [...runningCollections, { id: pendingId, ...installment }],
+        { useLegacyPaidFallback: false }
+      );
+      const collection = {
+        ...installment,
+        totalPaidAfterPayment: afterLedger.paidAmount,
+        dueAfterPayment: afterLedger.dueAmount,
+        pendingAgentFeeBalance: afterLedger.pendingAgentFeeBalance,
+      };
+      runningCollections = [...runningCollections, { id: pendingId, ...collection }];
+      return collection;
+    });
+  };
+
   const saveCollection = async (form) => {
     if (!canCollect) {
       toast.error('You do not have permission to record collections.');
       return;
     }
+    const normalizedEntries = normalizePaymentEntries(form.paymentEntries, form);
+    const paymentEntries = editingCollection ? normalizedEntries.slice(0, 1) : normalizedEntries;
+    const firstPaymentEntry = paymentEntries[0] || {};
+    const collectionForm = {
+      ...form,
+      paymentEntries,
+      amount: sumPaymentEntries(paymentEntries),
+      paymentMode: firstPaymentEntry.paymentMode || form.paymentMode,
+      referenceNo: firstPaymentEntry.referenceNo ?? form.referenceNo,
+      paymentDate: firstPaymentEntry.paymentDate || form.paymentDate,
+      paymentTime: firstPaymentEntry.paymentTime || form.paymentTime,
+    };
     const assignment = courseAssignments.find((item) => item.id === form.assignmentId);
     const validationAssignment = assignment
       ? {
@@ -430,32 +496,32 @@ export default function FeesManagement({
         ).dueAmount,
       }
       : assignment;
-    const validationMessage = validateFeeCollection(form, validationAssignment);
+    const validationMessage = validateFeeCollection(collectionForm, validationAssignment);
     if (validationMessage) {
       toast.error(validationMessage);
       return;
     }
-    const amount = Number(form.amount || 0);
-    const manualDueItems = normalizeManualDueItems(form.manualDueItems, form);
+    const amount = Number(collectionForm.amount || 0);
+    const manualDueItems = normalizeManualDueItems(collectionForm.manualDueItems, collectionForm);
     const now = new Date();
     const nowText = formatDisplayDate(now);
-    const paymentDateTime = getPaymentDateTime(form, now);
+    const batchPaymentId = editingCollection?.batchPaymentId || createBatchPaymentId(now);
 
-    if (form.entryMode === 'structure') {
-      const student = courseStudents.find((item) => item.id === form.studentRecordId);
-      const structure = courseStructures.find((item) => item.id === form.feeStructureId);
-      const targetAssignment = form.assignmentId
-        ? courseAssignments.find((item) => item.id === form.assignmentId)
-        : courseAssignments.find((item) => item.studentRecordId === form.studentRecordId && item.feeStructureId === form.feeStructureId);
+    if (collectionForm.entryMode === 'structure') {
+      const student = courseStudents.find((item) => item.id === collectionForm.studentRecordId);
+      const structure = courseStructures.find((item) => item.id === collectionForm.feeStructureId);
+      const targetAssignment = collectionForm.assignmentId
+        ? courseAssignments.find((item) => item.id === collectionForm.assignmentId)
+        : courseAssignments.find((item) => item.studentRecordId === collectionForm.studentRecordId && item.feeStructureId === collectionForm.feeStructureId);
       const oldAssignment = editingCollection?.assignmentId
         ? courseAssignments.find((item) => item.id === editingCollection.assignmentId)
         : null;
-      const feeValues = getFeeValues(form);
-      const totalAmount = Number(form.totalAmount || 0);
+      const feeValues = getFeeValues(collectionForm);
+      const totalAmount = Number(collectionForm.totalAmount || 0);
       const adjustmentAmount = Number(targetAssignment?.adjustmentAmount || 0);
-      const admissionThroughAgent = isAdmissionThroughAgent(form) || isAdmissionThroughAgent(targetAssignment) || isAdmissionThroughAgent(student);
-      const agentFee = admissionThroughAgent ? Number(form.agentFee || 0) : 0;
-      const agentFeePaidAmount = admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+      const admissionThroughAgent = isAdmissionThroughAgent(collectionForm) || isAdmissionThroughAgent(targetAssignment) || isAdmissionThroughAgent(student);
+      const agentFee = admissionThroughAgent ? Number(collectionForm.agentFee || 0) : 0;
+      const agentFeePaidAmount = admissionThroughAgent ? Number(collectionForm.agentFeePaidAmount || 0) : 0;
       const baseAssignmentForLedger = {
         ...(targetAssignment || {}),
         totalAmount,
@@ -464,17 +530,25 @@ export default function FeesManagement({
         agentFee,
       };
       const previousCollections = getCollectionsForFeeContext(courseCollections, {
-        assignmentId: targetAssignment?.id || form.assignmentId,
-        studentRecordId: student?.id || targetAssignment?.studentRecordId || form.studentRecordId,
-        studentId: student?.studentId || targetAssignment?.studentId || form.studentId || '',
-        studentName: student?.name || targetAssignment?.studentName || form.studentName || '',
-        feeStructureId: structure?.id || targetAssignment?.feeStructureId || form.feeStructureId,
+        assignmentId: targetAssignment?.id || collectionForm.assignmentId,
+        studentRecordId: student?.id || targetAssignment?.studentRecordId || collectionForm.studentRecordId,
+        studentId: student?.studentId || targetAssignment?.studentId || collectionForm.studentId || '',
+        studentName: student?.name || targetAssignment?.studentName || collectionForm.studentName || '',
+        feeStructureId: structure?.id || targetAssignment?.feeStructureId || collectionForm.feeStructureId,
       }, editingCollection?.id || '');
       const previousLedger = calculateAssignmentPaymentLedger(
         baseAssignmentForLedger,
         previousCollections,
         { useLegacyPaidFallback: !editingCollection }
       );
+      const ledgerBaseCollections = previousCollections.length || editingCollection || previousLedger.paidAmount <= 0
+        ? previousCollections
+        : [{
+          id: '__legacy_paid_amount__',
+          amount: previousLedger.paidAmount,
+          agentFeePaidAmount: previousLedger.agentFeePaid,
+          status: 'Posted',
+        }];
       const pendingAgentFeeBefore = admissionThroughAgent
         ? calculatePendingAgentFeeBalance(agentFee, previousLedger.agentFeePaid)
         : 0;
@@ -513,7 +587,6 @@ export default function FeesManagement({
       let nextAssignmentId = targetAssignment?.id || '';
       let nextAssignment = null;
       let oldAssignmentUpdates = null;
-      let nextPaymentContext = null;
 
       try {
         if (!targetAssignment) {
@@ -534,18 +607,12 @@ export default function FeesManagement({
         } else {
           nextAssignment = { ...targetAssignment, ...assignmentBase };
         }
-        nextPaymentContext = {
-          assignmentId: nextAssignmentId,
-          studentRecordId: assignmentBase.studentRecordId,
-          studentId: assignmentBase.studentId,
-          studentName: assignmentBase.studentName,
-          feeStructureId: assignmentBase.feeStructureId,
-        };
+        const assignmentForLedger = { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems };
 
         const collectionBase = {
           assignmentId: nextAssignmentId,
           feeStructureId: assignmentBase.feeStructureId,
-          feeStructureName: form.feeStructureName || structure?.name || '',
+          feeStructureName: collectionForm.feeStructureName || structure?.name || '',
           studentRecordId: assignmentBase.studentRecordId,
           studentId: assignmentBase.studentId,
           studentName: assignmentBase.studentName,
@@ -553,43 +620,36 @@ export default function FeesManagement({
           ...feeValues,
           admissionThroughAgent,
           agentFee,
-          agentFeePaidAmount,
+          installmentNo: editingCollection?.installmentNo || 0,
+          installmentCount: editingCollection?.installmentCount || 0,
           totalAmount,
-          dueBeforePayment,
           manualDueItems,
-          amount,
           academicYear,
-          paymentMode: form.paymentMode,
-          referenceNo: form.referenceNo.trim(),
-          paymentDate: paymentDateTime.paymentDate,
-          paymentTime: paymentDateTime.paymentTime,
-          paidAt: paymentDateTime.paidAt,
-          collectedBy: form.collectedBy,
+          collectedBy: collectionForm.collectedBy,
           status: 'Posted',
           entryMode: 'Fee Structure',
           ...(editingCollection ? { updatedAtText: nowText } : { createdAtText: nowText }),
         };
-        const projectedCollection = { id: editingCollection?.id || '__pending__', ...collectionBase };
-        const projectedCollections = getProjectedCollections(nextPaymentContext, projectedCollection, editingCollection?.id || '');
-        const projectedLedger = calculateAssignmentPaymentLedger(
-          { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems },
-          projectedCollections
-        );
-        const collection = {
-          ...collectionBase,
-          totalPaidAfterPayment: projectedLedger.paidAmount,
-          dueAfterPayment: projectedLedger.dueAmount,
-          pendingAgentFeeBalance: projectedLedger.pendingAgentFeeBalance,
-        };
+        const collectionsToSave = buildInstallmentCollections({
+          paymentEntries,
+          collectionBase,
+          assignmentForLedger,
+          previousCollections: ledgerBaseCollections,
+          agentFeePaidAmount,
+          batchPaymentId,
+          now,
+          editingCollectionId: editingCollection?.id || '',
+        });
+        let savedCollections = [];
 
         if (editingCollection) {
+          const collection = collectionsToSave[0];
           await updateFeeCollection(editingCollection.id, collection);
-          toast.success('Fee collection updated');
+          savedCollections = [{ id: editingCollection.id, ...collection }];
         } else {
-          const id = await createFeeCollection(collection);
-          if (!id) throw new Error('Live fee collection was not created.');
-          collection.id = id;
-          toast.success('Fee collection posted');
+          const ids = await Promise.all(collectionsToSave.map((collection) => createFeeCollection(collection)));
+          if (ids.some((id) => !id)) throw new Error('One or more live fee collections were not created.');
+          savedCollections = collectionsToSave.map((collection, index) => ({ id: ids[index], ...collection }));
         }
 
         const nextAssignmentUpdates = {
@@ -597,8 +657,8 @@ export default function FeesManagement({
           adjustmentAmount,
           manualDueItems,
           ...getLedgerAssignmentUpdates(
-            { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems },
-            getProjectedCollections(nextPaymentContext, { id: collection.id || editingCollection.id, ...collection }, editingCollection?.id || ''),
+            assignmentForLedger,
+            [...ledgerBaseCollections, ...savedCollections],
             nowText
           ),
         };
@@ -616,8 +676,8 @@ export default function FeesManagement({
 
         setCollections((prev) => (
           editingCollection
-            ? prev.map((item) => item.id === editingCollection.id ? { ...item, ...collection } : item)
-            : [{ ...collection }, ...prev]
+            ? prev.map((item) => item.id === editingCollection.id ? savedCollections[0] : item)
+            : [...savedCollections].reverse().concat(prev)
         ));
         setAssignments((prev) => {
           let next = prev;
@@ -629,6 +689,9 @@ export default function FeesManagement({
             ? next.map((item) => item.id === nextAssignment.id ? nextAssignment : item)
             : [nextAssignment, ...next];
         });
+        toast.success(editingCollection
+          ? 'Fee collection updated'
+          : `${savedCollections.length} payment${savedCollections.length === 1 ? '' : 's'} posted`);
       } catch (error) {
         console.error('Unable to save live fee collection.', error);
         toast.error('Fee collection was not saved to live data.');
@@ -639,43 +702,56 @@ export default function FeesManagement({
       }
       return;
     }
-    if (form.entryMode === 'manual') {
-      const student = courseStudents.find((item) => item.id === form.studentRecordId);
-      const admissionThroughAgent = isAdmissionThroughAgent(form) || isAdmissionThroughAgent(student);
-      const agentFee = admissionThroughAgent ? Number(form.agentFee || 0) : 0;
-      const agentFeePaidAmount = admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+    if (collectionForm.entryMode === 'manual') {
+      const student = courseStudents.find((item) => item.id === collectionForm.studentRecordId);
+      const admissionThroughAgent = isAdmissionThroughAgent(collectionForm) || isAdmissionThroughAgent(student);
+      const agentFee = admissionThroughAgent ? Number(collectionForm.agentFee || 0) : 0;
+      const agentFeePaidAmount = admissionThroughAgent ? Number(collectionForm.agentFeePaidAmount || 0) : 0;
       if (agentFeePaidAmount > amount) {
         toast.error('Agent fee paid cannot exceed this payment amount.');
         return;
       }
-      const collection = {
-        assignmentId: '',
-        studentRecordId: student?.id || '',
-        studentId: student?.studentId || '',
-        studentName: student?.name || '',
-        classKey: getStudentClassKey(student),
-        amount,
-        academicYear,
-        paymentMode: form.paymentMode,
-        referenceNo: form.referenceNo.trim(),
-        paymentDate: paymentDateTime.paymentDate,
-        paymentTime: paymentDateTime.paymentTime,
-        paidAt: paymentDateTime.paidAt,
-        collectedBy: form.collectedBy,
-        status: 'Posted',
-        createdAtText: nowText,
-        entryMode: 'Manual',
-        manualDueItems,
-        admissionThroughAgent,
-        agentFee,
-        agentFeePaidAmount,
-        pendingAgentFeeBalance: admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, agentFeePaidAmount) : 0,
-      };
+      let remainingAgentFeePaid = agentFeePaidAmount;
+      let agentFeePaidSoFar = 0;
+      const collectionsToSave = paymentEntries.map((entry, index) => {
+        const entryAmount = Number(entry.amount || 0);
+        const paymentDateTime = getPaymentDateTime(entry, now);
+        const entryAgentFeePaid = admissionThroughAgent ? Math.min(entryAmount, remainingAgentFeePaid) : 0;
+        remainingAgentFeePaid = Math.max(0, remainingAgentFeePaid - entryAgentFeePaid);
+        agentFeePaidSoFar += entryAgentFeePaid;
+        return {
+          assignmentId: '',
+          studentRecordId: student?.id || '',
+          studentId: student?.studentId || '',
+          studentName: student?.name || '',
+          classKey: getStudentClassKey(student),
+          amount: entryAmount,
+          academicYear,
+          paymentMode: entry.paymentMode,
+          referenceNo: entry.referenceNo,
+          paymentDate: paymentDateTime.paymentDate,
+          paymentTime: paymentDateTime.paymentTime,
+          paidAt: paymentDateTime.paidAt,
+          collectedBy: collectionForm.collectedBy,
+          status: 'Posted',
+          createdAtText: nowText,
+          entryMode: 'Manual',
+          manualDueItems,
+          admissionThroughAgent,
+          agentFee,
+          agentFeePaidAmount: entryAgentFeePaid,
+          pendingAgentFeeBalance: admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, agentFeePaidSoFar) : 0,
+          batchPaymentId,
+          installmentNo: index + 1,
+          installmentCount: paymentEntries.length,
+        };
+      });
       try {
-        const id = await createFeeCollection(collection);
-        if (!id) throw new Error('Live fee collection was not created.');
-        setCollections((prev) => [{ id, ...collection }, ...prev]);
-        toast.success('Manual fee collection posted');
+        const ids = await Promise.all(collectionsToSave.map((collection) => createFeeCollection(collection)));
+        if (ids.some((id) => !id)) throw new Error('One or more live manual fee collections were not created.');
+        const savedCollections = collectionsToSave.map((collection, index) => ({ id: ids[index], ...collection }));
+        setCollections((prev) => [...savedCollections].reverse().concat(prev));
+        toast.success(`${savedCollections.length} manual payment${savedCollections.length === 1 ? '' : 's'} posted`);
       } catch (error) {
         console.error('Unable to post live manual fee collection.', error);
         toast.error('Manual fee collection was not saved to live data.');
@@ -688,9 +764,17 @@ export default function FeesManagement({
     }
     const admissionThroughAgent = isAdmissionThroughAgent(assignment);
     const agentFee = admissionThroughAgent ? Number(assignment.agentFee || 0) : 0;
-    const agentFeePaidAmount = admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+    const agentFeePaidAmount = admissionThroughAgent ? Number(collectionForm.agentFeePaidAmount || 0) : 0;
     const previousCollections = getCollectionsForAssignment(courseCollections, assignment.id);
     const previousLedger = calculateAssignmentPaymentLedger(assignment, previousCollections);
+    const ledgerBaseCollections = previousCollections.length || previousLedger.paidAmount <= 0
+      ? previousCollections
+      : [{
+        id: '__legacy_paid_amount__',
+        amount: previousLedger.paidAmount,
+        agentFeePaidAmount: previousLedger.agentFeePaid,
+        status: 'Posted',
+      }];
     const pendingAgentFeeBefore = admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, previousLedger.agentFeePaid) : 0;
     if (amount > previousLedger.dueAmount) {
       toast.error('Collection amount cannot exceed outstanding due.');
@@ -710,40 +794,39 @@ export default function FeesManagement({
       studentId: assignment.studentId,
       studentName: assignment.studentName,
       classKey: assignment.classKey,
-      amount,
       academicYear: assignment.academicYear || academicYear,
-      paymentMode: form.paymentMode,
-      referenceNo: form.referenceNo.trim(),
-      paymentDate: paymentDateTime.paymentDate,
-      paymentTime: paymentDateTime.paymentTime,
-      paidAt: paymentDateTime.paidAt,
-      collectedBy: form.collectedBy,
+      collectedBy: collectionForm.collectedBy,
       status: 'Posted',
       createdAtText: nowText,
       manualDueItems,
       admissionThroughAgent,
       agentFee,
-      agentFeePaidAmount,
     };
-    const projectedLedger = calculateAssignmentPaymentLedger(assignment, [...previousCollections, { id: '__pending__', ...collectionBase }]);
+    const collectionsToSave = buildInstallmentCollections({
+      paymentEntries,
+      collectionBase,
+      assignmentForLedger: assignment,
+      previousCollections: ledgerBaseCollections,
+      agentFeePaidAmount,
+      batchPaymentId,
+      now,
+    });
+    const projectedCollections = [
+      ...ledgerBaseCollections,
+      ...collectionsToSave.map((collection, index) => ({ id: `__pending_payment_${index}`, ...collection })),
+    ];
     const assignmentUpdates = {
       manualDueItems,
-      ...getLedgerAssignmentUpdates(assignment, [...previousCollections, { id: '__pending__', ...collectionBase }], nowText),
-    };
-    const collection = {
-      ...collectionBase,
-      dueBeforePayment: previousLedger.dueAmount,
-      totalPaidAfterPayment: projectedLedger.paidAmount,
-      dueAfterPayment: projectedLedger.dueAmount,
-      pendingAgentFeeBalance: projectedLedger.pendingAgentFeeBalance,
+      ...getLedgerAssignmentUpdates(assignment, projectedCollections, nowText),
     };
     try {
-      const id = await createFeeCollection(collection);
-      if (!id) throw new Error('Live fee collection was not created.');
+      const ids = await Promise.all(collectionsToSave.map((collection) => createFeeCollection(collection)));
+      if (ids.some((id) => !id)) throw new Error('One or more live fee collections were not created.');
+      const savedCollections = collectionsToSave.map((collection, index) => ({ id: ids[index], ...collection }));
       await updateFeeAssignment(assignment.id, assignmentUpdates);
-      setCollections((prev) => [{ id, ...collection }, ...prev]);
+      setCollections((prev) => [...savedCollections].reverse().concat(prev));
       setAssignments((prev) => prev.map((item) => item.id === assignment.id ? { ...item, ...assignmentUpdates } : item));
-      toast.success('Fee collection posted');
+      toast.success(`${savedCollections.length} payment${savedCollections.length === 1 ? '' : 's'} posted`);
     } catch (error) {
       console.error('Unable to post live fee collection.', error);
       toast.error('Fee collection was not saved to live data.');
