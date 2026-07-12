@@ -124,6 +124,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _documentOwnerTypeFilter = '';
   var _documentCategoryFilter = '';
   var _documentStatusFilter = '';
+  var _parentPortalSelectedStudentId = '';
   var _curriculumSelectedEventId = '';
   var _reportCategory = 'students';
   var _attendanceReportScope = 'daily';
@@ -6568,58 +6569,455 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _parentPortal(Map<String, List<Map<String, dynamic>>> data) {
-    final students = _items(data, 'students')
+    if (!_can('parentPortal.view')) {
+      return const EmptyState(
+        title: 'No parent portal access',
+        message: 'This account does not have permission to view parent data.',
+      );
+    }
+    final allStudents = _parentPortalVisibleStudents(data);
+    final students = allStudents
         .where(
           (item) => containsQuery(item, _query, const [
             'name',
             'studentId',
             'className',
+            'section',
+            'program',
+            'courseName',
           ]),
         )
         .toList();
+    final selectedStudent = _parentPortalSelectedStudent(students);
+    final attendance = selectedStudent == null
+        ? const <Map<String, dynamic>>[]
+        : _parentPortalRecordsForStudent(
+            _items(data, 'attendance'),
+            selectedStudent,
+          );
+    final marks = selectedStudent == null
+        ? const <Map<String, dynamic>>[]
+        : _parentPortalRecordsForStudent(
+            _items(data, 'marks'),
+            selectedStudent,
+          );
+    final results = selectedStudent == null
+        ? const <Map<String, dynamic>>[]
+        : _parentPortalRecordsForStudent(
+            _items(data, 'results'),
+            selectedStudent,
+          );
+    final fees = selectedStudent == null
+        ? const <Map<String, dynamic>>[]
+        : _parentPortalRecordsForStudent(_items(data, 'fees'), selectedStudent);
+    final notices = _parentPortalVisibleNotices(_items(data, 'notices'));
+    final documents = selectedStudent == null
+        ? const <Map<String, dynamic>>[]
+        : _parentPortalVisibleDocuments(
+            _items(data, 'documents'),
+            selectedStudent,
+          );
+    final attendanceSummary = _parentPortalAttendance(
+      records: attendance,
+      student: selectedStudent,
+      academicSubjects: _items(data, 'academicSubjects'),
+    );
+    final performance = _parentPortalPerformance(marks, results);
+    final feeStatus = _parentPortalFeeStatus(fees);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 44,
+                width: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.family_restroom_rounded,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Parent Portal',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Attendance, academics, fees, notices, and verified documents.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         _SummaryRow(
           stats: [
             _Stat(
               'Students',
-              students.length.toString(),
+              allStudents.length.toString(),
               Icons.family_restroom_rounded,
               AppColors.accent,
             ),
             _Stat(
               'Attendance',
-              _items(data, 'attendance').length.toString(),
+              '${attendanceSummary.percentage}%',
               Icons.fact_check_rounded,
               AppColors.primary,
             ),
             _Stat(
-              'Fees',
-              _items(data, 'fees').length.toString(),
-              Icons.receipt_long_rounded,
+              'Performance',
+              '${performance.average}%',
+              Icons.school_rounded,
               const Color(0xFFF0A93B),
             ),
           ],
         ),
-        const SectionTitle('Linked Students'),
         if (students.isEmpty)
-          const EmptyState(
-            title: 'No linked students',
-            message:
-                'Ask the ERP administrator to link students to this parent account.',
+          EmptyState(
+            title: widget.user.isParent
+                ? 'No linked students'
+                : 'No student records',
+            message: widget.user.isParent
+                ? 'Ask the ERP administrator to link students to this parent account.'
+                : 'No student records were found for parent portal review.',
           )
-        else
-          ...students.map(
-            (student) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _StudentCard(
-                student: student,
-                onTap: () => _showStudentSheet(student, data),
+        else ...[
+          if (_can('parentPortal.viewAll')) ...[
+            const SectionTitle('Student'),
+            DropdownButtonFormField<String>(
+              initialValue: readText(selectedStudent ?? students.first, const [
+                'id',
+              ], fallback: ''),
+              decoration: InputDecoration(
+                labelText: '${students.length} linked',
+                prefixIcon: const Icon(Icons.search_rounded),
               ),
+              items: students
+                  .map(
+                    (student) => DropdownMenuItem(
+                      value: readText(student, const ['id'], fallback: ''),
+                      child: Text(
+                        [
+                          readText(student, const ['name'], fallback: ''),
+                          readText(student, const ['studentId'], fallback: ''),
+                        ].where((value) => value.isNotEmpty).join(' - '),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) =>
+                  setState(() => _parentPortalSelectedStudentId = value ?? ''),
             ),
-          ),
+          ],
+          if (selectedStudent != null) ...[
+            const SectionTitle('Selected Student'),
+            _ParentPortalStudentHero(student: selectedStudent),
+            const SectionTitle('Overview'),
+            _ParentPortalOverviewGrid(
+              attendance: '${attendanceSummary.percentage}%',
+              performance: '${performance.average}%',
+              feeDue: formatMoney(feeStatus.totalDue),
+              notices: notices.length.toString(),
+              documents: documents.length.toString(),
+            ),
+            const SectionTitle('Academic Performance'),
+            _ParentPortalPerformanceCard(performance: performance),
+            const SectionTitle('Attendance'),
+            _ParentPortalAttendanceCard(attendance: attendanceSummary),
+            const SectionTitle('Fee Status'),
+            _ParentPortalFeeCard(feeStatus: feeStatus),
+            const SectionTitle('Notices'),
+            _ParentPortalNoticePanel(notices: notices),
+            const SectionTitle('Verified Documents'),
+            _ParentPortalDocumentPanel(
+              documents: documents,
+              onOpen: _openDocument,
+            ),
+          ],
+        ],
       ],
     );
+  }
+
+  List<Map<String, dynamic>> _parentPortalVisibleStudents(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'students')
+        .where(
+          (student) =>
+              readText(student, const [
+                'status',
+              ], fallback: 'Active').toLowerCase() !=
+              'archived',
+        )
+        .toList();
+  }
+
+  Map<String, dynamic>? _parentPortalSelectedStudent(
+    List<Map<String, dynamic>> students,
+  ) {
+    if (students.isEmpty) return null;
+    for (final student in students) {
+      if (readText(student, const ['id'], fallback: '') ==
+          _parentPortalSelectedStudentId) {
+        return student;
+      }
+    }
+    final first = students.first;
+    final id = readText(first, const ['id'], fallback: '');
+    if (_parentPortalSelectedStudentId != id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _parentPortalSelectedStudentId = id);
+      });
+    }
+    return first;
+  }
+
+  List<Map<String, dynamic>> _parentPortalRecordsForStudent(
+    List<Map<String, dynamic>> records,
+    Map<String, dynamic> student,
+  ) {
+    final studentRecordId = readText(student, const ['id'], fallback: '');
+    final studentId = readText(student, const ['studentId'], fallback: '');
+    return records.where((record) {
+      final values = [
+        readText(record, const ['studentRecordId'], fallback: ''),
+        readText(record, const ['entityRecordId'], fallback: ''),
+        readText(record, const ['ownerRecordId'], fallback: ''),
+        readText(record, const ['studentId'], fallback: ''),
+        readText(record, const ['entityId'], fallback: ''),
+        readText(record, const ['ownerId'], fallback: ''),
+      ];
+      return values.contains(studentRecordId) || values.contains(studentId);
+    }).toList();
+  }
+
+  _ParentPortalAttendanceSummary _parentPortalAttendance({
+    required List<Map<String, dynamic>> records,
+    required Map<String, dynamic>? student,
+    required List<Map<String, dynamic>> academicSubjects,
+  }) {
+    final overall = _summarizeAttendance(records);
+    final subjects = _parentPortalCourseSubjects(
+      student: student,
+      records: records,
+      academicSubjects: academicSubjects,
+    );
+    final hasSubjectRecords = records.any(
+      (record) => readText(record, const [
+        'subjectName',
+        'subject',
+      ], fallback: '').isNotEmpty,
+    );
+    final rows = subjects.map((subject) {
+      final subjectRecords = records.where((record) {
+        final recordSubject = readText(record, const [
+          'subjectName',
+          'subject',
+        ], fallback: '');
+        return recordSubject.trim().toLowerCase() ==
+            subject.trim().toLowerCase();
+      }).toList();
+      final rowRecords = hasSubjectRecords ? subjectRecords : records;
+      final summary = _summarizeAttendance(rowRecords);
+      return _ParentPortalSubjectAttendance(
+        subject: subject,
+        total: summary.total,
+        present: summary.present,
+        absent: summary.absent,
+        leave: summary.leave,
+        percentage: summary.percentage,
+        status: summary.total == 0 ? 'Not Marked' : '${summary.percentage}%',
+      );
+    }).toList();
+    return _ParentPortalAttendanceSummary(
+      total: overall.total,
+      present: overall.present,
+      absent: overall.absent,
+      leave: overall.leave,
+      percentage: overall.percentage,
+      subjectRows: rows,
+    );
+  }
+
+  List<String> _parentPortalCourseSubjects({
+    required Map<String, dynamic>? student,
+    required List<Map<String, dynamic>> records,
+    required List<Map<String, dynamic>> academicSubjects,
+  }) {
+    final studentPrograms =
+        <String>{
+              if (student != null) ...[
+                readText(student, const ['program'], fallback: ''),
+                readText(student, const ['courseName'], fallback: ''),
+                readText(student, const ['courseCode'], fallback: ''),
+              ],
+            }
+            .where((value) => value.trim().isNotEmpty)
+            .map((value) => value.trim().toLowerCase())
+            .toSet();
+    final configured = academicSubjects
+        .where((subject) {
+          final program = readText(subject, const [
+            'programName',
+            'program',
+          ], fallback: '').trim().toLowerCase();
+          if (program.isEmpty) return false;
+          return studentPrograms.any(
+            (studentProgram) =>
+                studentProgram == program ||
+                studentProgram.contains(program) ||
+                program.contains(studentProgram),
+          );
+        })
+        .map(
+          (subject) =>
+              readText(subject, const ['subjectName', 'name'], fallback: ''),
+        )
+        .where((subject) => subject.isNotEmpty)
+        .toSet()
+        .toList();
+    if (configured.isNotEmpty) return configured;
+    return records
+        .map(
+          (record) =>
+              readText(record, const ['subjectName', 'subject'], fallback: ''),
+        )
+        .where((subject) => subject.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  _ParentPortalPerformance _parentPortalPerformance(
+    List<Map<String, dynamic>> marks,
+    List<Map<String, dynamic>> results,
+  ) {
+    final rows = marks.map((item) {
+      final obtained = readNumber(item, const ['marksObtained', 'obtained']);
+      final maxMarks = readNumber(item, const ['maxMarks', 'totalMarks']);
+      final explicitPercentage = readNumber(item, const [
+        'percentage',
+      ], fallback: -1);
+      final percentage = explicitPercentage >= 0
+          ? explicitPercentage.round()
+          : maxMarks > 0
+          ? ((obtained / maxMarks) * 100).round()
+          : 0;
+      return _ParentPortalMarkRow(
+        subject: readText(item, const ['subject', 'subjectName']),
+        marksObtained: obtained,
+        maxMarks: maxMarks,
+        percentage: percentage,
+        grade: readText(item, const ['grade'], fallback: ''),
+        status: readText(item, const ['status'], fallback: 'Entered'),
+      );
+    }).toList();
+    final latestResult = results.isEmpty ? null : results.first;
+    final average = rows.isNotEmpty
+        ? (rows.fold<num>(0, (total, row) => total + row.percentage) /
+                  rows.length)
+              .round()
+        : readNumber(latestResult ?? const {}, const ['percentage']).round();
+    return _ParentPortalPerformance(
+      latestResult: latestResult,
+      subjectRows: rows,
+      average: average,
+      grade: readText(latestResult ?? const {}, const [
+        'grade',
+      ], fallback: rows.isEmpty ? '-' : rows.first.grade),
+      status: readText(latestResult ?? const {}, const [
+        'status',
+      ], fallback: '-'),
+    );
+  }
+
+  _ParentPortalFeeStatus _parentPortalFeeStatus(
+    List<Map<String, dynamic>> assignments,
+  ) {
+    final assigned = assignments.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['totalAmount']),
+    );
+    final paid = assignments.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['paidAmount']),
+    );
+    final adjusted = assignments.fold<num>(
+      0,
+      (total, item) => total + readNumber(item, const ['adjustmentAmount']),
+    );
+    final due = assignments.fold<num>(
+      0,
+      (total, item) => total + _studentFeeDue(item),
+    );
+    return _ParentPortalFeeStatus(
+      totalAssigned: assigned,
+      totalPaid: paid,
+      totalAdjusted: adjusted,
+      totalDue: due,
+      status: due <= 0
+          ? 'Paid'
+          : paid > 0 || adjusted > 0
+          ? 'Partially Paid'
+          : 'Due',
+    );
+  }
+
+  List<Map<String, dynamic>> _parentPortalVisibleNotices(
+    List<Map<String, dynamic>> notices,
+  ) {
+    final now = DateTime.now();
+    return notices.where((notice) {
+      if (readText(notice, const ['status'], fallback: '') != 'Published') {
+        return false;
+      }
+      final audience = readText(notice, const ['audience'], fallback: '');
+      if (!const ['All', 'Parents', 'Students'].contains(audience)) {
+        return false;
+      }
+      final expiry = readDate(notice['expiryDate']);
+      if (expiry == null) return true;
+      final endOfDay = DateTime(
+        expiry.year,
+        expiry.month,
+        expiry.day,
+        23,
+        59,
+        59,
+      );
+      return !now.isAfter(endOfDay);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _parentPortalVisibleDocuments(
+    List<Map<String, dynamic>> documents,
+    Map<String, dynamic> student,
+  ) {
+    return _parentPortalRecordsForStudent(documents, student)
+        .where(
+          (document) =>
+              readText(document, const ['ownerType'], fallback: '') ==
+                  'Student' &&
+              readText(document, const ['verificationStatus'], fallback: '') ==
+                  'Verified',
+        )
+        .toList();
   }
 
   Widget _curriculum(Map<String, List<Map<String, dynamic>>> data) {
@@ -17784,6 +18182,679 @@ class _DashboardValueShare {
   final Color color;
 }
 
+class _ParentPortalAttendanceSummary {
+  const _ParentPortalAttendanceSummary({
+    required this.total,
+    required this.present,
+    required this.absent,
+    required this.leave,
+    required this.percentage,
+    required this.subjectRows,
+  });
+
+  final int total;
+  final int present;
+  final int absent;
+  final int leave;
+  final int percentage;
+  final List<_ParentPortalSubjectAttendance> subjectRows;
+}
+
+class _ParentPortalSubjectAttendance {
+  const _ParentPortalSubjectAttendance({
+    required this.subject,
+    required this.total,
+    required this.present,
+    required this.absent,
+    required this.leave,
+    required this.percentage,
+    required this.status,
+  });
+
+  final String subject;
+  final int total;
+  final int present;
+  final int absent;
+  final int leave;
+  final int percentage;
+  final String status;
+}
+
+class _ParentPortalPerformance {
+  const _ParentPortalPerformance({
+    required this.latestResult,
+    required this.subjectRows,
+    required this.average,
+    required this.grade,
+    required this.status,
+  });
+
+  final Map<String, dynamic>? latestResult;
+  final List<_ParentPortalMarkRow> subjectRows;
+  final int average;
+  final String grade;
+  final String status;
+}
+
+class _ParentPortalMarkRow {
+  const _ParentPortalMarkRow({
+    required this.subject,
+    required this.marksObtained,
+    required this.maxMarks,
+    required this.percentage,
+    required this.grade,
+    required this.status,
+  });
+
+  final String subject;
+  final num marksObtained;
+  final num maxMarks;
+  final int percentage;
+  final String grade;
+  final String status;
+}
+
+class _ParentPortalFeeStatus {
+  const _ParentPortalFeeStatus({
+    required this.totalAssigned,
+    required this.totalPaid,
+    required this.totalAdjusted,
+    required this.totalDue,
+    required this.status,
+  });
+
+  final num totalAssigned;
+  final num totalPaid;
+  final num totalAdjusted;
+  final num totalDue;
+  final String status;
+}
+
+class _ParentPortalStudentHero extends StatelessWidget {
+  const _ParentPortalStudentHero({required this.student});
+
+  final Map<String, dynamic> student;
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = readText(student, const [
+      'profilePhotoUrl',
+      'photoUrl',
+    ], fallback: '');
+    return InfoCard(
+      child: Row(
+        children: [
+          ClipOval(
+            child: Container(
+              height: 72,
+              width: 72,
+              color: AppColors.primaryDark,
+              child: photoUrl.isEmpty
+                  ? Center(
+                      child: Text(
+                        readText(student, const [
+                          'name',
+                        ], fallback: '?').characters.first.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    )
+                  : Image.network(photoUrl, fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Selected Student',
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  readText(student, const ['name'], fallback: 'Student'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  [
+                    readText(student, const ['studentId'], fallback: ''),
+                    readText(student, const ['className'], fallback: ''),
+                    readText(student, const ['section'], fallback: ''),
+                  ].where((value) => value.isNotEmpty).join(' | '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          StatusPill(
+            label: readText(student, const ['status'], fallback: 'Active'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParentPortalOverviewGrid extends StatelessWidget {
+  const _ParentPortalOverviewGrid({
+    required this.attendance,
+    required this.performance,
+    required this.feeDue,
+    required this.notices,
+    required this.documents,
+  });
+
+  final String attendance;
+  final String performance;
+  final String feeDue;
+  final String notices;
+  final String documents;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _ParentPortalOverviewItem(
+        'Attendance',
+        attendance,
+        Icons.person_search_rounded,
+        AppColors.primary,
+      ),
+      _ParentPortalOverviewItem(
+        'Performance',
+        performance,
+        Icons.school_rounded,
+        AppColors.warning,
+      ),
+      _ParentPortalOverviewItem(
+        'Fee Due',
+        feeDue,
+        Icons.wallet_rounded,
+        AppColors.danger,
+      ),
+      _ParentPortalOverviewItem(
+        'Notices',
+        notices,
+        Icons.notifications_rounded,
+        const Color(0xFF8357C5),
+      ),
+      _ParentPortalOverviewItem(
+        'Documents',
+        documents,
+        Icons.description_rounded,
+        AppColors.accent,
+      ),
+    ];
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 1.65,
+      children: items
+          .map(
+            (item) => InfoCard(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(item.icon, color: item.color, size: 22),
+                  const SizedBox(height: 8),
+                  Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    item.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _ParentPortalOverviewItem {
+  const _ParentPortalOverviewItem(
+    this.label,
+    this.value,
+    this.icon,
+    this.color,
+  );
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+}
+
+class _ParentPortalPerformanceCard extends StatelessWidget {
+  const _ParentPortalPerformanceCard({required this.performance});
+
+  final _ParentPortalPerformance performance;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Academic Performance',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                '${performance.average}%',
+                style: const TextStyle(
+                  color: AppColors.primaryDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (performance.grade != '-') ...[
+                const SizedBox(width: 8),
+                StatusPill(label: performance.grade),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (performance.subjectRows.isEmpty)
+            const Text(
+              'No marks entries available.',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            )
+          else
+            ...performance.subjectRows.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _DashboardProgressRow(
+                  label: row.subject,
+                  value: '${row.marksObtained}/${row.maxMarks}',
+                  percent: row.percentage / 100,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParentPortalAttendanceCard extends StatelessWidget {
+  const _ParentPortalAttendanceCard({required this.attendance});
+
+  final _ParentPortalAttendanceSummary attendance;
+
+  @override
+  Widget build(BuildContext context) {
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Overall Attendance',
+                  value: '${attendance.percentage}% Present',
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Records',
+                  value: attendance.total.toString(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Present',
+                  value: attendance.present.toString(),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Absent',
+                  value: attendance.absent.toString(),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Leave',
+                  value: attendance.leave.toString(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (attendance.subjectRows.isEmpty)
+            const Text(
+              'No subjects found for this course.',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            )
+          else
+            ...attendance.subjectRows.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            row.subject,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        StatusPill(label: row.status),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: row.percentage.clamp(0, 100) / 100,
+                      minHeight: 8,
+                      backgroundColor: AppColors.page,
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Present ${row.present} / Absent ${row.absent} / Leave ${row.leave}',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParentPortalFeeCard extends StatelessWidget {
+  const _ParentPortalFeeCard({required this.feeStatus});
+
+  final _ParentPortalFeeStatus feeStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = feeStatus.totalAssigned <= 0 ? 1 : feeStatus.totalAssigned;
+    final paidPercent = (feeStatus.totalPaid / total).clamp(0, 1).toDouble();
+    final duePercent = (feeStatus.totalDue / total).clamp(0, 1).toDouble();
+    final adjustedPercent = (feeStatus.totalAdjusted / total)
+        .clamp(0, 1)
+        .toDouble();
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Fee Status',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              StatusPill(label: feeStatus.status),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: (paidPercent * 100).round().clamp(1, 100),
+                  child: Container(height: 10, color: AppColors.accent),
+                ),
+                Expanded(
+                  flex: (adjustedPercent * 100).round().clamp(1, 100),
+                  child: Container(height: 10, color: AppColors.muted),
+                ),
+                Expanded(
+                  flex: (duePercent * 100).round().clamp(1, 100),
+                  child: Container(height: 10, color: AppColors.danger),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Assigned',
+                  value: formatMoney(feeStatus.totalAssigned),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Paid',
+                  value: formatMoney(feeStatus.totalPaid),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: LabelValue(
+                  label: 'Adjustment',
+                  value: formatMoney(feeStatus.totalAdjusted),
+                ),
+              ),
+              Expanded(
+                child: LabelValue(
+                  label: 'Due',
+                  value: formatMoney(feeStatus.totalDue),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ParentPortalNoticePanel extends StatelessWidget {
+  const _ParentPortalNoticePanel({required this.notices});
+
+  final List<Map<String, dynamic>> notices;
+
+  @override
+  Widget build(BuildContext context) {
+    if (notices.isEmpty) {
+      return const EmptyState(
+        title: 'No notices',
+        message: 'No published notices are available.',
+      );
+    }
+    return InfoCard(
+      child: Column(
+        children: notices.take(4).map((notice) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        readText(notice, const ['title'], fallback: 'Notice'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        readText(
+                          notice,
+                          const ['type', 'publishDate'],
+                          fallback: readText(notice, const [
+                            'body',
+                          ], fallback: ''),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusPill(
+                  label: readText(notice, const [
+                    'priority',
+                  ], fallback: 'Normal'),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _ParentPortalDocumentPanel extends StatelessWidget {
+  const _ParentPortalDocumentPanel({
+    required this.documents,
+    required this.onOpen,
+  });
+
+  final List<Map<String, dynamic>> documents;
+  final ValueChanged<Map<String, dynamic>> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (documents.isEmpty) {
+      return const EmptyState(
+        title: 'No verified documents',
+        message: 'Verified student documents will appear here.',
+      );
+    }
+    return InfoCard(
+      child: Column(
+        children: documents.take(4).map((document) {
+          final hasFile = readText(document, const [
+            'downloadUrl',
+            'fileUrl',
+            'url',
+          ], fallback: '').isNotEmpty;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        readText(document, const [
+                          'documentType',
+                          'title',
+                          'fileName',
+                        ], fallback: 'Document'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        readText(document, const [
+                          'fileName',
+                        ], fallback: 'Metadata only'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusPill(
+                  label: readText(document, const [
+                    'verificationStatus',
+                  ], fallback: 'Verified'),
+                ),
+                IconButton(
+                  tooltip: 'Open document',
+                  onPressed: hasFile ? () => onOpen(document) : null,
+                  icon: const Icon(Icons.download_rounded),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 class _StudentCourseOption {
   const _StudentCourseOption(
     this.courseCode,
@@ -19984,6 +21055,7 @@ class _StudentParityCard extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _StudentCard extends StatelessWidget {
   const _StudentCard({required this.student, required this.onTap});
 

@@ -382,10 +382,9 @@ class ErpRepository {
               : await listCollection('students', academicYear: academicYear),
         };
       case 'parent-portal':
-        final students = await linkedParentStudents(
-          user,
-          academicYear: academicYear,
-        );
+        final students = user.isParent
+            ? await linkedParentStudents(user, academicYear: academicYear)
+            : await listCollection('students', academicYear: academicYear);
         final studentIds = students
             .map(
               (student) => readText(student, const ['studentId'], fallback: ''),
@@ -468,6 +467,10 @@ class ErpRepository {
           ]),
           'notices': await listCollection(
             'noticeItems',
+            academicYear: academicYear,
+          ),
+          'academicSubjects': await listCollection(
+            'academicSubjects',
             academicYear: academicYear,
           ),
         };
