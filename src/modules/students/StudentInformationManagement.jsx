@@ -57,7 +57,7 @@ import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { normalizeInstituteSettings } from '../settings/settingsModel';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 import { getParentLinkedStudents } from '../parentPortal/parentPortalUtils';
-import { formatCurrency, formatManualDueItems } from '../fees/feeUtils';
+import { formatCurrency, formatManualDueItems, formatPaymentDate, sortPaymentRecordsByDate } from '../fees/feeUtils';
 
 const AcademicsManagement = lazy(() => import('../academics/AcademicsManagement'));
 const AttendanceManagement = lazy(() => import('../attendance/AttendanceManagement'));
@@ -1285,14 +1285,14 @@ function StudentDetailPage({
     };
   });
 
-  const paymentHistoryRows = [...feeCollections]
-    .sort((first, second) => String(second.paymentDate || second.createdAtText || '').localeCompare(String(first.paymentDate || first.createdAtText || '')))
+  const paymentHistoryRows = sortPaymentRecordsByDate(feeCollections)
     .map((item, index) => ({
       id: item.id || `collection-${index}`,
       label: item.feeStructureName || item.entryMode || `Payment ${index + 1}`,
       helper: [
-        item.paymentDate || item.createdAtText || 'Payment record',
+        formatPaymentDate(item.paymentDate || item.createdAtText) || 'Payment record',
         item.paymentMode || '',
+        item.creditedToAccount ? `Account: ${item.creditedToAccount}` : '',
         item.referenceNo ? `Ref: ${item.referenceNo}` : '',
         formatManualDueItems(item.manualDueItems) ? `Pending: ${formatManualDueItems(item.manualDueItems)}` : '',
       ].filter(Boolean).join(' | '),

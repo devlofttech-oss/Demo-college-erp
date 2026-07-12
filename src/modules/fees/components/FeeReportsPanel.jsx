@@ -1,4 +1,4 @@
-import { formatCurrency } from '../feeUtils';
+import { formatCurrency, formatPaymentDate, sortPaymentRecordsByDate } from '../feeUtils';
 
 export default function FeeReportsPanel({ collections, adjustments }) {
   return (
@@ -6,11 +6,11 @@ export default function FeeReportsPanel({ collections, adjustments }) {
       <div className="bg-white border border-slate-100 rounded-lg p-5">
         <h3 className="font-bold text-slate-900 mb-4">Recent Collections</h3>
         <div className="space-y-3">
-          {collections.slice(0, 5).map((item) => (
+          {sortPaymentRecordsByDate(collections).slice(0, 5).map((item) => (
             <div key={item.id} className="flex items-center justify-between rounded-lg bg-[#f5f5f6] p-3">
               <div>
                 <div className="font-semibold text-sm">{item.studentName}</div>
-                <div className="text-xs text-slate-500">{item.paymentMode} | {item.paymentDate}</div>
+                <div className="text-xs text-slate-500">{item.paymentMode} | {formatPaymentDate(item.paymentDate)}</div>
               </div>
               <div className="font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
             </div>

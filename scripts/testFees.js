@@ -4,15 +4,19 @@ import {
   calculatePendingAgentFeeBalance,
   calculateDueAmount,
   calculateFeeStatus,
+  formatPaymentDate,
   formatManualDueItems,
   getCollectionsForFeeContext,
   getFeeComponentValues,
   getDueBucket,
   getManualDueItemOptions,
+  getPaymentSortTime,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
   normalizePaymentEntries,
+  sortPaymentRecordsByDate,
   summarizeFees,
+  sumPaymentEntryAgentFees,
   sumPaymentEntries,
   totalFeeComponents,
   validateFeeAdjustment,
@@ -53,14 +57,22 @@ assert.deepEqual(normalizeManualDueItems(['agent-fee']), [
 assert.equal(formatManualDueItems(['application-fee', 'pocket-article-fee']), 'Application Fee, Pocket Article Fee');
 assert.equal(formatManualDueItems(['agent-fee']), 'Agent Fee');
 const normalizedPaymentEntries = normalizePaymentEntries([
-  { amount: '20000', paymentMode: 'Cash', referenceNo: 'B-001', paymentDate: '2026-07-01', paymentTime: '10:00' },
-  { amount: '40000', paymentMode: 'UPI Manual Entry', referenceNo: 'B-002', paymentDate: '2026-07-05', paymentTime: '11:30' },
+  { amount: '20000', paymentMode: 'Cash', creditedToAccount: 'Cash Counter', referenceNo: 'B-001', paymentDate: '2026-07-01', paymentTime: '10:00', agentFeePaidAmount: '2500' },
+  { amount: '40000', paymentMode: 'UPI Manual Entry', creditedToAccount: 'SBI Current', referenceNo: 'B-002', paymentDate: '2026-07-05', paymentTime: '11:30', agentFeePaidAmount: '5000' },
 ]);
 assert.equal(sumPaymentEntries(normalizedPaymentEntries), 60000);
-assert.deepEqual(normalizedPaymentEntries.map((entry) => [entry.amount, entry.referenceNo, entry.paymentTime]), [
-  [20000, 'B-001', '10:00'],
-  [40000, 'B-002', '11:30'],
+assert.equal(sumPaymentEntryAgentFees(normalizedPaymentEntries), 7500);
+assert.deepEqual(normalizedPaymentEntries.map((entry) => [entry.amount, entry.creditedToAccount, entry.referenceNo, entry.paymentTime, entry.agentFeePaidAmount]), [
+  [20000, 'Cash Counter', 'B-001', '10:00', 2500],
+  [40000, 'SBI Current', 'B-002', '11:30', 5000],
 ]);
+assert.equal(formatPaymentDate('2026-07-05'), '05-07-2026');
+assert.equal(formatPaymentDate('05-07-2026'), '05-07-2026');
+assert.equal(getPaymentSortTime({ paymentDate: '2026-07-05', paymentTime: '11:30' }) > getPaymentSortTime({ paymentDate: '2026-07-01', paymentTime: '10:00' }), true);
+assert.deepEqual(sortPaymentRecordsByDate([
+  { id: 'old', paymentDate: '2026-07-01', paymentTime: '10:00' },
+  { id: 'new', paymentDate: '2026-07-05', paymentTime: '11:30' },
+]).map((item) => item.id), ['new', 'old']);
 
 assert.equal(calculateDueAmount(10000, 4000, 1000), 5000);
 assert.equal(calculateDueAmount(10000, 12000, 0), 0);

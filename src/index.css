@@ -4490,14 +4490,23 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 
 .erp-shell .erp-payment-date-input,
 .erp-shell .erp-payment-time-input {
-  color-scheme:light;
+  background:#f8fafc!important;
+  color:#0f172a!important;
+  color-scheme:light!important;
+}
+
+.erp-shell .erp-payment-entry-card label svg {
+  color:#475569!important;
+  stroke-width:2.5;
 }
 
 .erp-shell .erp-payment-date-input::-webkit-calendar-picker-indicator,
 .erp-shell .erp-payment-time-input::-webkit-calendar-picker-indicator {
   cursor:pointer;
   opacity:1!important;
-  filter:invert(22%) sepia(12%) saturate(1020%) hue-rotate(169deg) brightness(86%) contrast(88%)!important;
+  width:18px;
+  height:18px;
+  filter:invert(25%) sepia(13%) saturate(873%) hue-rotate(169deg) brightness(91%) contrast(89%)!important;
 }
 
 .erp-shell .erp-due-picker {

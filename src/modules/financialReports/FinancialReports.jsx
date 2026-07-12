@@ -7,7 +7,7 @@ import {
 } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
-import { formatCurrency, formatDisplayDate } from '../fees/feeUtils';
+import { formatCurrency, formatDisplayDate, formatPaymentDate, getStudentClassKey } from '../fees/feeUtils';
 import {
   buildClassAnalytics,
   buildCollectionReport,
@@ -20,7 +20,6 @@ import OutstandingReportTable from './components/OutstandingReportTable';
 import ReportFilters from './components/ReportFilters';
 import FeeVisualGraph from '../fees/components/FeeVisualGraph';
 import { filterByCourse, filterStudentScopedRecords } from '../shared/courseFilters';
-import { getStudentClassKey } from '../fees/feeUtils';
 
 function csvValue(value) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`;
@@ -151,7 +150,7 @@ function downloadPdf(filename, {
 
     rows.forEach((item) => {
       const values = activeReport === 'collections'
-        ? [item.studentName, item.classKey || '-', item.paymentDate || '-', item.paymentMode || '-', formatCurrency(item.amount)]
+        ? [item.studentName, item.classKey || '-', formatPaymentDate(item.paymentDate), item.paymentMode || '-', formatCurrency(item.amount)]
         : [item.studentName, item.classKey || '-', item.dueDate || '-', item.dueBucket || '-', formatCurrency(item.dueAmount)];
       let rowX = 40;
       values.forEach((value, index) => {
@@ -291,7 +290,7 @@ export default function FinancialReports({ currentUser, academicYear = '', scope
           item.studentName,
           item.studentId,
           item.classKey || '-',
-          item.paymentDate || '-',
+          formatPaymentDate(item.paymentDate),
           item.paymentMode || '-',
           item.referenceNo || '-',
           item.amount || 0,

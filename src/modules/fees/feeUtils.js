@@ -107,14 +107,80 @@ export function normalizePaymentEntries(entries = [], fallback = {}) {
     rowKey: entry.rowKey || entry.id || `payment-${index + 1}`,
     amount: Number(entry.amount || 0),
     paymentMode: entry.paymentMode || fallback.paymentMode || 'Cash',
+    creditedToAccount: String(entry.creditedToAccount ?? fallback.creditedToAccount ?? '').trim(),
     referenceNo: String(entry.referenceNo ?? fallback.referenceNo ?? '').trim(),
     paymentDate: entry.paymentDate || fallback.paymentDate || '',
     paymentTime: entry.paymentTime || fallback.paymentTime || '',
+    agentFeePaidAmount: Number(entry.agentFeePaidAmount ?? fallback.agentFeePaidAmount ?? 0),
   }));
 }
 
 export function sumPaymentEntries(entries = []) {
   return entries.reduce((total, entry) => total + Number(entry.amount || 0), 0);
+}
+
+export function sumPaymentEntryAgentFees(entries = []) {
+  return entries.reduce((total, entry) => total + Number(entry.agentFeePaidAmount || 0), 0);
+}
+
+function padDatePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function normalizePaymentTime(value = '') {
+  const time = String(value || '').trim();
+  if (!time) return '00:00';
+  if (/^\d{1,2}:\d{2}$/.test(time)) {
+    const [hours, minutes] = time.split(':');
+    return `${padDatePart(hours)}:${minutes}`;
+  }
+  return time;
+}
+
+export function formatPaymentDate(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+  const displayMatch = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (displayMatch) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return `${padDatePart(parsed.getDate())}-${padDatePart(parsed.getMonth() + 1)}-${parsed.getFullYear()}`;
+}
+
+export function getPaymentSortTime(record = {}) {
+  const paidAtTime = Date.parse(record.paidAt || '');
+  if (!Number.isNaN(paidAtTime)) return paidAtTime;
+
+  const dateText = String(record.paymentDate || '').trim();
+  const timeText = normalizePaymentTime(record.paymentTime);
+  const isoMatch = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const displayMatch = dateText.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+
+  if (isoMatch) {
+    const parsed = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${timeText}`);
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  if (displayMatch) {
+    const parsed = new Date(`${displayMatch[3]}-${displayMatch[2]}-${displayMatch[1]}T${timeText}`);
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  const dateTime = Date.parse([dateText || record.createdAtText || '', timeText].filter(Boolean).join(' '));
+  if (!Number.isNaN(dateTime)) return dateTime;
+  const dateOnly = Date.parse(record.createdAtText || '');
+  return Number.isNaN(dateOnly) ? 0 : dateOnly;
+}
+
+export function sortPaymentRecordsByDate(records = [], direction = 'desc') {
+  const multiplier = direction === 'asc' ? 1 : -1;
+  return [...records].sort((first, second) => {
+    const dateCompare = (getPaymentSortTime(first) - getPaymentSortTime(second)) * multiplier;
+    if (dateCompare) return dateCompare;
+    return Number(first.installmentNo || 0) - Number(second.installmentNo || 0);
+  });
 }
 
 export function calculateAssignmentPaymentLedger(assignment = {}, collections = [], options = {}) {
@@ -265,6 +331,8 @@ export function validateFeeCollection(form, assignment) {
   const hasInvalidEntryAmount = paymentEntries.some((entry) => Number(entry.amount || 0) <= 0);
   const hasMissingEntryDate = paymentEntries.some((entry) => !entry.paymentDate);
   const hasMissingEntryMode = paymentEntries.some((entry) => !entry.paymentMode);
+  const hasNegativeAgentFee = paymentEntries.some((entry) => Number(entry.agentFeePaidAmount || 0) < 0);
+  const hasAgentFeeOverPayment = paymentEntries.some((entry) => Number(entry.agentFeePaidAmount || 0) > Number(entry.amount || 0));
 
   if (form.entryMode === 'structure') {
     if (!form.studentRecordId) return 'Student is required.';
@@ -273,6 +341,8 @@ export function validateFeeCollection(form, assignment) {
     if (hasMissingEntryDate) return 'Payment date is required for each payment.';
     if (hasMissingEntryMode) return 'Payment mode is required for each payment.';
     if (hasInvalidEntryAmount) return 'Each payment amount must be greater than zero.';
+    if (hasNegativeAgentFee) return 'Agent fee paid cannot be negative.';
+    if (hasAgentFeeOverPayment) return 'Agent fee paid cannot exceed the payment amount for any installment.';
     return '';
   }
   if (form.entryMode === 'manual') {
@@ -283,6 +353,8 @@ export function validateFeeCollection(form, assignment) {
   if (hasMissingEntryDate) return 'Payment date is required for each payment.';
   if (hasMissingEntryMode) return 'Payment mode is required for each payment.';
   if (hasInvalidEntryAmount) return 'Each payment amount must be greater than zero.';
+  if (hasNegativeAgentFee) return 'Agent fee paid cannot be negative.';
+  if (hasAgentFeeOverPayment) return 'Agent fee paid cannot exceed the payment amount for any installment.';
   if (form.entryMode !== 'manual' && assignment && amount > Number(assignment.dueAmount || assignment.totalAmount || 0)) {
     return 'Collection amount cannot exceed outstanding due.';
   }

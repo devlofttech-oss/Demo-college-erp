@@ -8,12 +8,15 @@ import {
   calculateDueAmount,
   feeComponentFields,
   formatCurrency,
+  formatPaymentDate,
   getFeeComponentValues,
   getCollectionsForFeeContext,
   getManualDueItemOptions,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
   normalizePaymentEntries,
+  sortPaymentRecordsByDate,
+  sumPaymentEntryAgentFees,
   sumPaymentEntries,
   totalFeeComponents,
 } from '../feeUtils';
@@ -26,9 +29,11 @@ function createPaymentEntry(overrides = {}) {
     rowKey: overrides.rowKey || `payment-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
     amount: overrides.amount ?? '',
     paymentMode: overrides.paymentMode || 'Cash',
+    creditedToAccount: overrides.creditedToAccount || '',
     referenceNo: overrides.referenceNo || '',
     paymentDate: overrides.paymentDate || now.toISOString().slice(0, 10),
     paymentTime: overrides.paymentTime || now.toTimeString().slice(0, 5),
+    agentFeePaidAmount: overrides.agentFeePaidAmount ?? '',
   };
 }
 
@@ -84,6 +89,7 @@ export default function FeeCollectionModal({
     agentFeePaidAmount: initialCollection?.agentFeePaidAmount || 0,
     amount: initialCollection?.amount || '',
     paymentMode: initialCollection?.paymentMode || 'Cash',
+    creditedToAccount: initialCollection?.creditedToAccount || '',
     referenceNo: initialCollection?.referenceNo || '',
     paymentDate: initialCollection?.paymentDate || new Date().toISOString().slice(0, 10),
     paymentTime: initialCollection?.paymentTime || new Date().toTimeString().slice(0, 5),
@@ -92,9 +98,11 @@ export default function FeeCollectionModal({
       rowKey: initialCollection?.id || undefined,
       amount: initialCollection?.amount || '',
       paymentMode: initialCollection?.paymentMode || 'Cash',
+      creditedToAccount: initialCollection?.creditedToAccount || '',
       referenceNo: initialCollection?.referenceNo || '',
       paymentDate: initialCollection?.paymentDate,
       paymentTime: initialCollection?.paymentTime,
+      agentFeePaidAmount: initialCollection?.agentFeePaidAmount || '',
     })],
     manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
   });
@@ -116,8 +124,9 @@ export default function FeeCollectionModal({
     feeStructureId: form.feeStructureId,
   };
   const hasFeeContext = Boolean(paymentContext.assignmentId || paymentContext.feeStructureId);
-  const paymentHistory = getCollectionsForFeeContext(collections, paymentContext, '', { allowStudentOnly: true })
-    .sort((first, second) => String(second.paidAt || `${second.paymentDate || ''}T${second.paymentTime || ''}`).localeCompare(String(first.paidAt || `${first.paymentDate || ''}T${first.paymentTime || ''}`)));
+  const paymentHistory = sortPaymentRecordsByDate(
+    getCollectionsForFeeContext(collections, paymentContext, '', { allowStudentOnly: true })
+  );
   const historyLedger = calculateAssignmentPaymentLedger(
     { ...(matchingAssignment || {}), totalAmount: editedTotal, adjustmentAmount: matchingAssignment?.adjustmentAmount || 0, admissionThroughAgent: form.admissionThroughAgent, agentFee: form.agentFee },
     paymentHistory,
@@ -136,7 +145,7 @@ export default function FeeCollectionModal({
   const paymentEntries = form.paymentEntries?.length ? form.paymentEntries : [createPaymentEntry()];
   const normalizedPaymentEntries = normalizePaymentEntries(paymentEntries, form);
   const paymentEntriesTotal = sumPaymentEntries(normalizedPaymentEntries);
-  const agentFeePaidInThisPayment = form.admissionThroughAgent ? Number(form.agentFeePaidAmount || 0) : 0;
+  const agentFeePaidInThisPayment = form.admissionThroughAgent ? sumPaymentEntryAgentFees(normalizedPaymentEntries) : 0;
   const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? previousLedger.agentFeePaid : 0;
   const pendingAgentFeeBefore = form.admissionThroughAgent
     ? calculatePendingAgentFeeBalance(form.agentFee, agentFeePaidBeforeThisPayment)
@@ -170,6 +179,10 @@ export default function FeeCollectionModal({
       admissionThroughAgent: nextAdmissionThroughAgent,
       agentFee: nextAdmissionThroughAgent ? feeValues.agentFee : 0,
       agentFeePaidAmount: 0,
+      paymentEntries: (nextForm.paymentEntries || []).map((entry) => ({
+        ...entry,
+        agentFeePaidAmount: nextAdmissionThroughAgent ? entry.agentFeePaidAmount : 0,
+      })),
       manualDueItems: syncAgentDueItem(nextAssignment?.manualDueItems || [], nextAdmissionThroughAgent),
     };
   };
@@ -243,6 +256,7 @@ export default function FeeCollectionModal({
       ...form,
       amount: sumPaymentEntries(normalizedEntries),
       paymentMode: firstPayment.paymentMode || form.paymentMode,
+      creditedToAccount: firstPayment.creditedToAccount || form.creditedToAccount,
       referenceNo: firstPayment.referenceNo || form.referenceNo,
       paymentDate: firstPayment.paymentDate || form.paymentDate,
       paymentTime: firstPayment.paymentTime || form.paymentTime,
@@ -297,6 +311,10 @@ export default function FeeCollectionModal({
                 admissionThroughAgent: event.target.checked,
                 agentFee: event.target.checked ? prev.agentFee : 0,
                 agentFeePaidAmount: event.target.checked ? prev.agentFeePaidAmount : 0,
+                paymentEntries: prev.paymentEntries.map((entry) => ({
+                  ...entry,
+                  agentFeePaidAmount: event.target.checked ? entry.agentFeePaidAmount : 0,
+                })),
                 manualDueItems: syncAgentDueItem(prev.manualDueItems, event.target.checked),
               }))}
               className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
@@ -337,7 +355,7 @@ export default function FeeCollectionModal({
           </div>
 
           {form.admissionThroughAgent && (
-            <div className="erp-agent-fee-panel sm:col-span-2 grid sm:grid-cols-3 gap-3 rounded-lg border border-cyan-100 bg-cyan-50/70 p-4">
+            <div className="erp-agent-fee-panel sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-cyan-100 bg-cyan-50/70 p-4">
               <label className="erp-fee-field">
                 <span className="block text-xs font-semibold text-cyan-700 mb-1.5">{agentFeeComponentField.label}</span>
                 <input
@@ -346,18 +364,6 @@ export default function FeeCollectionModal({
                   value={form.agentFee}
                   onChange={(event) => updateFeeComponent(agentFeeComponentField.key, event.target.value)}
                   placeholder="Enter agent fee"
-                  className="w-full h-10 rounded-lg border border-cyan-100 bg-white px-3 text-sm"
-                />
-              </label>
-              <label className="erp-fee-field">
-                <span className="block text-xs font-semibold text-cyan-700 mb-1.5">Agent Fee Paid Now</span>
-                <input
-                  type="number"
-                  min="0"
-                  max={Math.min(paymentEntriesTotal, pendingAgentFeeBefore)}
-                  value={form.agentFeePaidAmount}
-                  onChange={(event) => setForm((prev) => ({ ...prev, agentFeePaidAmount: event.target.value }))}
-                  placeholder="Amount from these payments"
                   className="w-full h-10 rounded-lg border border-cyan-100 bg-white px-3 text-sm"
                 />
               </label>
@@ -420,6 +426,7 @@ export default function FeeCollectionModal({
                       <th className="px-3 py-2 text-left font-semibold">No.</th>
                       <th className="px-3 py-2 text-left font-semibold">Date & Time</th>
                       <th className="px-3 py-2 text-left font-semibold">Mode</th>
+                      <th className="px-3 py-2 text-left font-semibold">Credited To</th>
                       <th className="px-3 py-2 text-left font-semibold">Reference</th>
                       <th className="px-3 py-2 text-right font-semibold">Amount</th>
                     </tr>
@@ -430,8 +437,9 @@ export default function FeeCollectionModal({
                         <td className="px-3 py-2 font-bold text-slate-500">
                           {payment.installmentNo ? `${payment.installmentNo}/${payment.installmentCount || payment.installmentNo}` : index + 1}
                         </td>
-                        <td className="px-3 py-2 text-slate-700">{payment.paymentDate || payment.createdAtText || '-'} {payment.paymentTime || ''}</td>
+                        <td className="px-3 py-2 text-slate-700">{formatPaymentDate(payment.paymentDate || payment.createdAtText)} {payment.paymentTime || ''}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.paymentMode || '-'}</td>
+                        <td className="px-3 py-2 text-slate-600">{payment.creditedToAccount || '-'}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.referenceNo || '-'}</td>
                         <td className="px-3 py-2 text-right font-bold text-emerald-700">{formatCurrency(payment.amount)}</td>
                       </tr>
@@ -498,6 +506,27 @@ export default function FeeCollectionModal({
                         {paymentModeOptions.map((item) => <option key={item}>{item}</option>)}
                       </select>
                     </label>
+                    <label>
+                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Credited To Account</span>
+                      <input
+                        value={entry.creditedToAccount || ''}
+                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'creditedToAccount', event.target.value)}
+                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                      />
+                    </label>
+                    {form.admissionThroughAgent && (
+                      <label>
+                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Agent Fee Paid</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={Math.min(Number(entry.amount || 0), pendingAgentFeeBefore)}
+                          value={entry.agentFeePaidAmount}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'agentFeePaidAmount', event.target.value)}
+                          className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                        />
+                      </label>
+                    )}
                     <label>
                       <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><CalendarDays size={13} /> Payment Date</span>
                       <input

@@ -1,4 +1,4 @@
-import { calculateDueAmount, getDueBucket } from '../fees/feeUtils.js';
+import { calculateDueAmount, getDueBucket, sortPaymentRecordsByDate } from '../fees/feeUtils.js';
 
 export function withinDateRange(dateValue, fromDate, toDate) {
   if (!dateValue) return false;
@@ -25,7 +25,7 @@ export function filterCollections(collections = [], filters = {}) {
 }
 
 export function buildCollectionReport(collections = [], filters = {}) {
-  const rows = filterCollections(collections, filters);
+  const rows = sortPaymentRecordsByDate(filterCollections(collections, filters));
   const totalCollected = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const byMode = rows.reduce((map, item) => {
     map[item.paymentMode] = (map[item.paymentMode] || 0) + Number(item.amount || 0);

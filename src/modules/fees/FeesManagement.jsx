@@ -28,7 +28,9 @@ import {
   isAdmissionThroughAgent,
   normalizeManualDueItems,
   normalizePaymentEntries,
+  sortPaymentRecordsByDate,
   summarizeFees,
+  sumPaymentEntryAgentFees,
   sumPaymentEntries,
   validateFeeAdjustment,
   validateFeeCollection,
@@ -171,13 +173,24 @@ export default function FeesManagement({
 
   const visibleCollections = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return courseCollections;
-    return courseCollections.filter((collection) =>
-      [collection.studentName, collection.studentId, collection.classKey, collection.paymentMode, collection.referenceNo, collection.paymentDate]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(term))
-    );
+    const filteredCollections = term
+      ? courseCollections.filter((collection) =>
+        [collection.studentName, collection.studentId, collection.classKey, collection.paymentMode, collection.creditedToAccount, collection.referenceNo, collection.paymentDate]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term))
+      )
+      : courseCollections;
+    return sortPaymentRecordsByDate(filteredCollections);
   }, [courseCollections, search]);
+
+  const validateAgentFeePayments = (paymentEntries, pendingAgentFeeBefore, admissionThroughAgent) => {
+    if (!admissionThroughAgent) return '';
+    const agentFeePaidAmount = sumPaymentEntryAgentFees(paymentEntries);
+    const entryOverPayment = paymentEntries.some((entry) => Number(entry.agentFeePaidAmount || 0) > Number(entry.amount || 0));
+    if (entryOverPayment) return 'Agent fee paid cannot exceed the payment amount for any installment.';
+    if (agentFeePaidAmount > Number(pendingAgentFeeBefore || 0)) return 'Agent fee paid cannot exceed pending agent fee balance.';
+    return '';
+  };
 
   const payableAssignments = courseAssignments.filter((item) => Number(item.dueAmount || 0) > 0);
   const selectedAssignment = selectedAssignmentId ? courseAssignments.find((item) => item.id === selectedAssignmentId) || null : null;
@@ -419,20 +432,17 @@ export default function FeesManagement({
     collectionBase,
     assignmentForLedger,
     previousCollections,
-    agentFeePaidAmount = 0,
     batchPaymentId,
     now,
     editingCollectionId = '',
   }) => {
     let runningCollections = [...previousCollections];
-    let remainingAgentFeePaid = Number(agentFeePaidAmount || 0);
     return paymentEntries.map((entry, index) => {
       const entryAmount = Number(entry.amount || 0);
       const paymentDateTime = getPaymentDateTime(entry, now);
       const entryAgentFeePaid = collectionBase.admissionThroughAgent
-        ? Math.min(entryAmount, remainingAgentFeePaid)
+        ? Number(entry.agentFeePaidAmount || 0)
         : 0;
-      remainingAgentFeePaid = Math.max(0, remainingAgentFeePaid - entryAgentFeePaid);
       const beforeLedger = calculateAssignmentPaymentLedger(
         assignmentForLedger,
         runningCollections,
@@ -443,6 +453,7 @@ export default function FeesManagement({
         ...collectionBase,
         amount: entryAmount,
         paymentMode: entry.paymentMode,
+        creditedToAccount: entry.creditedToAccount,
         referenceNo: entry.referenceNo,
         paymentDate: paymentDateTime.paymentDate,
         paymentTime: paymentDateTime.paymentTime,
@@ -482,6 +493,7 @@ export default function FeesManagement({
       paymentEntries,
       amount: sumPaymentEntries(paymentEntries),
       paymentMode: firstPaymentEntry.paymentMode || form.paymentMode,
+      creditedToAccount: firstPaymentEntry.creditedToAccount || form.creditedToAccount || '',
       referenceNo: firstPaymentEntry.referenceNo ?? form.referenceNo,
       paymentDate: firstPaymentEntry.paymentDate || form.paymentDate,
       paymentTime: firstPaymentEntry.paymentTime || form.paymentTime,
@@ -521,7 +533,6 @@ export default function FeesManagement({
       const adjustmentAmount = Number(targetAssignment?.adjustmentAmount || 0);
       const admissionThroughAgent = isAdmissionThroughAgent(collectionForm) || isAdmissionThroughAgent(targetAssignment) || isAdmissionThroughAgent(student);
       const agentFee = admissionThroughAgent ? Number(collectionForm.agentFee || 0) : 0;
-      const agentFeePaidAmount = admissionThroughAgent ? Number(collectionForm.agentFeePaidAmount || 0) : 0;
       const baseAssignmentForLedger = {
         ...(targetAssignment || {}),
         totalAmount,
@@ -557,12 +568,9 @@ export default function FeesManagement({
         toast.error('Collection amount cannot exceed outstanding due.');
         return;
       }
-      if (agentFeePaidAmount > amount) {
-        toast.error('Agent fee paid cannot exceed this payment amount.');
-        return;
-      }
-      if (agentFeePaidAmount > pendingAgentFeeBefore) {
-        toast.error('Agent fee paid cannot exceed pending agent fee balance.');
+      const agentFeeValidationMessage = validateAgentFeePayments(paymentEntries, pendingAgentFeeBefore, admissionThroughAgent);
+      if (agentFeeValidationMessage) {
+        toast.error(agentFeeValidationMessage);
         return;
       }
 
@@ -635,7 +643,6 @@ export default function FeesManagement({
           collectionBase,
           assignmentForLedger,
           previousCollections: ledgerBaseCollections,
-          agentFeePaidAmount,
           batchPaymentId,
           now,
           editingCollectionId: editingCollection?.id || '',
@@ -706,18 +713,17 @@ export default function FeesManagement({
       const student = courseStudents.find((item) => item.id === collectionForm.studentRecordId);
       const admissionThroughAgent = isAdmissionThroughAgent(collectionForm) || isAdmissionThroughAgent(student);
       const agentFee = admissionThroughAgent ? Number(collectionForm.agentFee || 0) : 0;
-      const agentFeePaidAmount = admissionThroughAgent ? Number(collectionForm.agentFeePaidAmount || 0) : 0;
-      if (agentFeePaidAmount > amount) {
-        toast.error('Agent fee paid cannot exceed this payment amount.');
+      const pendingAgentFeeBefore = admissionThroughAgent ? agentFee : 0;
+      const agentFeeValidationMessage = validateAgentFeePayments(paymentEntries, pendingAgentFeeBefore, admissionThroughAgent);
+      if (agentFeeValidationMessage) {
+        toast.error(agentFeeValidationMessage);
         return;
       }
-      let remainingAgentFeePaid = agentFeePaidAmount;
       let agentFeePaidSoFar = 0;
       const collectionsToSave = paymentEntries.map((entry, index) => {
         const entryAmount = Number(entry.amount || 0);
         const paymentDateTime = getPaymentDateTime(entry, now);
-        const entryAgentFeePaid = admissionThroughAgent ? Math.min(entryAmount, remainingAgentFeePaid) : 0;
-        remainingAgentFeePaid = Math.max(0, remainingAgentFeePaid - entryAgentFeePaid);
+        const entryAgentFeePaid = admissionThroughAgent ? Number(entry.agentFeePaidAmount || 0) : 0;
         agentFeePaidSoFar += entryAgentFeePaid;
         return {
           assignmentId: '',
@@ -728,6 +734,7 @@ export default function FeesManagement({
           amount: entryAmount,
           academicYear,
           paymentMode: entry.paymentMode,
+          creditedToAccount: entry.creditedToAccount,
           referenceNo: entry.referenceNo,
           paymentDate: paymentDateTime.paymentDate,
           paymentTime: paymentDateTime.paymentTime,
@@ -764,7 +771,6 @@ export default function FeesManagement({
     }
     const admissionThroughAgent = isAdmissionThroughAgent(assignment);
     const agentFee = admissionThroughAgent ? Number(assignment.agentFee || 0) : 0;
-    const agentFeePaidAmount = admissionThroughAgent ? Number(collectionForm.agentFeePaidAmount || 0) : 0;
     const previousCollections = getCollectionsForAssignment(courseCollections, assignment.id);
     const previousLedger = calculateAssignmentPaymentLedger(assignment, previousCollections);
     const ledgerBaseCollections = previousCollections.length || previousLedger.paidAmount <= 0
@@ -780,12 +786,9 @@ export default function FeesManagement({
       toast.error('Collection amount cannot exceed outstanding due.');
       return;
     }
-    if (agentFeePaidAmount > amount) {
-      toast.error('Agent fee paid cannot exceed this payment amount.');
-      return;
-    }
-    if (agentFeePaidAmount > pendingAgentFeeBefore) {
-      toast.error('Agent fee paid cannot exceed pending agent fee balance.');
+    const agentFeeValidationMessage = validateAgentFeePayments(paymentEntries, pendingAgentFeeBefore, admissionThroughAgent);
+    if (agentFeeValidationMessage) {
+      toast.error(agentFeeValidationMessage);
       return;
     }
     const collectionBase = {
@@ -807,7 +810,6 @@ export default function FeesManagement({
       collectionBase,
       assignmentForLedger: assignment,
       previousCollections: ledgerBaseCollections,
-      agentFeePaidAmount,
       batchPaymentId,
       now,
     });

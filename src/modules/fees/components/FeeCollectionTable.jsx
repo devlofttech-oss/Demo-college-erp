@@ -1,5 +1,5 @@
 import { Edit3 } from 'lucide-react';
-import { formatCurrency } from '../feeUtils';
+import { formatCurrency, formatPaymentDate } from '../feeUtils';
 
 export default function FeeCollectionTable({ collections, onEdit }) {
   return (
@@ -14,6 +14,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
               <th className="text-left px-4 py-3 font-semibold">Class</th>
               <th className="text-left px-4 py-3 font-semibold">Date</th>
               <th className="text-left px-4 py-3 font-semibold">Mode</th>
+              <th className="text-left px-4 py-3 font-semibold">Credited To</th>
               <th className="text-left px-4 py-3 font-semibold">Reference</th>
               <th className="text-right px-4 py-3 font-semibold">Amount</th>
               <th className="text-right px-4 py-3 font-semibold">Actions</th>
@@ -38,10 +39,11 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                 </td>
                 <td className="px-4 py-3 text-slate-600">{item.classKey || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">
-                  <div>{item.paymentDate || item.createdAtText || '-'}</div>
+                  <div>{formatPaymentDate(item.paymentDate || item.createdAtText)}</div>
                   {item.paymentTime && <div className="text-xs text-slate-500">{item.paymentTime}</div>}
                 </td>
                 <td className="px-4 py-3 text-slate-600">{item.paymentMode || '-'}</td>
+                <td className="px-4 py-3 text-slate-600">{item.creditedToAccount || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{item.referenceNo || '-'}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
@@ -64,7 +66,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
             ))}
             {!collections.length && (
               <tr>
-                <td colSpan="9" className="px-4 py-10 text-center text-slate-500">No fee collections found.</td>
+                <td colSpan="10" className="px-4 py-10 text-center text-slate-500">No fee collections found.</td>
               </tr>
             )}
           </tbody>

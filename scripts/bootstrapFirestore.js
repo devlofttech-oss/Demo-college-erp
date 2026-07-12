@@ -174,7 +174,7 @@ const collections = {
   },
   feeCollections: {
     purpose: 'Manual/offline fee collection records',
-    fields: ['assignmentId', 'feeStructureId', 'feeStructureName', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'batchPaymentId', 'installmentNo', 'installmentCount', 'amount', 'academicYear', 'paymentMode', 'referenceNo', 'paymentDate', 'paymentTime', 'paidAt', 'collectedBy', 'entryMode', 'manualDueItems', 'dueBeforePayment', 'totalPaidAfterPayment', 'dueAfterPayment', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['assignmentId', 'feeStructureId', 'feeStructureName', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'batchPaymentId', 'installmentNo', 'installmentCount', 'amount', 'academicYear', 'paymentMode', 'creditedToAccount', 'referenceNo', 'paymentDate', 'paymentTime', 'paidAt', 'collectedBy', 'entryMode', 'manualDueItems', 'dueBeforePayment', 'totalPaidAfterPayment', 'dueAfterPayment', 'admissionThroughAgent', 'agentFee', 'agentFeePaidAmount', 'pendingAgentFeeBalance', 'status', 'createdAtText', 'updatedAtText'],
   },
   feeAdjustments: {
     purpose: 'Fee concessions, waivers, and approved adjustments',

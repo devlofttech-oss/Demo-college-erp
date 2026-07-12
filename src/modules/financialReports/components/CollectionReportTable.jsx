@@ -1,4 +1,4 @@
-import { formatCurrency } from '../../fees/feeUtils';
+import { formatCurrency, formatPaymentDate } from '../../fees/feeUtils';
 
 export default function CollectionReportTable({ rows }) {
   return (
@@ -23,7 +23,7 @@ export default function CollectionReportTable({ rows }) {
                   <div className="text-xs text-slate-500">{item.studentId}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{item.classKey || '-'}</td>
-                <td className="px-4 py-3 text-slate-600">{item.paymentDate}</td>
+                <td className="px-4 py-3 text-slate-600">{formatPaymentDate(item.paymentDate)}</td>
                 <td className="px-4 py-3 text-slate-600">{item.paymentMode}</td>
                 <td className="px-4 py-3 text-slate-600">{item.referenceNo || '-'}</td>
                 <td className="px-4 py-3 text-right font-bold text-emerald-700">{formatCurrency(item.amount)}</td>
