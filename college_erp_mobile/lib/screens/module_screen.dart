@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -497,6 +499,33 @@ class _ModuleScreenState extends State<ModuleScreen> {
               label: 'New User',
               icon: Icons.person_add_alt_1_rounded,
               onTap: () => _showUserRoleUserSheet(data: data),
+            ),
+        ];
+      case 'settings':
+        final isSuperAdmin = widget.user.roleId == 'super-admin';
+        if (!_can('settings.manage')) return const [];
+        return [
+          _ModuleAction(
+            label: 'Institute',
+            icon: Icons.account_balance_rounded,
+            onTap: () => _showInstituteSettingsSheet(data),
+          ),
+          _ModuleAction(
+            label: 'Academic Year',
+            icon: Icons.calendar_month_rounded,
+            onTap: () => _showAcademicYearSettingsSheet(data),
+          ),
+          if (isSuperAdmin)
+            _ModuleAction(
+              label: 'ID Formats',
+              icon: Icons.badge_rounded,
+              onTap: () => _showIdFormatsSettingsSheet(data),
+            ),
+          if (isSuperAdmin)
+            _ModuleAction(
+              label: 'Defaults',
+              icon: Icons.tune_rounded,
+              onTap: () => _showModuleDefaultsSettingsSheet(data),
             ),
         ];
       case 'dashboard':
@@ -8291,14 +8320,219 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   Widget _settings(Map<String, List<Map<String, dynamic>>> data) {
     final settings = _items(data, 'settings');
-    final institute = settings.firstWhere(
-      (item) => readText(item, const ['id'], fallback: '') == 'institute',
-      orElse: () => _items(data, 'colleges').isNotEmpty
-          ? _items(data, 'colleges').first
-          : const <String, dynamic>{},
-    );
+    final institute = _settingsInstitute(data);
+    final academicYear = _settingsAcademicYear(data);
+    final idFormats = _settingsIdFormats(data);
+    final moduleDefaults = _settingsModuleDefaults(data);
+    final canManage = _can('settings.manage');
+    final canViewAcademics = _can('academics.view');
+    final canManageUsers = _can('users.view');
+    final isSuperAdmin = widget.user.roleId == 'super-admin';
+    final instituteReady =
+        readText(institute, const ['name'], fallback: '').isNotEmpty &&
+        readText(institute, const ['email'], fallback: '').isNotEmpty;
+    final academicYearName = readText(academicYear, const [
+      'name',
+    ], fallback: 'Not Set');
+    final enabledDefaults = moduleDefaults.entries
+        .where((entry) => entry.value == true)
+        .length;
+    final filteredSettings = settings
+        .where(
+          (setting) => containsQuery(setting, _query, const [
+            'id',
+            'name',
+            'status',
+            'updatedAtText',
+          ]),
+        )
+        .toList();
+
+    void openOrExplain(bool enabled, String message, VoidCallback open) {
+      if (enabled) {
+        open();
+        return;
+      }
+      _showSettingsSnack(message);
+    }
+
     return Column(
       children: [
+        InfoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    height: 46,
+                    width: 46,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.settings_rounded,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          readText(institute, const [
+                            'name',
+                          ], fallback: 'Institute Settings'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          readText(
+                            institute,
+                            const ['email', 'phone'],
+                            fallback: 'College profile and app defaults',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Institute',
+                      value: instituteReady ? 'Ready' : 'Pending',
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Academic Year',
+                      value: academicYearName,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
+                      label: 'ID Preview',
+                      value: _settingsFormatPreview(
+                        readText(idFormats, const ['student'], fallback: ''),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Defaults',
+                      value: '$enabledDefaults enabled',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SectionTitle('Setup'),
+        _SettingsSectionCard(
+          icon: Icons.account_balance_rounded,
+          color: AppColors.primaryDark,
+          title: 'Institute Setup',
+          description: 'College profile, contact, address, and logo.',
+          meta: instituteReady ? 'Ready' : 'Pending',
+          disabled: !canManage,
+          onTap: () => openOrExplain(
+            canManage,
+            'You do not have permission to manage settings.',
+            () => _showInstituteSettingsSheet(data),
+          ),
+        ),
+        _SettingsSectionCard(
+          icon: Icons.calendar_month_rounded,
+          color: AppColors.festival,
+          title: 'Academic Year',
+          description: 'Active year, start date, and end date.',
+          meta: academicYearName,
+          disabled: !canManage,
+          onTap: () => openOrExplain(
+            canManage,
+            'You do not have permission to manage settings.',
+            () => _showAcademicYearSettingsSheet(data),
+          ),
+        ),
+        _SettingsSectionCard(
+          icon: Icons.account_tree_rounded,
+          color: const Color(0xFF6E8FC7),
+          title: 'Academic Setup',
+          description: 'Programs, subjects, batches, and calendar setup.',
+          meta: canViewAcademics ? 'Open Academics' : 'No Access',
+          disabled: !canViewAcademics,
+          onTap: () => openOrExplain(
+            canViewAcademics,
+            'Academics is not available for your role.',
+            () => _openModuleById('academics'),
+          ),
+        ),
+        _SettingsSectionCard(
+          icon: Icons.admin_panel_settings_rounded,
+          color: AppColors.primary,
+          title: 'People Setup',
+          description: 'Users, roles, staff-linked access, and permissions.',
+          meta: canManageUsers ? 'Open Users & Roles' : 'No Access',
+          disabled: !canManageUsers,
+          onTap: () => openOrExplain(
+            canManageUsers,
+            'Users & Roles is not available for your role.',
+            () => _openModuleById('user-roles'),
+          ),
+        ),
+        if (isSuperAdmin)
+          _SettingsSectionCard(
+            icon: Icons.badge_rounded,
+            color: AppColors.warning,
+            title: 'ID & Receipt Formats',
+            description: 'Student, admission, employee, and receipt numbers.',
+            meta: _settingsFormatPreview(
+              readText(idFormats, const ['student'], fallback: ''),
+            ),
+            disabled: !canManage,
+            onTap: () => openOrExplain(
+              canManage,
+              'You do not have permission to manage settings.',
+              () => _showIdFormatsSettingsSheet(data),
+            ),
+          ),
+        if (isSuperAdmin)
+          _SettingsSectionCard(
+            icon: Icons.tune_rounded,
+            color: AppColors.accent,
+            title: 'Module Defaults',
+            description: 'Default feature switches for operational modules.',
+            meta: '$enabledDefaults enabled',
+            disabled: !canManage,
+            onTap: () => openOrExplain(
+              canManage,
+              'You do not have permission to manage settings.',
+              () => _showModuleDefaultsSettingsSheet(data),
+            ),
+          ),
         const SectionTitle('Institute'),
         InfoCard(
           child: Column(
@@ -8332,24 +8566,335 @@ class _ModuleScreenState extends State<ModuleScreen> {
             ],
           ),
         ),
-        const SectionTitle('Settings Records'),
-        ...settings.map(
-          (setting) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _CompactRow(
-              title: readText(setting, const ['id', 'name']),
-              subtitle: readText(setting, const [
-                'updatedAtText',
-                'status',
-              ], fallback: 'System setting'),
-              trailing: const Icon(
-                Icons.tune_rounded,
-                color: AppColors.primary,
+        if (settings.isNotEmpty) ...[
+          const SectionTitle('Settings Records'),
+          if (filteredSettings.isEmpty)
+            const EmptyState(
+              icon: Icons.search_off_rounded,
+              title: 'No settings found',
+              message: 'Try a different search term.',
+            )
+          else
+            ...filteredSettings.map(
+              (setting) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _CompactRow(
+                  title: readText(setting, const ['id', 'name']),
+                  subtitle: readText(setting, const [
+                    'updatedAtText',
+                    'status',
+                  ], fallback: 'System setting'),
+                  trailing: const Icon(
+                    Icons.tune_rounded,
+                    color: AppColors.primary,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+        ],
       ],
+    );
+  }
+
+  Map<String, dynamic> _settingsRecord(
+    Map<String, List<Map<String, dynamic>>> data,
+    String id,
+  ) {
+    for (final item in _items(data, 'settings')) {
+      if (readText(item, const ['id'], fallback: '') == id) {
+        return item;
+      }
+    }
+    return const <String, dynamic>{};
+  }
+
+  Map<String, dynamic> _settingsInstitute(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final setting = _settingsRecord(data, 'institute');
+    final college = setting.isNotEmpty
+        ? const <String, dynamic>{}
+        : (_items(data, 'colleges').isNotEmpty
+              ? _items(data, 'colleges').first
+              : const <String, dynamic>{});
+    final merged = <String, dynamic>{
+      ..._settingsEmptyInstitute,
+      ...college,
+      ...setting,
+      'id': 'institute',
+    };
+    final instituteId = readText(merged, const [
+      'instituteId',
+      'code',
+    ], fallback: '');
+    final code = readText(merged, const [
+      'code',
+      'instituteId',
+    ], fallback: instituteId);
+    merged['instituteId'] = instituteId;
+    merged['code'] = code;
+    if (readText(merged, const ['status'], fallback: '').isEmpty) {
+      merged['status'] = 'Active';
+    }
+    return merged;
+  }
+
+  Map<String, dynamic> _settingsAcademicYear(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return <String, dynamic>{
+      ..._settingsEmptyAcademicYear,
+      ..._settingsRecord(data, 'academic-year'),
+      'id': 'academic-year',
+    };
+  }
+
+  Map<String, dynamic> _settingsIdFormats(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return <String, dynamic>{
+      ..._settingsEmptyIdFormats,
+      ..._settingsRecord(data, 'id-formats'),
+      'id': 'id-formats',
+    };
+  }
+
+  Map<String, dynamic> _settingsModuleDefaults(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final record = _settingsRecord(data, 'module-defaults');
+    return <String, dynamic>{
+      'id': 'module-defaults',
+      ..._settingsDefaultModuleDefaults,
+      ...record,
+    };
+  }
+
+  String _settingsFormatPreview(String format) {
+    final trimmed = format.trim();
+    if (trimmed.isEmpty) return 'Not Set';
+    return trimmed
+        .replaceAll('{year}', DateTime.now().year.toString())
+        .replaceAll('{number}', '00001');
+  }
+
+  Future<void> _showInstituteSettingsSheet(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('settings.manage')) {
+      _showSettingsSnack('You do not have permission to manage settings.');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _InstituteSettingsSheet(
+        initialValues: _settingsInstitute(data),
+        onSave: _saveInstituteSettings,
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      _showSettingsSnack('Institute settings saved');
+      await _refresh();
+    }
+  }
+
+  Future<void> _showAcademicYearSettingsSheet(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('settings.manage')) {
+      _showSettingsSnack('You do not have permission to manage settings.');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: 'Academic Year',
+        helper: 'Use ISO dates such as 2025-06-01.',
+        saveLabel: 'Save Year',
+        initialValues: _settingsAcademicYear(data),
+        fields: const [
+          _FieldSpec('name', 'Academic year', isRequired: true),
+          _FieldSpec('startsOn', 'Start date', isRequired: true),
+          _FieldSpec('endsOn', 'End date', isRequired: true),
+          _FieldSpec('status', 'Status'),
+        ],
+        onSave: _saveAcademicYearSettings,
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      _showSettingsSnack('Academic year settings saved');
+      await _refresh();
+    }
+  }
+
+  Future<void> _showIdFormatsSettingsSheet(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('settings.manage') || widget.user.roleId != 'super-admin') {
+      _showSettingsSnack('Only Super Admin can manage ID formats.');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: 'ID & Receipt Formats',
+        helper: 'Use {year} and {number}; preview uses 00001.',
+        saveLabel: 'Save Formats',
+        initialValues: _settingsIdFormats(data),
+        fields: const [
+          _FieldSpec('student', 'Student ID format'),
+          _FieldSpec('admission', 'Admission format'),
+          _FieldSpec('employee', 'Employee format'),
+          _FieldSpec('receipt', 'Receipt format'),
+        ],
+        onSave: _saveIdFormatsSettings,
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      _showSettingsSnack('ID formats saved');
+      await _refresh();
+    }
+  }
+
+  Future<void> _showModuleDefaultsSettingsSheet(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('settings.manage') || widget.user.roleId != 'super-admin') {
+      _showSettingsSnack('Only Super Admin can manage module defaults.');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _SettingsDefaultsSheet(
+        initialValues: _settingsModuleDefaults(data),
+        onSave: _saveModuleDefaultsSettings,
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      _showSettingsSnack('Module defaults saved');
+      await _refresh();
+    }
+  }
+
+  Future<void> _saveInstituteSettings(Map<String, dynamic> values) async {
+    final name = _requiredSettingsValue(values, const ['name'], 'Name');
+    final email = _requiredSettingsValue(values, const ['email'], 'Email');
+    final phone = _requiredSettingsValue(values, const ['phone'], 'Phone');
+    if (!_emailPattern.hasMatch(email)) {
+      throw ArgumentError('Enter a valid institute email.');
+    }
+    final instituteId = readText(values, const [
+      'instituteId',
+      'code',
+    ], fallback: '').trim();
+    final code = readText(values, const [
+      'code',
+      'instituteId',
+    ], fallback: instituteId).trim();
+    final status = readText(values, const [
+      'status',
+    ], fallback: 'Active').trim();
+    final payload = <String, dynamic>{
+      ..._settingsEmptyInstitute,
+      ...values,
+      'id': 'institute',
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'instituteId': instituteId,
+      'code': code.isEmpty ? instituteId : code,
+      'status': status.isEmpty ? 'Active' : status,
+      'updatedAtText': _displayDateNow(),
+    };
+
+    await widget.repository.setDocument('systemSettings', 'institute', payload);
+    await widget.repository.setDocument('colleges', 'main-campus', {
+      'name': payload['name'],
+      'code': payload['code'],
+      'instituteId': payload['instituteId'],
+      'email': payload['email'],
+      'phone': payload['phone'],
+      'address': payload['address'],
+      'city': payload['city'],
+      'logoUrl': payload['logoUrl'],
+      'logoFileName': payload['logoFileName'],
+      'status': payload['status'],
+    });
+  }
+
+  Future<void> _saveAcademicYearSettings(Map<String, dynamic> values) async {
+    final name = _requiredSettingsValue(values, const [
+      'name',
+    ], 'Academic year');
+    final startsOn = _requiredSettingsValue(values, const [
+      'startsOn',
+    ], 'Start date');
+    final endsOn = _requiredSettingsValue(values, const ['endsOn'], 'End date');
+    final startsAt = DateTime.tryParse(startsOn);
+    final endsAt = DateTime.tryParse(endsOn);
+    if (startsAt == null || endsAt == null) {
+      throw ArgumentError('Start and end dates must use YYYY-MM-DD.');
+    }
+    if (endsAt.isBefore(startsAt)) {
+      throw ArgumentError('End date cannot be before start date.');
+    }
+    await widget.repository.setDocument('systemSettings', 'academic-year', {
+      ..._settingsEmptyAcademicYear,
+      ...values,
+      'id': 'academic-year',
+      'name': name,
+      'startsOn': startsOn,
+      'endsOn': endsOn,
+      'updatedAtText': _displayDateNow(),
+    });
+  }
+
+  Future<void> _saveIdFormatsSettings(Map<String, dynamic> values) async {
+    await widget.repository.setDocument('systemSettings', 'id-formats', {
+      ..._settingsEmptyIdFormats,
+      ...values,
+      'id': 'id-formats',
+      'updatedAtText': _displayDateNow(),
+    });
+  }
+
+  Future<void> _saveModuleDefaultsSettings(Map<String, dynamic> values) async {
+    final defaults = <String, dynamic>{};
+    for (final entry in _settingsDefaultModuleDefaults.entries) {
+      defaults[entry.key] = values[entry.key] == true;
+    }
+    await widget.repository.setDocument('systemSettings', 'module-defaults', {
+      'id': 'module-defaults',
+      ...defaults,
+      'updatedAtText': _displayDateNow(),
+    });
+  }
+
+  String _requiredSettingsValue(
+    Map<String, dynamic> values,
+    List<String> keys,
+    String label,
+  ) {
+    final value = readText(values, keys, fallback: '').trim();
+    if (value.isEmpty) throw ArgumentError('$label is required.');
+    return value;
+  }
+
+  void _showSettingsSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -11116,6 +11661,110 @@ class _ModuleAction {
   final VoidCallback onTap;
 }
 
+class _SettingsSectionCard extends StatelessWidget {
+  const _SettingsSectionCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.description,
+    required this.meta,
+    required this.onTap,
+    this.disabled = false,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String description;
+  final String meta;
+  final VoidCallback onTap;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Opacity(
+        opacity: disabled ? 0.58 : 1,
+        child: InfoCard(
+          onTap: onTap,
+          child: Row(
+            children: [
+              Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: disabled ? AppColors.muted : color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                disabled ? Icons.lock_outline_rounded : Icons.chevron_right,
+                color: AppColors.muted,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsDefaultOption {
+  const _SettingsDefaultOption({
+    required this.key,
+    required this.label,
+    required this.description,
+    this.enabled = true,
+  });
+
+  final String key;
+  final String label;
+  final String description;
+  final bool enabled;
+}
+
 const _permissionGroupLabels = {
   'students': 'Student Information',
   'staff': 'Faculty & Staff',
@@ -11187,6 +11836,90 @@ const _permissionLabels = {
   'settings.view': 'Settings module',
   'settings.manage': 'Manage settings',
 };
+
+const _settingsEmptyInstitute = <String, dynamic>{
+  'id': 'institute',
+  'name': '',
+  'instituteId': '',
+  'code': '',
+  'logoUrl': '',
+  'logoFileName': '',
+  'email': '',
+  'phone': '',
+  'address': '',
+  'city': '',
+  'status': '',
+  'updatedAtText': '',
+};
+
+const _settingsEmptyAcademicYear = <String, dynamic>{
+  'id': 'academic-year',
+  'name': '',
+  'startsOn': '',
+  'endsOn': '',
+  'status': '',
+  'updatedAtText': '',
+};
+
+const _settingsEmptyIdFormats = <String, dynamic>{
+  'id': 'id-formats',
+  'student': '',
+  'admission': '',
+  'employee': '',
+  'receipt': '',
+  'updatedAtText': '',
+};
+
+const _settingsDefaultModuleDefaults = <String, bool>{
+  'studentAdmissions': false,
+  'staffLeave': false,
+  'timetablePublishing': false,
+  'parentPortal': false,
+  'onlinePayments': false,
+  'receiptGeneration': false,
+  'communicationModule': false,
+};
+
+const _settingsDefaultOptions = [
+  _SettingsDefaultOption(
+    key: 'studentAdmissions',
+    label: 'Student Admissions',
+    description: 'Keep new admission workflows enabled by default.',
+  ),
+  _SettingsDefaultOption(
+    key: 'staffLeave',
+    label: 'Staff Leave',
+    description: 'Enable staff leave request and decision tracking.',
+  ),
+  _SettingsDefaultOption(
+    key: 'timetablePublishing',
+    label: 'Timetable Publishing',
+    description: 'Allow timetable publishing after setup.',
+  ),
+  _SettingsDefaultOption(
+    key: 'parentPortal',
+    label: 'Parent Portal',
+    description: 'Expose parent-facing student information by default.',
+  ),
+  _SettingsDefaultOption(
+    key: 'onlinePayments',
+    label: 'Online Payments',
+    description: 'Reserved until payment gateway setup is complete.',
+    enabled: false,
+  ),
+  _SettingsDefaultOption(
+    key: 'receiptGeneration',
+    label: 'Receipt Generation',
+    description: 'Reserved until receipt templates are finalized.',
+    enabled: false,
+  ),
+  _SettingsDefaultOption(
+    key: 'communicationModule',
+    label: 'Communication Module',
+    description: 'Reserved until communication channels are configured.',
+    enabled: false,
+  ),
+];
 
 const _hostelRoomStatuses = ['Available', 'Full', 'Maintenance', 'Archived'];
 const _hostelAllocationStatuses = ['Active', 'Released'];
@@ -16715,6 +17448,388 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
                         size: 18,
                       ),
                       label: Text(_saving ? 'Saving...' : widget.saveLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InstituteSettingsSheet extends StatefulWidget {
+  const _InstituteSettingsSheet({
+    required this.initialValues,
+    required this.onSave,
+  });
+
+  final Map<String, dynamic> initialValues;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_InstituteSettingsSheet> createState() =>
+      _InstituteSettingsSheetState();
+}
+
+class _InstituteSettingsSheetState extends State<_InstituteSettingsSheet> {
+  static const _fields = [
+    _FieldSpec('name', 'Institute name', isRequired: true),
+    _FieldSpec('instituteId', 'Institute ID'),
+    _FieldSpec('code', 'Code'),
+    _FieldSpec('email', 'Email', isRequired: true),
+    _FieldSpec('phone', 'Phone', isRequired: true),
+    _FieldSpec('city', 'City'),
+    _FieldSpec('address', 'Address'),
+    _FieldSpec('status', 'Status'),
+    _FieldSpec('logoUrl', 'Logo data or URL'),
+    _FieldSpec('logoFileName', 'Logo file name'),
+  ];
+
+  late final Map<String, TextEditingController> _controllers;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = {
+      for (final field in _fields)
+        field.key: TextEditingController(
+          text: (widget.initialValues[field.key] ?? '').toString(),
+        ),
+    };
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _pickLogo() async {
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp'],
+          ),
+        ],
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
+        setState(() => _error = 'Selected logo file is empty.');
+        return;
+      }
+      final mimeType = _logoMimeType(file.name);
+      final dataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      setState(() {
+        _controllers['logoUrl']?.text = dataUrl;
+        _controllers['logoFileName']?.text = file.name;
+        _error = '';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    }
+  }
+
+  String _logoMimeType(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/png';
+  }
+
+  Future<void> _save() async {
+    final values = <String, dynamic>{};
+    for (final field in _fields) {
+      final text = _controllers[field.key]?.text.trim() ?? '';
+      if (field.isRequired && text.isEmpty) {
+        setState(() => _error = '${field.label} is required.');
+        return;
+      }
+      values[field.key] = text;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(values);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Institute Setup',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'College profile, contact details, and logo.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              ..._fields.map((field) {
+                if (field.key == 'logoUrl' || field.key == 'logoFileName') {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: TextField(
+                    controller: _controllers[field.key],
+                    minLines: field.key == 'address' ? 2 : 1,
+                    maxLines: field.key == 'address' ? 3 : 1,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: field.isRequired
+                          ? '${field.label} *'
+                          : field.label,
+                    ),
+                  ),
+                );
+              }),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _pickLogo,
+                icon: const Icon(Icons.image_rounded, size: 18),
+                label: const Text('Upload Logo'),
+              ),
+              const SizedBox(height: 8),
+              if ((_controllers['logoFileName']?.text.trim() ?? '').isNotEmpty)
+                Text(
+                  _controllers['logoFileName']!.text.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Saving...' : 'Save Institute'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsDefaultsSheet extends StatefulWidget {
+  const _SettingsDefaultsSheet({
+    required this.initialValues,
+    required this.onSave,
+  });
+
+  final Map<String, dynamic> initialValues;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_SettingsDefaultsSheet> createState() => _SettingsDefaultsSheetState();
+}
+
+class _SettingsDefaultsSheetState extends State<_SettingsDefaultsSheet> {
+  late final Map<String, bool> _values;
+  var _saving = false;
+  var _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _values = {
+      for (final option in _settingsDefaultOptions)
+        option.key: _readBool(widget.initialValues[option.key]),
+    };
+  }
+
+  bool _readBool(Object? value) {
+    if (value is bool) return value;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == 'yes' || normalized == '1';
+    }
+    if (value is num) return value != 0;
+    return false;
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      await widget.onSave(_values);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Module Defaults',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Default feature switches for operational modules.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              ..._settingsDefaultOptions.map(
+                (option) => SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: _values[option.key] ?? false,
+                  onChanged: option.enabled && !_saving
+                      ? (value) => setState(() => _values[option.key] = value)
+                      : null,
+                  title: Text(
+                    option.label,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(option.description),
+                ),
+              ),
+              if (_error.isNotEmpty) ...[
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(_saving ? 'Saving...' : 'Save Defaults'),
                     ),
                   ),
                 ],
