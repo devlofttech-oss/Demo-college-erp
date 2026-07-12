@@ -124,6 +124,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _reportCategory = 'students';
   var _attendanceReportScope = 'daily';
   var _financialReportTab = 'collections';
+  var _academicsTab = 'programs';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -470,34 +471,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
         return [
           if (_can('academics.manage'))
             _ModuleAction(
-              label: 'Subject',
-              icon: Icons.menu_book_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Academic Subject',
-                collectionName: 'academicSubjects',
-                fields: const [
-                  _FieldSpec('subjectName', 'Subject name', isRequired: true),
-                  _FieldSpec('code', 'Subject code'),
-                  _FieldSpec('program', 'Program'),
-                  _FieldSpec('className', 'Class / Standard'),
-                ],
-                defaults: {'status': 'Active'},
-              ),
-            ),
-          if (_can('academics.manage'))
-            _ModuleAction(
-              label: 'Event',
-              icon: Icons.event_available_rounded,
-              onTap: () => _showCreateRecordSheet(
-                title: 'Add Academic Event',
-                collectionName: 'academicCalendarEvents',
-                fields: const [
-                  _FieldSpec('title', 'Event title', isRequired: true),
-                  _FieldSpec('date', 'Date YYYY-MM-DD'),
-                  _FieldSpec('description', 'Description'),
-                ],
-                defaults: {'status': 'Active'},
-              ),
+              label:
+                  'Create ${_academicsTabLabel(_academicsTab, singular: true)}',
+              icon: _academicsTabIcon(_academicsTab),
+              onTap: _showAcademicRecordSheet,
             ),
         ];
       case 'dashboard':
@@ -6925,32 +6902,73 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _academics(Map<String, List<Map<String, dynamic>>> data) {
-    final subjects = _items(data, 'subjects')
+    final programs = _items(data, 'programs');
+    final subjects = _items(data, 'subjects');
+    final batches = _items(data, 'batches');
+    final activeRows = _academicRowsForTab(data, _academicsTab)
         .where(
           (item) => containsQuery(item, _query, const [
             'name',
-            'subjectName',
             'code',
+            'subjectName',
+            'subjectCode',
+            'programName',
             'program',
-          ]),
-        )
-        .toList();
-    final events = _items(data, 'events')
-        .where(
-          (item) => containsQuery(item, _query, const [
-            'title',
-            'eventName',
-            'description',
+            'className',
+            'section',
+            'classTeacher',
+            'academicYear',
+            'status',
           ]),
         )
         .toList();
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 44,
+                width: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.account_tree_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Academics',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Programs, subjects, batches, and sections setup.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         _SummaryRow(
           stats: [
             _Stat(
               'Programs',
-              _items(data, 'programs').length.toString(),
+              programs.length.toString(),
               Icons.account_tree_rounded,
               AppColors.primary,
             ),
@@ -6961,64 +6979,326 @@ class _ModuleScreenState extends State<ModuleScreen> {
               const Color(0xFF6E8FC7),
             ),
             _Stat(
-              'Events',
-              events.length.toString(),
-              Icons.event_rounded,
+              'Batches',
+              batches.length.toString(),
+              Icons.groups_2_rounded,
               AppColors.danger,
             ),
           ],
         ),
-        const SectionTitle('Subjects'),
-        if (subjects.isEmpty)
-          const EmptyState(
-            title: 'No academic subjects',
-            message: 'Academic setup records will appear here.',
+        const SectionTitle('Academic Setup'),
+        _SegmentedFilter(
+          value: _academicsTab,
+          options: const {
+            'programs': 'Programs',
+            'subjects': 'Subjects',
+            'batches': 'Batches',
+          },
+          onChanged: (value) => setState(() => _academicsTab = value),
+        ),
+        SectionTitle(_academicsTabLabel(_academicsTab)),
+        if (activeRows.isEmpty)
+          EmptyState(
+            title:
+                'No ${_academicsTabLabel(_academicsTab).toLowerCase()} found',
+            message: 'Create academic records from the action bar.',
           )
         else
-          ...subjects
+          ...activeRows
               .take(30)
               .map(
-                (subject) => Padding(
+                (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _CompactRow(
-                    title: readText(subject, const [
-                      'name',
-                      'subjectName',
-                      'code',
-                    ]),
-                    subtitle: readText(subject, const [
-                      'program',
-                      'courseName',
-                      'className',
-                    ], fallback: 'Academic subject'),
+                  child: _ReportDataCard(
+                    icon: _academicsTabIcon(_academicsTab),
+                    color: _academicsTabColor(_academicsTab),
+                    title: _academicRecordTitle(item, _academicsTab),
+                    subtitle: _academicRecordSubtitle(item, _academicsTab),
+                    meta: _academicRecordMeta(item, _academicsTab),
                     trailing: StatusPill(
-                      label: readText(subject, const [
+                      label: readText(item, const [
                         'status',
                       ], fallback: 'Active'),
                     ),
                   ),
                 ),
               ),
-        const SectionTitle('Academic Calendar'),
-        ...events
-            .take(20)
-            .map(
-              (event) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _CompactRow(
-                  title: readText(event, const ['title', 'eventName']),
-                  subtitle: formatDateValue(
-                    event['date'] ?? event['startsOn'] ?? event['createdAt'],
-                  ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.muted,
-                  ),
-                ),
-              ),
-            ),
       ],
     );
+  }
+
+  String _academicsTabLabel(String tab, {bool singular = false}) {
+    switch (tab) {
+      case 'subjects':
+        return singular ? 'Subject' : 'Subjects';
+      case 'batches':
+        return singular ? 'Batch' : 'Batches';
+      case 'programs':
+      default:
+        return singular ? 'Program' : 'Programs';
+    }
+  }
+
+  IconData _academicsTabIcon(String tab) {
+    switch (tab) {
+      case 'subjects':
+        return Icons.menu_book_rounded;
+      case 'batches':
+        return Icons.groups_2_rounded;
+      case 'programs':
+      default:
+        return Icons.account_tree_rounded;
+    }
+  }
+
+  Color _academicsTabColor(String tab) {
+    switch (tab) {
+      case 'subjects':
+        return const Color(0xFF6E8FC7);
+      case 'batches':
+        return AppColors.danger;
+      case 'programs':
+      default:
+        return AppColors.primary;
+    }
+  }
+
+  List<Map<String, dynamic>> _academicRowsForTab(
+    Map<String, List<Map<String, dynamic>>> data,
+    String tab,
+  ) {
+    switch (tab) {
+      case 'subjects':
+        return _items(data, 'subjects');
+      case 'batches':
+        return _items(data, 'batches');
+      case 'programs':
+      default:
+        return _items(data, 'programs');
+    }
+  }
+
+  String _academicRecordTitle(Map<String, dynamic> item, String tab) {
+    switch (tab) {
+      case 'subjects':
+        return readText(item, const [
+          'subjectName',
+          'name',
+          'subjectCode',
+          'code',
+        ]);
+      case 'batches':
+        final className = readText(item, const ['className'], fallback: '');
+        final section = readText(item, const ['section'], fallback: '');
+        final title = [
+          className,
+          section,
+        ].where((value) => value.isNotEmpty).join(' - ');
+        return title.isEmpty ? 'Academic batch' : title;
+      case 'programs':
+      default:
+        return readText(item, const ['name', 'programName', 'code']);
+    }
+  }
+
+  String _academicRecordSubtitle(Map<String, dynamic> item, String tab) {
+    switch (tab) {
+      case 'subjects':
+        return readText(item, const [
+          'subjectCode',
+          'code',
+        ], fallback: 'Subject code not set');
+      case 'batches':
+        return readText(item, const [
+          'programName',
+          'program',
+        ], fallback: 'Program not set');
+      case 'programs':
+      default:
+        return readText(item, const ['code'], fallback: 'Program code not set');
+    }
+  }
+
+  List<String> _academicRecordMeta(Map<String, dynamic> item, String tab) {
+    switch (tab) {
+      case 'subjects':
+        return [
+          readText(item, const ['programName', 'program'], fallback: ''),
+          _formatAcademicNumber(item, const ['creditHours'], 'credits'),
+          readText(item, const ['academicYear'], fallback: ''),
+        ];
+      case 'batches':
+        return [
+          readText(item, const ['classTeacher'], fallback: ''),
+          _formatAcademicNumber(item, const ['capacity'], 'seats'),
+          readText(item, const ['academicYear'], fallback: ''),
+        ];
+      case 'programs':
+      default:
+        return [
+          readText(item, const ['academicYear'], fallback: ''),
+          readText(item, const ['courseName'], fallback: ''),
+        ];
+    }
+  }
+
+  String _formatAcademicNumber(
+    Map<String, dynamic> item,
+    List<String> keys,
+    String suffix,
+  ) {
+    final value = readNumber(item, keys, fallback: -1);
+    if (value < 0) return '';
+    return '$value $suffix';
+  }
+
+  Future<void> _showAcademicRecordSheet() async {
+    if (!_can('academics.manage')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You do not have permission to manage academics.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final label = _academicsTabLabel(_academicsTab, singular: true);
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordFormSheet(
+        title: 'Create $label',
+        helper: 'Saved to the same live Academics data used by the web ERP.',
+        fields: _academicRecordFields(_academicsTab),
+        initialValues: const {'status': 'Active'},
+        saveLabel: 'Save $label',
+        onSave: _saveAcademicRecord,
+      ),
+    );
+
+    if (!mounted) return;
+    if (saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$label saved'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _refresh();
+    }
+  }
+
+  List<_FieldSpec> _academicRecordFields(String tab) {
+    switch (tab) {
+      case 'subjects':
+        return const [
+          _FieldSpec('subjectName', 'Subject name', isRequired: true),
+          _FieldSpec('subjectCode', 'Subject code', isRequired: true),
+          _FieldSpec('programName', 'Program', isRequired: true),
+          _FieldSpec('creditHours', 'Credit hours', numeric: true),
+          _FieldSpec('status', 'Status'),
+        ];
+      case 'batches':
+        return const [
+          _FieldSpec('className', 'Class name', isRequired: true),
+          _FieldSpec('section', 'Section', isRequired: true),
+          _FieldSpec('programName', 'Program', isRequired: true),
+          _FieldSpec('classTeacher', 'Class teacher'),
+          _FieldSpec('capacity', 'Capacity', numeric: true),
+          _FieldSpec('status', 'Status'),
+        ];
+      case 'programs':
+      default:
+        return const [
+          _FieldSpec('name', 'Program name', isRequired: true),
+          _FieldSpec('code', 'Program code', isRequired: true),
+          _FieldSpec('status', 'Status'),
+        ];
+    }
+  }
+
+  Future<void> _saveAcademicRecord(Map<String, dynamic> values) async {
+    final academicYear = _academicYear.trim().isEmpty
+        ? _defaultAcademicYear
+        : _academicYear.trim();
+    final status = readText(values, const ['status'], fallback: 'Active');
+    final basePayload = {
+      'academicYear': academicYear,
+      'status': status.isEmpty ? 'Active' : status,
+      'createdAtText': _displayDateNow(),
+      'createdBy': widget.user.uid,
+      'courseCode': '',
+      'courseName': '',
+    };
+
+    switch (_academicsTab) {
+      case 'subjects':
+        final subjectName = _requiredAcademicValue(values, const [
+          'subjectName',
+        ], 'Subject name');
+        final subjectCode = _requiredAcademicValue(values, const [
+          'subjectCode',
+        ], 'Subject code');
+        final programName = _requiredAcademicValue(values, const [
+          'programName',
+        ], 'Program');
+        await widget.repository.createDocument('academicSubjects', {
+          ...basePayload,
+          'subjectName': subjectName,
+          'subjectCode': subjectCode,
+          'name': subjectName,
+          'code': subjectCode,
+          'programName': programName,
+          'program': programName,
+          'creditHours': values['creditHours'] ?? '',
+        });
+        return;
+      case 'batches':
+        final className = _requiredAcademicValue(values, const [
+          'className',
+        ], 'Class name');
+        final section = _requiredAcademicValue(values, const [
+          'section',
+        ], 'Section');
+        final programName = _requiredAcademicValue(values, const [
+          'programName',
+        ], 'Program');
+        await widget.repository.createDocument('academicBatches', {
+          ...basePayload,
+          'className': className,
+          'section': section,
+          'programName': programName,
+          'program': programName,
+          'classTeacher': readText(values, const [
+            'classTeacher',
+          ], fallback: ''),
+          'capacity': values['capacity'] ?? '',
+        });
+        return;
+      case 'programs':
+      default:
+        final name = _requiredAcademicValue(values, const [
+          'name',
+        ], 'Program name');
+        final code = _requiredAcademicValue(values, const [
+          'code',
+        ], 'Program code');
+        await widget.repository.createDocument('academicPrograms', {
+          ...basePayload,
+          'name': name,
+          'code': code,
+        });
+    }
+  }
+
+  String _requiredAcademicValue(
+    Map<String, dynamic> values,
+    List<String> keys,
+    String label,
+  ) {
+    final value = readText(values, keys, fallback: '').trim();
+    if (value.isEmpty) throw StateError('$label is required.');
+    return value;
   }
 
   Widget _usersAndRoles(Map<String, List<Map<String, dynamic>>> data) {
