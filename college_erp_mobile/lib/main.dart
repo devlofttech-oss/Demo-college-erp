@@ -136,6 +136,7 @@ class _CollegeErpMobileAppState extends State<CollegeErpMobileApp> {
       user: user,
       roles: _roles,
       repository: _erpRepository,
+      authRepository: _authRepository,
       onLogout: _logout,
       onRefreshSession: _loadSession,
     );

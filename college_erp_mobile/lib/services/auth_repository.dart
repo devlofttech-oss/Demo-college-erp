@@ -1,8 +1,22 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+import '../config/firebase_options.dart';
 import '../models/app_user.dart';
 import 'erp_repository.dart';
 import 'login_alias_resolver.dart';
+
+class ManagedAuthUser {
+  const ManagedAuthUser({
+    required this.uid,
+    required this.name,
+    required this.email,
+  });
+
+  final String uid;
+  final String name;
+  final String email;
+}
 
 class AuthRepository {
   AuthRepository({
@@ -89,6 +103,40 @@ class AuthRepository {
       throw StateError('No account exists for that email or phone.');
     }
     await auth.sendPasswordResetEmail(email: _aliases.resolve(identifier));
+  }
+
+  Future<ManagedAuthUser> createManagedAuthUser({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    if (_auth == null || !CollegeFirebaseOptions.isConfigured) {
+      throw StateError('Firebase is not configured for user creation.');
+    }
+    final app = await Firebase.initializeApp(
+      name: 'managed-user-${DateTime.now().millisecondsSinceEpoch}',
+      options: CollegeFirebaseOptions.currentPlatform,
+    );
+    final secondaryAuth = FirebaseAuth.instanceFor(app: app);
+    try {
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = credential.user;
+      if (user == null) throw StateError('Managed user was not created.');
+      if (name.trim().isNotEmpty) {
+        await user.updateDisplayName(name.trim());
+      }
+      return ManagedAuthUser(
+        uid: user.uid,
+        name: name.trim().isEmpty ? user.displayName ?? '' : name.trim(),
+        email: user.email ?? email,
+      );
+    } finally {
+      await secondaryAuth.signOut().catchError((_) {});
+      await app.delete().catchError((_) {});
+    }
   }
 
   Future<void> signOut() async {

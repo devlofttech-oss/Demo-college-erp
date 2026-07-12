@@ -52,7 +52,23 @@ class ErpRepository {
           .map((doc) => ErpRole.fromMap(doc.id, doc.data()))
           .where((role) => role.permissions.isNotEmpty)
           .toList();
-      return liveRoles.isEmpty ? defaultRoles : liveRoles;
+      if (liveRoles.isEmpty) return defaultRoles;
+      final byId = <String, ErpRole>{
+        for (final role in defaultRoles) role.id: role,
+      };
+      for (final role in liveRoles) {
+        final fallback = byId[role.id];
+        byId[role.id] = ErpRole(
+          id: role.id,
+          name: role.name,
+          description: role.description.isEmpty
+              ? fallback?.description ?? ''
+              : role.description,
+          permissions: role.permissions,
+          locked: role.locked || (fallback?.locked ?? false),
+        );
+      }
+      return byId.values.toList();
     } catch (_) {
       return defaultRoles;
     }
@@ -479,6 +495,7 @@ class ErpRepository {
         return {
           'users': await listCollection('users'),
           'roles': await listCollection('roles'),
+          'students': await listCollection('students'),
         };
       case 'settings':
         return {
@@ -678,6 +695,24 @@ class ErpRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     return ref.id;
+  }
+
+  Future<void> setDocument(
+    String collectionName,
+    String id,
+    Map<String, dynamic> data, {
+    bool merge = true,
+    bool includeCreatedAt = false,
+  }) async {
+    if (!isReady) throw StateError('Firebase is not configured.');
+    if (id.trim().isEmpty || id.startsWith('sample-')) {
+      throw ArgumentError('A live $collectionName record id is required.');
+    }
+    await _db.collection(collectionName).doc(id).set({
+      ...data,
+      if (includeCreatedAt) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: merge));
   }
 
   Future<void> updateDocument(

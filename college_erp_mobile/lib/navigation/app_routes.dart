@@ -4,6 +4,7 @@ import '../models/app_user.dart';
 import '../models/erp_module.dart';
 import '../models/erp_role.dart';
 import '../screens/module_screen.dart';
+import '../services/auth_repository.dart';
 import '../services/erp_repository.dart';
 
 class AppRoutes {
@@ -19,6 +20,7 @@ class AppRoutes {
     required AppUser user,
     required List<ErpRole> roles,
     required ErpRepository repository,
+    required AuthRepository authRepository,
     Map<String, String> initialState = const {},
   }) {
     return Navigator.of(context).push<T>(
@@ -29,6 +31,7 @@ class AppRoutes {
           user: user,
           roles: roles,
           repository: repository,
+          authRepository: authRepository,
           initialState: initialState,
         ),
       ),

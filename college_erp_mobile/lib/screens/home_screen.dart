@@ -7,6 +7,7 @@ import '../models/dashboard_snapshot.dart';
 import '../models/erp_module.dart';
 import '../models/erp_role.dart';
 import '../navigation/app_routes.dart';
+import '../services/auth_repository.dart';
 import '../services/erp_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/field_reader.dart';
@@ -18,6 +19,7 @@ class HomeScreen extends StatefulWidget {
     required this.user,
     required this.roles,
     required this.repository,
+    required this.authRepository,
     required this.onLogout,
     required this.onRefreshSession,
   });
@@ -25,6 +27,7 @@ class HomeScreen extends StatefulWidget {
   final AppUser user;
   final List<ErpRole> roles;
   final ErpRepository repository;
+  final AuthRepository authRepository;
   final Future<void> Function() onLogout;
   final Future<void> Function() onRefreshSession;
 
@@ -86,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
       user: widget.user,
       roles: widget.roles,
       repository: widget.repository,
+      authRepository: widget.authRepository,
     );
   }
 

@@ -11,6 +11,7 @@ import '../models/app_user.dart';
 import '../models/erp_module.dart';
 import '../models/erp_role.dart';
 import '../navigation/app_routes.dart';
+import '../services/auth_repository.dart';
 import '../services/erp_repository.dart';
 import '../theme/app_theme.dart';
 import '../utils/field_reader.dart';
@@ -70,6 +71,7 @@ class ModuleScreen extends StatefulWidget {
     required this.user,
     required this.roles,
     required this.repository,
+    required this.authRepository,
     this.initialState = const {},
   });
 
@@ -77,6 +79,7 @@ class ModuleScreen extends StatefulWidget {
   final AppUser user;
   final List<ErpRole> roles;
   final ErpRepository repository;
+  final AuthRepository authRepository;
   final Map<String, String> initialState;
 
   @override
@@ -88,6 +91,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   static const _approvedAdmissionStatus = 'Approved';
   static const _activeStudentStatus = 'Active';
   static const _defaultAcademicYear = '2025-2026';
+  static final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   var _query = '';
   var _academicYear = '';
@@ -125,6 +129,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _attendanceReportScope = 'daily';
   var _financialReportTab = 'collections';
   var _academicsTab = 'programs';
+  var _selectedUserRoleId = 'admin';
   late Future<Map<String, List<Map<String, dynamic>>>> _future;
 
   @override
@@ -201,6 +206,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       user: widget.user,
       roles: widget.roles,
       repository: widget.repository,
+      authRepository: widget.authRepository,
       initialState: initialState,
     );
   }
@@ -475,6 +481,21 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   'Create ${_academicsTabLabel(_academicsTab, singular: true)}',
               icon: _academicsTabIcon(_academicsTab),
               onTap: _showAcademicRecordSheet,
+            ),
+        ];
+      case 'user-roles':
+        return [
+          if (_can('roles.edit'))
+            _ModuleAction(
+              label: 'Sync Roles',
+              icon: Icons.sync_rounded,
+              onTap: () => _syncDefaultRoles(data),
+            ),
+          if (_can('users.create'))
+            _ModuleAction(
+              label: 'New User',
+              icon: Icons.person_add_alt_1_rounded,
+              onTap: () => _showUserRoleUserSheet(data: data),
             ),
         ];
       case 'dashboard':
@@ -7302,7 +7323,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _usersAndRoles(Map<String, List<Map<String, dynamic>>> data) {
-    final users = _items(data, 'users')
+    final roles = _userRoleModels(data);
+    final selectedRole = _selectedUserRole(roles);
+    final rolesById = {for (final role in roles) role.id: role};
+    final allUsers = _items(data, 'users');
+    final users = allUsers
         .where(
           (item) => containsQuery(item, _query, const [
             'name',
@@ -7312,60 +7337,557 @@ class _ModuleScreenState extends State<ModuleScreen> {
           ]),
         )
         .toList();
-    final roles = _items(data, 'roles');
+    final canEditUsers = _can('users.edit');
+    final canEditRoles = _can('roles.edit');
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        InfoCard(
+          child: Row(
+            children: [
+              Container(
+                height: 44,
+                width: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDark.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'User & Role Management',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Create ERP users, assign roles, and manage module permissions.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         _SummaryRow(
           stats: [
             _Stat(
               'Users',
-              users.length.toString(),
+              allUsers.length.toString(),
               Icons.people_rounded,
               AppColors.primary,
             ),
             _Stat(
-              'Roles',
-              roles.length.toString(),
-              Icons.admin_panel_settings_rounded,
-              const Color(0xFF8357C5),
-            ),
-            _Stat(
-              'Active',
-              users
+              'Active Users',
+              allUsers
                   .where(
                     (user) =>
-                        readText(user, const ['status'], fallback: '') ==
-                        'Active',
+                        readText(user, const ['status'], fallback: 'Active') !=
+                        'Suspended',
                   )
                   .length
                   .toString(),
               Icons.verified_user_rounded,
               AppColors.accent,
             ),
+            _Stat(
+              'Roles',
+              roles.length.toString(),
+              Icons.shield_rounded,
+              const Color(0xFF8357C5),
+            ),
           ],
         ),
-        const SectionTitle('Users'),
+        const SectionTitle('Roles'),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: roles
+                .map(
+                  (role) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      selected: selectedRole?.id == role.id,
+                      avatar: Icon(
+                        role.locked
+                            ? Icons.lock_rounded
+                            : Icons.verified_user_rounded,
+                        size: 16,
+                        color: selectedRole?.id == role.id
+                            ? Colors.white
+                            : AppColors.muted,
+                      ),
+                      label: Text(role.name),
+                      onSelected: (_) =>
+                          setState(() => _selectedUserRoleId = role.id),
+                      selectedColor: AppColors.primaryDark,
+                      labelStyle: TextStyle(
+                        color: selectedRole?.id == role.id
+                            ? Colors.white
+                            : AppColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: selectedRole?.id == role.id
+                              ? AppColors.primaryDark
+                              : AppColors.line,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        SectionTitle(
+          'Users',
+          trailing: Text(
+            '${users.length} shown',
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
         if (users.isEmpty)
           const EmptyState(
             title: 'No users',
-            message: 'ERP users will appear here.',
+            message: 'Create ERP users from the action bar.',
           )
         else
           ...users.map(
             (user) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: _CompactRow(
+              child: _ReportDataCard(
+                icon: Icons.person_rounded,
+                color: AppColors.primaryDark,
                 title: readText(user, const ['name', 'email']),
                 subtitle: readText(user, const [
                   'email',
                 ], fallback: readText(user, const ['uid'])),
-                trailing: StatusPill(
-                  label: readText(user, const ['roleId'], fallback: 'role'),
+                meta: [
+                  rolesById[readText(user, const ['roleId'], fallback: '')]
+                          ?.name ??
+                      readText(user, const [
+                        'roleId',
+                      ], fallback: 'Role not set'),
+                  readText(user, const ['status'], fallback: 'Active'),
+                  if (readText(user, const [
+                    'linkedStudentIds',
+                  ], fallback: '').isNotEmpty)
+                    'Linked parent',
+                ],
+                trailing: IconButton(
+                  tooltip: 'Edit user',
+                  onPressed: canEditUsers
+                      ? () => _showUserRoleUserSheet(data: data, user: user)
+                      : null,
+                  icon: const Icon(Icons.edit_rounded),
                 ),
               ),
             ),
           ),
+        if (selectedRole != null)
+          _rolePermissionEditor(role: selectedRole, canEdit: canEditRoles),
       ],
+    );
+  }
+
+  List<ErpRole> _userRoleModels(Map<String, List<Map<String, dynamic>>> data) {
+    final byId = <String, ErpRole>{
+      for (final role in defaultRoles) role.id: role,
+    };
+    for (final role in widget.roles) {
+      byId[role.id] = _mergeRoleWithFallback(role, byId[role.id]);
+    }
+    for (final item in _items(data, 'roles')) {
+      final id = readText(item, const ['id'], fallback: '');
+      if (id.isEmpty) continue;
+      final role = ErpRole.fromMap(id, item);
+      byId[role.id] = _mergeRoleWithFallback(role, byId[role.id]);
+    }
+    return byId.values.toList();
+  }
+
+  ErpRole _mergeRoleWithFallback(ErpRole role, ErpRole? fallback) {
+    return ErpRole(
+      id: role.id,
+      name: role.name.isEmpty ? fallback?.name ?? role.id : role.name,
+      description: role.description.isEmpty
+          ? fallback?.description ?? ''
+          : role.description,
+      permissions: role.permissions.isEmpty
+          ? fallback?.permissions ?? const []
+          : role.permissions,
+      locked: role.locked || (fallback?.locked ?? false),
+    );
+  }
+
+  ErpRole? _selectedUserRole(List<ErpRole> roles) {
+    if (roles.isEmpty) return null;
+    for (final role in roles) {
+      if (role.id == _selectedUserRoleId) return role;
+    }
+    return roles.first;
+  }
+
+  List<Map<String, dynamic>> _activeStudentsForUserRoles(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    return _items(data, 'students')
+        .where(
+          (student) =>
+              readText(student, const ['status'], fallback: 'Active') !=
+              'Archived',
+        )
+        .toList();
+  }
+
+  Future<void> _syncDefaultRoles(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) async {
+    if (!_can('roles.edit')) {
+      _showUserRoleSnack('You do not have permission to edit roles.');
+      return;
+    }
+    final liveRoleIds = _items(data, 'roles')
+        .map((role) => readText(role, const ['id'], fallback: ''))
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final missingRoles = defaultRoles
+        .where((role) => !liveRoleIds.contains(role.id))
+        .toList();
+    try {
+      for (final role in missingRoles) {
+        await widget.repository.setDocument(
+          'roles',
+          role.id,
+          _rolePayload(role),
+          includeCreatedAt: true,
+        );
+      }
+      if (!mounted) return;
+      _showUserRoleSnack(
+        missingRoles.isEmpty
+            ? 'Default roles already available'
+            : 'Default roles synced',
+      );
+      await _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      _showUserRoleSnack('Default roles were not synced to live data.');
+    }
+  }
+
+  Future<void> _showUserRoleUserSheet({
+    required Map<String, List<Map<String, dynamic>>> data,
+    Map<String, dynamic>? user,
+  }) async {
+    final editing = user != null;
+    if (editing && !_can('users.edit')) {
+      _showUserRoleSnack('You do not have permission to edit users.');
+      return;
+    }
+    if (!editing && !_can('users.create')) {
+      _showUserRoleSnack('You do not have permission to create users.');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _UserRoleUserSheet(
+        initialUser: user,
+        roles: _userRoleModels(data),
+        students: _activeStudentsForUserRoles(data),
+        onSave: (values) => editing
+            ? _updateManagedUser(user, values)
+            : _createManagedUser(values),
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      _showUserRoleSnack(editing ? 'User updated' : 'User created');
+      await _refresh();
+    }
+  }
+
+  Future<void> _createManagedUser(Map<String, dynamic> values) async {
+    final name = _requiredUserValue(values, const ['name'], 'Name');
+    final email = _requiredUserValue(values, const ['email'], 'Email');
+    final password = _requiredUserValue(values, const ['password'], 'Password');
+    final roleId = _requiredUserValue(values, const ['roleId'], 'Role');
+    if (!_emailPattern.hasMatch(email)) {
+      throw StateError('Valid email is required.');
+    }
+    if (password.length < 12) {
+      throw StateError('Password must be at least 12 characters.');
+    }
+    final authUser = await widget.authRepository.createManagedAuthUser(
+      name: name,
+      email: email,
+      password: password,
+    );
+    await widget.repository.setDocument(
+      'users',
+      authUser.uid,
+      {
+        'uid': authUser.uid,
+        'name': name,
+        'email': authUser.email,
+        'roleId': roleId,
+        'status': 'Active',
+        'createdBy': widget.user.uid,
+        'createdAtText': _displayDateNow(),
+        ..._linkedStudentPayload(values),
+      },
+      merge: false,
+      includeCreatedAt: true,
+    );
+  }
+
+  Future<void> _updateManagedUser(
+    Map<String, dynamic> user,
+    Map<String, dynamic> values,
+  ) async {
+    final uid = readText(user, const ['uid', 'id'], fallback: '');
+    if (uid.isEmpty) throw StateError('A live user id is required.');
+    final name = _requiredUserValue(values, const ['name'], 'Name');
+    final roleId = _requiredUserValue(values, const ['roleId'], 'Role');
+    final status = _requiredUserValue(values, const ['status'], 'Status');
+    await widget.repository.updateDocument('users', uid, {
+      'name': name,
+      'roleId': roleId,
+      'status': status,
+      'updatedAtText': _displayDateNow(),
+      ..._linkedStudentPayload(values),
+    });
+  }
+
+  Map<String, dynamic> _linkedStudentPayload(Map<String, dynamic> values) {
+    if (readText(values, const ['roleId'], fallback: '') != 'parent') {
+      return {
+        'linkedStudentRecordIds': <String>[],
+        'linkedStudentIds': <String>[],
+      };
+    }
+    final recordIds = _stringListValue(values['linkedStudentRecordIds']);
+    final studentIds = _stringListValue(values['linkedStudentIds']);
+    return {
+      'linkedStudentRecordIds': recordIds,
+      'linkedStudentIds': studentIds,
+    };
+  }
+
+  List<String> _stringListValue(Object? value) {
+    if (value is Iterable) {
+      return value
+          .map((item) => item.toString())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  Widget _rolePermissionEditor({required ErpRole role, required bool canEdit}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          'Permissions',
+          trailing: Text(
+            '${role.permissions.length} enabled',
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        InfoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 42,
+                    width: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      role.locked ? Icons.lock_rounded : Icons.shield_rounded,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          role.name,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          role.description,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (role.locked || !canEdit) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            role.locked
+                                ? 'Locked role permissions cannot be edited.'
+                                : 'You can view permissions but cannot edit this role.',
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ...permissionGroups.entries.map(
+                (group) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        _permissionGroupLabel(group.key),
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...group.value.map(
+                        (permission) => Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.page,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: CheckboxListTile(
+                            value: role.permissions.contains(permission),
+                            onChanged: role.locked || !canEdit
+                                ? null
+                                : (_) =>
+                                      _toggleRolePermission(role, permission),
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                            ),
+                            title: Text(
+                              _permissionLabel(permission),
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            controlAffinity: ListTileControlAffinity.trailing,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _toggleRolePermission(ErpRole role, String permission) async {
+    if (!_can('roles.edit')) {
+      _showUserRoleSnack('You do not have permission to edit roles.');
+      return;
+    }
+    if (role.locked) return;
+    final permissions = role.permissions.toSet();
+    if (permissions.contains(permission)) {
+      permissions.remove(permission);
+    } else {
+      permissions.add(permission);
+    }
+    final nextRole = ErpRole(
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      permissions: (permissions.toList()..sort()),
+      locked: role.locked,
+    );
+    try {
+      await widget.repository.setDocument(
+        'roles',
+        role.id,
+        _rolePayload(nextRole),
+      );
+      if (!mounted) return;
+      _showUserRoleSnack('Role permissions updated');
+      await _refresh();
+    } catch (_) {
+      if (!mounted) return;
+      _showUserRoleSnack('Role permissions were not saved to live data.');
+    }
+  }
+
+  Map<String, dynamic> _rolePayload(ErpRole role) {
+    return {
+      'id': role.id,
+      'name': role.name,
+      'description': role.description,
+      'locked': role.locked,
+      'permissions': role.permissions,
+    };
+  }
+
+  String _requiredUserValue(
+    Map<String, dynamic> values,
+    List<String> keys,
+    String label,
+  ) {
+    final value = readText(values, keys, fallback: '').trim();
+    if (value.isEmpty) throw StateError('$label is required.');
+    return value;
+  }
+
+  String _permissionGroupLabel(String id) {
+    return _permissionGroupLabels[id] ?? id;
+  }
+
+  String _permissionLabel(String id) {
+    return _permissionLabels[id] ?? id;
+  }
+
+  void _showUserRoleSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -10195,6 +10717,78 @@ class _ModuleAction {
   final IconData icon;
   final VoidCallback onTap;
 }
+
+const _permissionGroupLabels = {
+  'students': 'Student Information',
+  'staff': 'Faculty & Staff',
+  'users': 'Users & Roles',
+  'modules': 'Module Access',
+};
+
+const _permissionLabels = {
+  'students.view': 'View students',
+  'students.create': 'Create admissions',
+  'students.edit': 'Edit profiles',
+  'students.archive': 'Archive/restore',
+  'students.documents': 'Upload documents',
+  'students.verifyDocuments': 'Verify documents',
+  'students.promote': 'Promote/transfer',
+  'staff.view': 'View faculty/staff',
+  'staff.create': 'Create faculty/staff',
+  'staff.edit': 'Edit faculty/staff',
+  'staff.archive': 'Archive/restore staff',
+  'staff.leave': 'Manage leave',
+  'staff.attendance': 'Mark attendance',
+  'users.view': 'View users',
+  'users.create': 'Create users',
+  'users.edit': 'Edit users',
+  'roles.view': 'View roles',
+  'roles.edit': 'Edit permissions',
+  'dashboard.view': 'Dashboard module',
+  'attendance.view': 'Attendance module',
+  'academicCurriculum.view': 'Academic curriculum module',
+  'academics.view': 'Academics module',
+  'academics.manage': 'Manage academics',
+  'attendance.markStudents': 'Mark student attendance',
+  'attendance.markStaff': 'Mark staff attendance',
+  'attendance.reports': 'View attendance reports',
+  'attendance.notifyParents': 'Parent notifications',
+  'timetable.view': 'Timetable module',
+  'timetable.create': 'Create timetable',
+  'timetable.edit': 'Edit timetable',
+  'timetable.publish': 'Publish timetable',
+  'timetable.classrooms': 'Manage classrooms',
+  'exams.view': 'Exams module',
+  'exams.schedule': 'Schedule exams',
+  'exams.assessments': 'Manage assessments',
+  'exams.marks': 'Enter marks',
+  'exams.results': 'Generate results',
+  'exams.reportCards': 'Generate report cards',
+  'fees.view': 'Fees module',
+  'fees.setup': 'Set up fee structures',
+  'fees.assign': 'Assign fees',
+  'fees.collect': 'Record manual collections',
+  'fees.adjust': 'Approve adjustments',
+  'fees.reports': 'View fee reports',
+  'hostel.view': 'Hostel module',
+  'hostel.manage': 'Manage hostel records',
+  'financialReports.view': 'Financial reports module',
+  'financialReports.export': 'Export financial reports',
+  'financialReports.snapshots': 'Save financial summaries',
+  'reports.view': 'Reports module',
+  'notices.view': 'Communication module',
+  'notices.create': 'Create announcements',
+  'notices.edit': 'Edit announcements',
+  'notices.archive': 'Archive announcements',
+  'documents.view': 'Document management module',
+  'documents.upload': 'Upload documents',
+  'documents.verify': 'Verify documents',
+  'documents.archive': 'Archive documents',
+  'parentPortal.view': 'Parent portal',
+  'parentPortal.viewAll': 'View all parent portal students',
+  'settings.view': 'Settings module',
+  'settings.manage': 'Manage settings',
+};
 
 const _hostelRoomStatuses = ['Available', 'Full', 'Maintenance', 'Archived'];
 const _hostelAllocationStatuses = ['Active', 'Released'];
@@ -15723,6 +16317,342 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
                         size: 18,
                       ),
                       label: Text(_saving ? 'Saving...' : widget.saveLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserRoleUserSheet extends StatefulWidget {
+  const _UserRoleUserSheet({
+    required this.roles,
+    required this.students,
+    required this.onSave,
+    this.initialUser,
+  });
+
+  final Map<String, dynamic>? initialUser;
+  final List<ErpRole> roles;
+  final List<Map<String, dynamic>> students;
+  final Future<void> Function(Map<String, dynamic> values) onSave;
+
+  @override
+  State<_UserRoleUserSheet> createState() => _UserRoleUserSheetState();
+}
+
+class _UserRoleUserSheetState extends State<_UserRoleUserSheet> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
+  late String _roleId;
+  late String _status;
+  late final Set<String> _linkedStudentRecordIds;
+  var _saving = false;
+  var _error = '';
+
+  bool get _editing => widget.initialUser != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = widget.initialUser ?? const <String, dynamic>{};
+    _nameController = TextEditingController(
+      text: readText(user, const ['name'], fallback: ''),
+    );
+    _emailController = TextEditingController(
+      text: readText(user, const ['email'], fallback: ''),
+    );
+    _passwordController = TextEditingController();
+    _roleId = readText(user, const [
+      'roleId',
+    ], fallback: widget.roles.isEmpty ? '' : widget.roles.first.id);
+    _status = readText(user, const ['status'], fallback: 'Active');
+    _linkedStudentRecordIds = _initialLinkedStudentRecordIds(user);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Set<String> _initialLinkedStudentRecordIds(Map<String, dynamic> user) {
+    final recordIds = <String>{..._stringList(user['linkedStudentRecordIds'])};
+    final studentIds = _stringList(user['linkedStudentIds']).toSet();
+    for (final student in widget.students) {
+      final studentId = readText(student, const ['studentId'], fallback: '');
+      final recordId = readText(student, const ['id'], fallback: '');
+      if (studentIds.contains(studentId) && recordId.isNotEmpty) {
+        recordIds.add(recordId);
+      }
+    }
+    return recordIds;
+  }
+
+  List<String> _stringList(Object? value) {
+    if (value is Iterable) {
+      return value
+          .map((item) => item.toString())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  void _toggleStudent(String recordId) {
+    setState(() {
+      if (_linkedStudentRecordIds.contains(recordId)) {
+        _linkedStudentRecordIds.remove(recordId);
+      } else {
+        _linkedStudentRecordIds.add(recordId);
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      final linkedStudents = widget.students.where((student) {
+        final id = readText(student, const ['id'], fallback: '');
+        return _linkedStudentRecordIds.contains(id);
+      }).toList();
+      await widget.onSave({
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text,
+        'roleId': _roleId,
+        'status': _status,
+        'linkedStudentRecordIds': linkedStudents
+            .map((student) => readText(student, const ['id'], fallback: ''))
+            .where((id) => id.isNotEmpty)
+            .toList(),
+        'linkedStudentIds': linkedStudents
+            .map(
+              (student) => readText(student, const [
+                'studentId',
+                'admissionNo',
+              ], fallback: ''),
+            )
+            .where((id) => id.isNotEmpty)
+            .toList(),
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final roleValue = widget.roles.any((role) => role.id == _roleId)
+        ? _roleId
+        : null;
+    final isParentRole = _roleId == 'parent';
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        18,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _editing ? 'Edit User' : 'Create User',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _editing
+                    ? 'Update role, access status, and parent links.'
+                    : 'Creates Firebase Auth login and ERP profile.',
+                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _nameController,
+                enabled: !_saving,
+                decoration: const InputDecoration(labelText: 'Name *'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _emailController,
+                enabled: !_saving && !_editing,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email *'),
+              ),
+              if (!_editing) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passwordController,
+                  enabled: !_saving,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password *',
+                    helperText: 'Minimum 12 characters',
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: roleValue,
+                decoration: const InputDecoration(labelText: 'Role *'),
+                items: widget.roles
+                    .map(
+                      (role) => DropdownMenuItem(
+                        value: role.id,
+                        child: Text(role.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() {
+                        _roleId = value ?? '';
+                        if (_roleId != 'parent') {
+                          _linkedStudentRecordIds.clear();
+                        }
+                      }),
+              ),
+              if (_editing) ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: _status == 'Suspended' ? 'Suspended' : 'Active',
+                  decoration: const InputDecoration(labelText: 'Status *'),
+                  items: const [
+                    DropdownMenuItem(value: 'Active', child: Text('Active')),
+                    DropdownMenuItem(
+                      value: 'Suspended',
+                      child: Text('Suspended'),
+                    ),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (value) => setState(() => _status = value ?? 'Active'),
+                ),
+              ],
+              if (isParentRole) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'Linked students',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                if (widget.students.isEmpty)
+                  const Text(
+                    'No active students are available to link.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  )
+                else
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    decoration: BoxDecoration(
+                      color: AppColors.page,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: widget.students.map((student) {
+                          final recordId = readText(student, const [
+                            'id',
+                          ], fallback: '');
+                          final studentName = readText(student, const [
+                            'name',
+                            'studentName',
+                          ], fallback: 'Student');
+                          final studentId = readText(student, const [
+                            'studentId',
+                            'admissionNo',
+                          ], fallback: recordId);
+                          return CheckboxListTile(
+                            value: _linkedStudentRecordIds.contains(recordId),
+                            onChanged: _saving || recordId.isEmpty
+                                ? null
+                                : (_) => _toggleStudent(recordId),
+                            dense: true,
+                            title: Text(studentName),
+                            subtitle: Text(studentId),
+                            controlAffinity: ListTileControlAffinity.leading,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+              ],
+              if (_error.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error,
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: Icon(
+                        _saving
+                            ? Icons.hourglass_top_rounded
+                            : Icons.save_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _saving
+                            ? 'Saving...'
+                            : _editing
+                            ? 'Save Changes'
+                            : 'Create User',
+                      ),
                     ),
                   ),
                 ],
