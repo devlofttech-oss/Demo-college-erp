@@ -200,6 +200,10 @@ export function canAccess(roles, roleId, permission) {
   return hasPermission(getRoleById(roles, roleId), permission);
 }
 
+export function canAccessFinancialReports(roles, roleId, permission = 'financialReports.view') {
+  return ['admin', 'super-admin'].includes(roleId) || canAccess(roles, roleId, permission);
+}
+
 export function togglePermission(role, permission) {
   const permissions = new Set(role.permissions || []);
   if (permissions.has(permission)) {

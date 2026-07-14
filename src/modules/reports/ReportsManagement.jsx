@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import AttendanceReports from '../attendance/components/AttendanceReports';
 import FinancialReports from '../financialReports/FinancialReports';
 import StatusBadge from '../students/components/StatusBadge';
-import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
+import { canAccess, canAccessFinancialReports, defaultRoles } from '../userRoles/rolePermissions';
 
 function csvValue(value) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`;
@@ -311,7 +311,7 @@ export default function ReportsManagement({
       label: 'Financial',
       description: 'Collections and dues',
       icon: <BarChart3 size={18} />,
-      enabled: canAccess(defaultRoles, currentRoleId, 'financialReports.view'),
+      enabled: canAccessFinancialReports(defaultRoles, currentRoleId),
       content: (
         <FinancialReports
           academicYear={academicYear}

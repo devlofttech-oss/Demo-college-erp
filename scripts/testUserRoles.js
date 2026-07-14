@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   canAccess,
+  canAccessFinancialReports,
   defaultRoles,
   getRoleById,
   hasPermission,
@@ -32,6 +33,8 @@ assert.equal(canAccess(defaultRoles, 'admin', 'fees.collect'), true);
 assert.equal(canAccess(defaultRoles, 'admin', 'fees.reports'), true);
 assert.equal(canAccess(defaultRoles, 'admin', 'financialReports.export'), true);
 assert.equal(canAccess(defaultRoles, 'admin', 'financialReports.snapshots'), true);
+assert.equal(canAccessFinancialReports(defaultRoles, 'admin'), true);
+assert.equal(canAccessFinancialReports(defaultRoles, 'admin', 'financialReports.export'), true);
 assert.equal(canAccess(defaultRoles, 'admin', 'reports.view'), true);
 assert.equal(canAccess(defaultRoles, 'admin', 'academicCurriculum.view'), true);
 assert.equal(canAccess(defaultRoles, 'admin', 'academics.view'), true);
@@ -69,6 +72,7 @@ assert.equal(canAccess(defaultRoles, 'faculty', 'documents.view'), true);
 assert.equal(canAccess(defaultRoles, 'faculty', 'documents.upload'), false);
 assert.equal(canAccess(defaultRoles, 'faculty', 'fees.collect'), false);
 assert.equal(canAccess(defaultRoles, 'faculty', 'financialReports.view'), false);
+assert.equal(canAccessFinancialReports(defaultRoles, 'faculty'), false);
 assert.equal(canAccess(defaultRoles, 'faculty', 'reports.view'), true);
 assert.equal(canAccess(defaultRoles, 'faculty', 'parentPortal.view'), false);
 assert.equal(canAccess(defaultRoles, 'faculty', 'settings.view'), false);

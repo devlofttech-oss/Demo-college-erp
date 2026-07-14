@@ -67,6 +67,7 @@ export default function FeeCollectionModal({
   collections = [],
   students = [],
   structures = [],
+  embedded = false,
 }) {
   const initialAssignment = assignments.find((item) => item.id === (initialCollection?.assignmentId || initialAssignmentId));
   const initialStructure = structures.find((item) => item.id === (initialCollection?.feeStructureId || initialAssignment?.feeStructureId));
@@ -106,6 +107,8 @@ export default function FeeCollectionModal({
     })],
     manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
   });
+  const [activePaymentIndex, setActivePaymentIndex] = useState(0);
+  const [paymentStepError, setPaymentStepError] = useState('');
 
   const selectedStructure = structures.find((item) => item.id === form.feeStructureId);
   const selectedStudent = students.find((item) => item.id === form.studentRecordId);
@@ -145,6 +148,17 @@ export default function FeeCollectionModal({
   const paymentEntries = form.paymentEntries?.length ? form.paymentEntries : [createPaymentEntry()];
   const normalizedPaymentEntries = normalizePaymentEntries(paymentEntries, form);
   const paymentEntriesTotal = sumPaymentEntries(normalizedPaymentEntries);
+  const safeActivePaymentIndex = Math.min(activePaymentIndex, Math.max(paymentEntries.length - 1, 0));
+  const activePaymentEntry = paymentEntries[safeActivePaymentIndex] || paymentEntries[0];
+  const paymentEntryRows = paymentEntries.map((entry, index) => ({
+    entry,
+    index,
+    isActive: entry.rowKey === activePaymentEntry?.rowKey,
+  }));
+  const orderedPaymentEntryRows = [
+    ...paymentEntryRows.filter((row) => row.isActive),
+    ...paymentEntryRows.filter((row) => !row.isActive),
+  ];
   const agentFeePaidInThisPayment = form.admissionThroughAgent ? sumPaymentEntryAgentFees(normalizedPaymentEntries) : 0;
   const agentFeePaidBeforeThisPayment = form.admissionThroughAgent ? previousLedger.agentFeePaid : 0;
   const pendingAgentFeeBefore = form.admissionThroughAgent
@@ -213,6 +227,7 @@ export default function FeeCollectionModal({
   };
 
   const updatePaymentEntry = (rowKey, key, value) => {
+    setPaymentStepError('');
     setForm((prev) => ({
       ...prev,
       paymentEntries: prev.paymentEntries.map((entry) => (
@@ -221,31 +236,65 @@ export default function FeeCollectionModal({
     }));
   };
 
+  const validatePaymentStep = (entry) => {
+    if (Number(entry?.amount || 0) <= 0) return 'Enter a payment amount before adding the next payment.';
+    if (!entry?.paymentMode) return 'Select a payment mode before adding the next payment.';
+    if (!entry?.paymentDate) return 'Select a payment date before adding the next payment.';
+    if (form.admissionThroughAgent && Number(entry.agentFeePaidAmount || 0) > Number(entry.amount || 0)) {
+      return 'Agent fee paid cannot exceed this payment amount.';
+    }
+    return '';
+  };
+
   const addPaymentEntry = () => {
+    const entries = form.paymentEntries?.length ? form.paymentEntries : [createPaymentEntry()];
+    const currentEntry = entries[Math.min(activePaymentIndex, entries.length - 1)] || entries[0];
+    const validationMessage = validatePaymentStep(currentEntry);
+    if (validationMessage) {
+      setPaymentStepError(validationMessage);
+      return;
+    }
+    if (activePaymentIndex < entries.length - 1) {
+      setActivePaymentIndex((index) => index + 1);
+      setPaymentStepError('');
+      return;
+    }
     setForm((prev) => {
-      const lastEntry = prev.paymentEntries[prev.paymentEntries.length - 1] || {};
+      const sourceEntries = prev.paymentEntries?.length ? prev.paymentEntries : [createPaymentEntry()];
+      const lastEntry = sourceEntries[Math.min(activePaymentIndex, sourceEntries.length - 1)] || sourceEntries[sourceEntries.length - 1] || {};
       return {
         ...prev,
         paymentEntries: [
-          ...prev.paymentEntries,
+          ...sourceEntries,
           createPaymentEntry({
             amount: '',
             paymentMode: lastEntry.paymentMode || 'Cash',
+            creditedToAccount: lastEntry.creditedToAccount || '',
             paymentDate: lastEntry.paymentDate,
             paymentTime: lastEntry.paymentTime,
           }),
         ],
       };
     });
+    setActivePaymentIndex(entries.length);
+    setPaymentStepError('');
   };
 
   const removePaymentEntry = (rowKey) => {
+    const removeIndex = form.paymentEntries.findIndex((entry) => entry.rowKey === rowKey);
+    const nextLength = Math.max(form.paymentEntries.length - 1, 1);
     setForm((prev) => ({
       ...prev,
       paymentEntries: prev.paymentEntries.length > 1
         ? prev.paymentEntries.filter((entry) => entry.rowKey !== rowKey)
         : prev.paymentEntries,
     }));
+    setActivePaymentIndex((currentIndex) => {
+      if (removeIndex === -1) return Math.min(currentIndex, nextLength - 1);
+      if (currentIndex > removeIndex) return currentIndex - 1;
+      return Math.min(currentIndex, nextLength - 1);
+    });
+    setPaymentStepError('');
   };
 
   const submit = (event) => {
@@ -271,9 +320,19 @@ export default function FeeCollectionModal({
     });
   };
 
+  const shellClassName = embedded
+    ? 'erp-fee-page-shell w-full'
+    : 'erp-fee-modal-overlay fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4';
+  const formClassName = embedded
+    ? 'erp-fee-modal erp-fee-page w-full overflow-hidden bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col'
+    : 'erp-fee-modal w-full max-w-4xl max-h-[90vh] overflow-hidden bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col';
+  const bodyClassName = embedded
+    ? 'erp-fee-modal-body p-6 grid sm:grid-cols-2 gap-4'
+    : 'erp-fee-modal-body p-6 grid sm:grid-cols-2 gap-4 overflow-y-auto';
+
   return (
-    <div className="erp-fee-modal-overlay fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <form onSubmit={submit} className="erp-fee-modal w-full max-w-4xl max-h-[90vh] overflow-hidden bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col">
+    <div className={shellClassName}>
+      <form onSubmit={submit} className={formClassName}>
         <div className="erp-fee-modal-header px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-slate-900">{initialCollection ? 'Edit Fee Collection' : 'Record Fee Collection'}</h2>
@@ -283,7 +342,7 @@ export default function FeeCollectionModal({
             <X size={16} strokeWidth={2.4} />
           </button>
         </div>
-        <div className="erp-fee-modal-body p-6 grid sm:grid-cols-2 gap-4 overflow-y-auto">
+        <div className={bodyClassName}>
           <label className="sm:col-span-2">
             <span className="block text-xs font-semibold text-slate-500 mb-1.5">Student</span>
             <SearchSelect
@@ -462,101 +521,145 @@ export default function FeeCollectionModal({
             </div>
 
             <div className="space-y-3">
-              {paymentEntries.map((entry, index) => (
-                <div key={entry.rowKey} className="erp-payment-entry-card rounded-lg border border-dashed border-slate-300 bg-[#f8fafc] p-3">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="erp-payment-entry-number h-7 w-7 rounded-full bg-[#026c36] text-white text-xs font-extrabold flex items-center justify-center">{index + 1}</div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-900">Payment {index + 1}</div>
-                        <div className="text-xs font-semibold text-slate-500">{formatCurrency(entry.amount)}</div>
-                      </div>
-                    </div>
-                    {!initialCollection && paymentEntries.length > 1 && (
+              {orderedPaymentEntryRows.map(({ entry, index, isActive }) => {
+                if (!isActive) {
+                  return (
+                    <div key={entry.rowKey} className="erp-payment-step-summary rounded-lg border border-slate-200 bg-[#f8fafc] p-3 flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => removePaymentEntry(entry.rowKey)}
-                        className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-rose-700 inline-flex items-center justify-center"
-                        aria-label={`Remove payment ${index + 1}`}
+                        onClick={() => {
+                          setActivePaymentIndex(index);
+                          setPaymentStepError('');
+                        }}
+                        className="min-w-0 flex-1 text-left flex items-center gap-3"
                       >
-                        <Trash2 size={14} />
+                        <div className="erp-payment-entry-number h-7 w-7 rounded-full bg-[#026c36] text-white text-xs font-extrabold flex items-center justify-center shrink-0">{index + 1}</div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-slate-900">Payment {index + 1}</div>
+                          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+                            <span>{formatCurrency(entry.amount)}</span>
+                            <span>{entry.paymentMode || '-'}</span>
+                            <span>{formatPaymentDate(entry.paymentDate)} {entry.paymentTime || ''}</span>
+                            {entry.creditedToAccount && <span>{entry.creditedToAccount}</span>}
+                            {entry.referenceNo && <span>Ref: {entry.referenceNo}</span>}
+                          </div>
+                        </div>
                       </button>
-                    )}
-                  </div>
+                      {!initialCollection && paymentEntries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePaymentEntry(entry.rowKey)}
+                          className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-rose-700 inline-flex items-center justify-center shrink-0"
+                          aria-label={`Remove payment ${index + 1}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
 
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <label>
-                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Amount</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={entry.amount}
-                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'amount', event.target.value)}
-                        placeholder={dueBeforeThisPayment || 0}
-                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                    </label>
-                    <label>
-                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Mode</span>
-                      <select
-                        value={entry.paymentMode}
-                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentMode', event.target.value)}
-                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                      >
-                        {paymentModeOptions.map((item) => <option key={item}>{item}</option>)}
-                      </select>
-                    </label>
-                    <label>
-                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Credited To Account</span>
-                      <input
-                        value={entry.creditedToAccount || ''}
-                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'creditedToAccount', event.target.value)}
-                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                    </label>
-                    {form.admissionThroughAgent && (
+                return (
+                  <div key={entry.rowKey} className="erp-payment-entry-card rounded-lg border border-dashed border-slate-300 bg-[#f8fafc] p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="erp-payment-entry-number h-7 w-7 rounded-full bg-[#026c36] text-white text-xs font-extrabold flex items-center justify-center">{index + 1}</div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">Payment {index + 1}</div>
+                          <div className="text-xs font-semibold text-slate-500">{formatCurrency(entry.amount)}</div>
+                        </div>
+                      </div>
+                      {!initialCollection && paymentEntries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePaymentEntry(entry.rowKey)}
+                          className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-rose-700 inline-flex items-center justify-center"
+                          aria-label={`Remove payment ${index + 1}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-3">
                       <label>
-                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Agent Fee Paid</span>
+                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Amount</span>
                         <input
                           type="number"
                           min="0"
-                          max={Math.min(Number(entry.amount || 0), pendingAgentFeeBefore)}
-                          value={entry.agentFeePaidAmount}
-                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'agentFeePaidAmount', event.target.value)}
+                          value={entry.amount}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'amount', event.target.value)}
+                          placeholder={dueBeforeThisPayment || 0}
                           className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
                         />
                       </label>
-                    )}
-                    <label>
-                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><CalendarDays size={13} /> Payment Date</span>
-                      <input
-                        type="date"
-                        value={entry.paymentDate}
-                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentDate', event.target.value)}
-                        className="erp-payment-date-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                    </label>
-                    <label>
-                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><Clock3 size={13} /> Payment Time</span>
-                      <input
-                        type="time"
-                        value={entry.paymentTime}
-                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentTime', event.target.value)}
-                        className="erp-payment-time-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                    </label>
-                    <label className="sm:col-span-2">
-                      <span className="block text-xs font-semibold text-slate-500 mb-1.5">Reference No.</span>
-                      <input
-                        value={entry.referenceNo}
-                        onChange={(event) => updatePaymentEntry(entry.rowKey, 'referenceNo', event.target.value)}
-                        className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                    </label>
+                      <label>
+                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Payment Mode</span>
+                        <select
+                          value={entry.paymentMode}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentMode', event.target.value)}
+                          className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                        >
+                          {paymentModeOptions.map((item) => <option key={item}>{item}</option>)}
+                        </select>
+                      </label>
+                      <label>
+                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Credited To Account</span>
+                        <input
+                          value={entry.creditedToAccount || ''}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'creditedToAccount', event.target.value)}
+                          className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                        />
+                      </label>
+                      {form.admissionThroughAgent && (
+                        <label>
+                          <span className="block text-xs font-semibold text-slate-500 mb-1.5">Agent Fee Paid</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={Math.min(Number(entry.amount || 0), pendingAgentFeeBefore)}
+                            value={entry.agentFeePaidAmount}
+                            onChange={(event) => updatePaymentEntry(entry.rowKey, 'agentFeePaidAmount', event.target.value)}
+                            className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                          />
+                        </label>
+                      )}
+                      <label>
+                        <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><CalendarDays size={13} /> Payment Date</span>
+                        <input
+                          type="date"
+                          value={entry.paymentDate}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentDate', event.target.value)}
+                          className="erp-payment-date-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                        />
+                      </label>
+                      <label>
+                        <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><Clock3 size={13} /> Payment Time</span>
+                        <input
+                          type="time"
+                          value={entry.paymentTime}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentTime', event.target.value)}
+                          className="erp-payment-time-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                        />
+                      </label>
+                      <label className="sm:col-span-2">
+                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Reference No.</span>
+                        <input
+                          value={entry.referenceNo}
+                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'referenceNo', event.target.value)}
+                          className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
+                        />
+                      </label>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            {paymentStepError && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                {paymentStepError}
+              </div>
+            )}
 
             {!initialCollection && (
               <button
@@ -564,7 +667,7 @@ export default function FeeCollectionModal({
                 onClick={addPaymentEntry}
                 className="erp-add-payment-box mt-3 w-full min-h-12 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/70 text-emerald-800 text-sm font-extrabold flex items-center justify-center gap-2"
               >
-                <Plus size={16} /> Add Payment
+                <Plus size={16} /> {safeActivePaymentIndex < paymentEntries.length - 1 ? 'Save & Proceed' : 'Save & Add Next Payment'}
               </button>
             )}
           </div>

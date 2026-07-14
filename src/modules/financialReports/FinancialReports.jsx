@@ -6,7 +6,7 @@ import {
   getFinancialReportsData,
 } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
-import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
+import { canAccessFinancialReports, defaultRoles } from '../userRoles/rolePermissions';
 import { formatCurrency, formatDisplayDate, formatPaymentDate, getStudentClassKey } from '../fees/feeUtils';
 import {
   buildClassAnalytics,
@@ -223,9 +223,9 @@ export default function FinancialReports({ currentUser, academicYear = '', scope
   }, [academicYear]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
-  const canView = canAccess(defaultRoles, currentRoleId, 'financialReports.view');
-  const canExport = canAccess(defaultRoles, currentRoleId, 'financialReports.export');
-  const canSnapshot = canAccess(defaultRoles, currentRoleId, 'financialReports.snapshots');
+  const canView = canAccessFinancialReports(defaultRoles, currentRoleId);
+  const canExport = canAccessFinancialReports(defaultRoles, currentRoleId, 'financialReports.export');
+  const canSnapshot = canAccessFinancialReports(defaultRoles, currentRoleId, 'financialReports.snapshots');
   const courseStructures = useMemo(() => filterByCourse(structures, selectedCourseCode, selectedCourse), [selectedCourse, selectedCourseCode, structures]);
   const courseAssignments = useMemo(() => filterStudentScopedRecords(assignments, scopedStudents, selectedCourseCode, selectedCourse), [assignments, scopedStudents, selectedCourse, selectedCourseCode]);
   const courseAssignmentIds = useMemo(() => new Set(courseAssignments.map((item) => item.id).filter(Boolean)), [courseAssignments]);

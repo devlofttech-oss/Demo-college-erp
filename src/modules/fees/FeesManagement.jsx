@@ -235,7 +235,17 @@ export default function FeesManagement({
     }
   };
 
+  const closeCollectionForm = () => {
+    setShowCollectionModal(false);
+    setEditingCollection(null);
+    setCollectionAssignmentId('');
+  };
+
   const goBackOneFeeStep = () => {
+    if (showCollectionModal) {
+      closeCollectionForm();
+      return;
+    }
     const flow = window.history.state?.feeFlow;
     if (flow?.branch || flow?.task) {
       window.history.back();
@@ -1008,46 +1018,62 @@ export default function FeesManagement({
 
       {activeFeeBranch === 'collect-fee' ? (
         <div>
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
-            <div className="grid sm:grid-cols-3 gap-6 rounded-lg bg-white border border-slate-100 p-5 flex-1">
-              <div>
-                <div className="text-xs font-bold text-slate-500 uppercase">Total Collected</div>
-                <div className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCurrency(summary.totalCollected)}</div>
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-500 uppercase">Total Payments</div>
-                <div className="text-2xl font-extrabold text-slate-900 mt-1">{courseCollections.length}</div>
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-500 uppercase">This Year</div>
-                <div className="text-2xl font-extrabold text-slate-900 mt-1">{courseCollections.filter((item) => item.academicYear === academicYear).length}</div>
-              </div>
-            </div>
-            <button
-              onClick={() => { setCollectionAssignmentId(''); setEditingCollection(null); setShowCollectionModal(true); }}
-              disabled={!canCollect}
-              className="erp-record-payment-button h-12 px-6 rounded-xl bg-[#026c36] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-[0_14px_30px_rgba(2,108,54,0.35)] ring-2 ring-emerald-300/60 hover:bg-[#02552b] disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:ring-0"
-            >
-              <Plus className="erp-record-payment-icon" size={16} /> Record Payment
-            </button>
-          </div>
-          <div className="relative mb-4 max-w-xl">
-            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by student, payment mode, reference..."
-              className="w-full h-11 rounded-lg bg-[#f0f0f2] border-0 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-orange-100"
+          {showCollectionModal ? (
+            <FeeCollectionModal
+              assignments={courseAssignments}
+              initialAssignmentId={collectionAssignmentId}
+              initialCollection={editingCollection}
+              onClose={closeCollectionForm}
+              onSave={saveCollection}
+              collections={courseCollections}
+              students={courseStudents}
+              structures={courseStructures}
+              embedded
             />
-          </div>
-          <FeeCollectionTable
-            collections={visibleCollections}
-            onEdit={(collection) => {
-              setCollectionAssignmentId(collection.assignmentId || '');
-              setEditingCollection(collection);
-              setShowCollectionModal(true);
-            }}
-          />
+          ) : (
+            <>
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
+                <div className="grid sm:grid-cols-3 gap-6 rounded-lg bg-white border border-slate-100 p-5 flex-1">
+                  <div>
+                    <div className="text-xs font-bold text-slate-500 uppercase">Total Collected</div>
+                    <div className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCurrency(summary.totalCollected)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-500 uppercase">Total Payments</div>
+                    <div className="text-2xl font-extrabold text-slate-900 mt-1">{courseCollections.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-500 uppercase">This Year</div>
+                    <div className="text-2xl font-extrabold text-slate-900 mt-1">{courseCollections.filter((item) => item.academicYear === academicYear).length}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setCollectionAssignmentId(''); setEditingCollection(null); setShowCollectionModal(true); }}
+                  disabled={!canCollect}
+                  className="erp-record-payment-button h-12 px-6 rounded-xl bg-[#026c36] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-[0_14px_30px_rgba(2,108,54,0.35)] ring-2 ring-emerald-300/60 hover:bg-[#02552b] disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:ring-0"
+                >
+                  <Plus className="erp-record-payment-icon" size={16} /> Record Payment
+                </button>
+              </div>
+              <div className="relative mb-4 max-w-xl">
+                <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by student, payment mode, reference..."
+                  className="w-full h-11 rounded-lg bg-[#f0f0f2] border-0 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-orange-100"
+                />
+              </div>
+              <FeeCollectionTable
+                collections={visibleCollections}
+                onEdit={(collection) => {
+                  setCollectionAssignmentId(collection.assignmentId || '');
+                  setEditingCollection(collection);
+                  setShowCollectionModal(true);
+                }}
+              />
+            </>
+          )}
         </div>
       ) : ['create-structure', 'manage-structures'].includes(activeFeeBranch) ? (
         <div className="w-full">
@@ -1141,18 +1167,6 @@ export default function FeesManagement({
 
       {showStructureModal && <FeeStructureModal classOptions={classOptions} onClose={() => setShowStructureModal(false)} onSave={saveStructure} />}
       {editingStructure && <FeeStructureModal mode="edit" initialStructure={editingStructure} classOptions={classOptions} onClose={() => setEditingStructure(null)} onSave={saveStructure} />}
-      {showCollectionModal && (
-        <FeeCollectionModal
-          assignments={courseAssignments}
-          initialAssignmentId={collectionAssignmentId}
-          initialCollection={editingCollection}
-          onClose={() => { setShowCollectionModal(false); setEditingCollection(null); setCollectionAssignmentId(''); }}
-          onSave={saveCollection}
-          collections={courseCollections}
-          students={courseStudents}
-          structures={courseStructures}
-        />
-      )}
       {showAdjustmentModal && <FeeAdjustmentModal assignments={payableAssignments} initialAssignmentId={collectionAssignmentId} onClose={() => setShowAdjustmentModal(false)} onSave={saveAdjustment} />}
     </div>
   );

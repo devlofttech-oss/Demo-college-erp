@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { getEnabledModules, sortModulesByDisplayOrder } from '../../moduleRegistry';
-import { canAccess, defaultRoles } from '../../userRoles/rolePermissions';
+import { canAccess, canAccessFinancialReports, defaultRoles } from '../../userRoles/rolePermissions';
 import devloftLogo from '../../../../assets/logo.png';
 
 export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = false, currentUser, onNavigate, onThemeToggle, onToggleCollapse, themeMode = 'dark' }) {
@@ -119,7 +119,7 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         icon: <Wallet size={16} />,
         moduleId: 'reports',
         state: { reportCategory: 'financial' },
-        enabled: canAccess(defaultRoles, currentRoleId, 'financialReports.view'),
+        enabled: canAccessFinancialReports(defaultRoles, currentRoleId),
       },
     ],
   }), [currentRoleId]);

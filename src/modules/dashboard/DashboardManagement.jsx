@@ -3,7 +3,7 @@ import { AlertCircle, FileText, GraduationCap, TrendingUp, Users, Wallet } from 
 import { getDashboardData } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { formatCurrency, summarizeFees } from '../fees/feeUtils';
-import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
+import { canAccess, canAccessFinancialReports, defaultRoles } from '../userRoles/rolePermissions';
 import { filterByCourse, filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 
 const emptyDashboardData = {
@@ -122,7 +122,7 @@ export default function DashboardManagement({ academicYear = '', currentUser, on
   const canViewDocuments = canAccess(defaultRoles, currentRoleId, 'documents.view');
   const canVerifyDocuments = canAccess(defaultRoles, currentRoleId, 'documents.verify');
   const canViewExams = canAccess(defaultRoles, currentRoleId, 'exams.view');
-  const canViewFinancialReports = canAccess(defaultRoles, currentRoleId, 'financialReports.view');
+  const canViewFinancialReports = canAccessFinancialReports(defaultRoles, currentRoleId);
   const {
     students = [],
     staff = [],
