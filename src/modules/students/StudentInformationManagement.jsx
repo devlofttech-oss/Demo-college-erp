@@ -1300,7 +1300,6 @@ function StudentDetailPage({
         label: [installmentLabel, item.feeStructureName || item.entryMode].filter(Boolean).join(' - '),
         helper: [
           paymentDate && paymentDate !== '-' ? `Date: ${paymentDate}` : 'Payment record',
-          item.paymentTime ? `Time: ${item.paymentTime}` : '',
           item.paymentMode ? `Mode: ${item.paymentMode}` : '',
           item.creditedToAccount ? `Account: ${item.creditedToAccount}` : '',
           item.referenceNo ? `Ref: ${item.referenceNo}` : '',

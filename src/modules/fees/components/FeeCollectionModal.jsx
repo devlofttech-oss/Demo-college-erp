@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, Clock3, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, X } from 'lucide-react';
 import SearchSelect from '../../../components/SearchSelect';
 import {
   agentFeeComponentField,
@@ -32,7 +32,6 @@ function createPaymentEntry(overrides = {}) {
     creditedToAccount: overrides.creditedToAccount || '',
     referenceNo: overrides.referenceNo || '',
     paymentDate: overrides.paymentDate || now.toISOString().slice(0, 10),
-    paymentTime: overrides.paymentTime || now.toTimeString().slice(0, 5),
     agentFeePaidAmount: overrides.agentFeePaidAmount ?? '',
   };
 }
@@ -88,7 +87,6 @@ export default function FeeCollectionModal({
     creditedToAccount: initialCollection?.creditedToAccount || '',
     referenceNo: initialCollection?.referenceNo || '',
     paymentDate: initialCollection?.paymentDate || new Date().toISOString().slice(0, 10),
-    paymentTime: initialCollection?.paymentTime || new Date().toTimeString().slice(0, 5),
     collectedBy: initialCollection?.collectedBy || 'Admin Office',
     paymentEntries: [createPaymentEntry({
       rowKey: initialCollection?.id || undefined,
@@ -97,7 +95,6 @@ export default function FeeCollectionModal({
       creditedToAccount: initialCollection?.creditedToAccount || '',
       referenceNo: initialCollection?.referenceNo || '',
       paymentDate: initialCollection?.paymentDate,
-      paymentTime: initialCollection?.paymentTime,
       agentFeePaidAmount: initialCollection?.agentFeePaidAmount || '',
     })],
     manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
@@ -263,7 +260,6 @@ export default function FeeCollectionModal({
             paymentMode: lastEntry.paymentMode || 'Cash',
             creditedToAccount: lastEntry.creditedToAccount || '',
             paymentDate: lastEntry.paymentDate,
-            paymentTime: lastEntry.paymentTime,
           }),
         ],
       };
@@ -300,7 +296,6 @@ export default function FeeCollectionModal({
       creditedToAccount: firstPayment.creditedToAccount || form.creditedToAccount,
       referenceNo: firstPayment.referenceNo || form.referenceNo,
       paymentDate: firstPayment.paymentDate || form.paymentDate,
-      paymentTime: firstPayment.paymentTime || form.paymentTime,
       paymentEntries: normalizedEntries,
       totalAmount: editedTotal,
       feeStructureName: selectedStructure?.name || '',
@@ -488,7 +483,7 @@ export default function FeeCollectionModal({
                         <td className="px-3 py-2 font-bold text-slate-500">
                           {payment.installmentNo ? `${payment.installmentNo}/${payment.installmentCount || payment.installmentNo}` : index + 1}
                         </td>
-                        <td className="px-3 py-2 text-slate-700">{formatPaymentDate(payment.paymentDate || payment.createdAtText)} {payment.paymentTime || ''}</td>
+                        <td className="px-3 py-2 text-slate-700">{formatPaymentDate(payment.paymentDate || payment.createdAtText)}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.paymentMode || '-'}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.creditedToAccount || '-'}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.referenceNo || '-'}</td>
@@ -531,7 +526,7 @@ export default function FeeCollectionModal({
                           <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
                             <span>{formatCurrency(entry.amount)}</span>
                             <span>{entry.paymentMode || '-'}</span>
-                            <span>{formatPaymentDate(entry.paymentDate)} {entry.paymentTime || ''}</span>
+                            <span>{formatPaymentDate(entry.paymentDate)}</span>
                             {entry.creditedToAccount && <span>{entry.creditedToAccount}</span>}
                             {entry.referenceNo && <span>Ref: {entry.referenceNo}</span>}
                           </div>
@@ -623,15 +618,6 @@ export default function FeeCollectionModal({
                           value={entry.paymentDate}
                           onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentDate', event.target.value)}
                           className="erp-payment-date-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
-                        />
-                      </label>
-                      <label>
-                        <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1.5"><Clock3 size={13} /> Payment Time</span>
-                        <input
-                          type="time"
-                          value={entry.paymentTime}
-                          onChange={(event) => updatePaymentEntry(entry.rowKey, 'paymentTime', event.target.value)}
-                          className="erp-payment-time-input w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
                         />
                       </label>
                       <label className="sm:col-span-2">

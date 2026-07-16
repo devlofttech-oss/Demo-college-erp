@@ -149,7 +149,7 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
           aria-expanded={submenuItems.length > 0 ? expanded : undefined}
         >
           <span className="erp-sidebar-item-icon">{icon}</span>
-          {!collapsed && <span className="erp-sidebar-item-label">{label}</span>}
+          <span className="erp-sidebar-item-label" aria-hidden={collapsed}>{label}</span>
           {!collapsed && submenuItems.length > 0 && <ChevronRight className={`erp-sidebar-submenu-chevron ${expanded ? 'is-open' : ''}`} size={16} />}
           {!collapsed && status === 'planned' && <span className="erp-sidebar-item-badge">Soon</span>}
           {!collapsed && status === 'demo' && <span className="erp-sidebar-item-badge">Demo</span>}
