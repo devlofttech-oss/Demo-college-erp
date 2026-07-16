@@ -82,6 +82,7 @@ export default function DashboardManagement({ academicYear = '', currentUser, on
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(isFirebaseConfigured);
   const [loadError, setLoadError] = useState('');
+  const [showAllUpcomingExams, setShowAllUpcomingExams] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -151,6 +152,8 @@ export default function DashboardManagement({ academicYear = '', currentUser, on
   const upcomingExams = courseExamSchedules
     .filter((item) => item.status !== 'Archived')
     .sort((first, second) => String(first.examDate || '').localeCompare(String(second.examDate || '')));
+  const visibleUpcomingExams = showAllUpcomingExams ? upcomingExams : upcomingExams.slice(0, 4);
+  const hiddenUpcomingExamCount = Math.max(0, upcomingExams.length - visibleUpcomingExams.length);
   const collectionTrend = useMemo(() => buildCollectionTrend(courseFeeCollections), [courseFeeCollections]);
   const hasCollectionTrend = collectionTrend.some((item) => item.value > 0);
   const maxTrendValue = Math.max(...collectionTrend.map((item) => item.value), 1);
@@ -391,7 +394,7 @@ export default function DashboardManagement({ academicYear = '', currentUser, on
           <TrendingUp size={18} className="text-slate-400" />
         </div>
         <div className="grid md:grid-cols-2 gap-3">
-          {upcomingExams.map((exam) => (
+          {visibleUpcomingExams.map((exam) => (
             <button key={exam.id} onClick={() => onNavigate?.('examination-results')} className="rounded-lg bg-[#f5f5f6] p-4 text-left">
               <span className="block text-sm font-bold text-slate-900">{exam.examName}</span>
               <span className="block text-xs text-slate-500 mt-1">{exam.classKey} - {exam.subject}</span>
@@ -399,6 +402,15 @@ export default function DashboardManagement({ academicYear = '', currentUser, on
             </button>
           ))}
         </div>
+        {upcomingExams.length > 4 && (
+          <button
+            type="button"
+            onClick={() => setShowAllUpcomingExams((value) => !value)}
+            className="mt-4 h-10 w-full rounded-lg border border-dashed border-slate-200 bg-[#f5f5f6] text-sm font-bold text-slate-600"
+          >
+            {showAllUpcomingExams ? 'View less' : `View more (${hiddenUpcomingExamCount})`}
+          </button>
+        )}
       </div>
       )}
     </div>

@@ -5242,3 +5242,37 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   opacity:0!important;
   transform:translateX(-8px)!important;
 }
+
+@media (min-width:1024px) {
+  .erp-shell .erp-sidebar {
+    align-self:stretch!important;
+    height:calc(100dvh / var(--erp-ui-scale))!important;
+    min-height:calc(100dvh / var(--erp-ui-scale))!important;
+    padding:0 12px!important;
+  }
+
+  .erp-shell .erp-sidebar-sticky {
+    top:0!important;
+    height:calc(100dvh / var(--erp-ui-scale))!important;
+    min-height:calc(100dvh / var(--erp-ui-scale))!important;
+    padding:0!important;
+  }
+}
+
+.erp-shell .erp-sidebar-collapse-button:hover {
+  transform:translateY(-50%)!important;
+}
+
+.erp-shell .erp-year-picker {
+  min-width:118px;
+}
+
+.erp-shell .erp-year-picker-menu {
+  min-width:118px;
+  width:100%;
+}
+
+.erp-shell .erp-year-picker-option {
+  min-height:38px!important;
+  justify-content:space-between!important;
+}

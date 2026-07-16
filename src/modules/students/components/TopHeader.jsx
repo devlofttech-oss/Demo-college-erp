@@ -81,9 +81,11 @@ export default function TopHeader({
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [courseMenuOpen, setCourseMenuOpen] = useState(false);
+  const [yearMenuOpen, setYearMenuOpen] = useState(false);
   const [expandedDepartment, setExpandedDepartment] = useState('');
   const profileMenuRef = useRef(null);
   const courseMenuRef = useRef(null);
+  const yearMenuRef = useRef(null);
   const currentRoleId = user?.roleId || 'admin';
   const currentRole = getRoleById(defaultRoles, currentRoleId);
   const isSuperAdmin = currentRoleId === 'super-admin';
@@ -107,6 +109,7 @@ export default function TopHeader({
       ? 'Student Course'
       : 'All Courses';
   const coursePickerDisabled = isParent && courses.length <= 1;
+  const selectedAcademicYear = academicYear || academicYears[0] || 'Academic Year';
 
   const toggleCourseMenu = () => {
     if (coursePickerDisabled) return;
@@ -119,6 +122,11 @@ export default function TopHeader({
     setCourseMenuOpen(false);
   };
 
+  const selectAcademicYear = (nextYear) => {
+    onAcademicYearChange?.(nextYear);
+    setYearMenuOpen(false);
+  };
+
   useEffect(() => {
     const closeMenus = (event) => {
       if (!profileMenuRef.current?.contains(event.target)) {
@@ -126,6 +134,9 @@ export default function TopHeader({
       }
       if (!courseMenuRef.current?.contains(event.target)) {
         setCourseMenuOpen(false);
+      }
+      if (!yearMenuRef.current?.contains(event.target)) {
+        setYearMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', closeMenus);
@@ -216,19 +227,40 @@ export default function TopHeader({
             </div>
           </label>
           {!isParent && (
-          <label className="text-xs font-semibold text-slate-500">
+          <label className="erp-course-picker-label text-xs font-semibold text-slate-500">
             <span className="sr-only">Academic Year</span>
-            <select
-              value={academicYear}
-              onChange={(event) => onAcademicYearChange?.(event.target.value)}
-              disabled={!academicYears.length}
-              className="erp-header-year-select bg-white border border-slate-200 rounded-lg shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-3 text-xs text-slate-600 outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
-            >
-              {!academicYears.length && <option value="">Academic Year</option>}
-              {academicYears.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
+            <div ref={yearMenuRef} className={`erp-course-picker erp-year-picker ${yearMenuOpen ? 'is-open' : ''}`}>
+              <button
+                type="button"
+                onClick={() => academicYears.length && setYearMenuOpen((open) => !open)}
+                disabled={!academicYears.length}
+                className="erp-header-select erp-course-picker-button erp-header-year-select bg-white border border-slate-200 rounded-lg shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-3 text-xs text-slate-600 outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
+                aria-haspopup="menu"
+                aria-expanded={yearMenuOpen}
+              >
+                <span>{selectedAcademicYear}</span>
+                <ChevronDown className="erp-course-picker-chevron" size={15} />
+              </button>
+              {yearMenuOpen && Boolean(academicYears.length) && (
+                <div className="erp-course-picker-menu erp-year-picker-menu" role="menu">
+                  {academicYears.map((year) => {
+                    const selected = year === selectedAcademicYear;
+                    return (
+                      <button
+                        type="button"
+                        key={year}
+                        onClick={() => selectAcademicYear(year)}
+                        className={`erp-course-picker-course erp-year-picker-option ${selected ? 'is-selected' : ''}`}
+                        role="menuitem"
+                      >
+                        <span>{year}</span>
+                        {selected && <Check size={14} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </label>
           )}
         </div>

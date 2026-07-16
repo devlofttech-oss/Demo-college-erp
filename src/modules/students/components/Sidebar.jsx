@@ -241,7 +241,7 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
               type="button"
               onClick={onToggleCollapse}
               className="erp-sidebar-logo erp-sidebar-expand-logo"
-              title="Expand sidebar"
+              aria-label="Expand sidebar"
             >
               <img src={devloftLogo} alt="" className="h-full w-full object-contain rounded-lg" />
             </button>
@@ -260,7 +260,7 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
               type="button"
               onClick={onToggleCollapse}
               className="erp-sidebar-collapse-button"
-              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
             >
               <ChevronLeft size={18} />
             </button>
