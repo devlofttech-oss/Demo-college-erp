@@ -41,21 +41,20 @@ assert.deepEqual(getFeeComponentValues({
 });
 assert.equal(totalFeeComponents({ applicationFee: 500, pocketArticleFee: 750, tuitionFee: 2000 }), 3250);
 assert.equal(totalFeeComponents({ tuitionFee: 2000, agentFee: 5000 }), 2000);
-assert.equal(totalFeeComponents({ tuitionFee: 2000, agentFee: 5000, admissionThroughAgent: true }), 7000);
+assert.equal(totalFeeComponents({ tuitionFee: 2000, agentFee: 5000, admissionThroughAgent: true }), 2000);
 assert.equal(isAdmissionThroughAgent({ admissionSource: 'Agent - Kerala desk' }), true);
 assert.equal(isAdmissionThroughAgent({ admissionSource: 'Direct Walk-in' }), false);
 assert.equal(calculatePendingAgentFeeBalance(25000, 10000), 15000);
-assert.equal(getManualDueItemOptions({ admissionThroughAgent: true }).some((item) => item.id === 'agent-fee'), true);
+assert.equal(getManualDueItemOptions({ admissionThroughAgent: true }).some((item) => item.id === 'agent-fee'), false);
 assert.equal(getManualDueItemOptions({ admissionThroughAgent: false }).some((item) => item.id === 'agent-fee'), false);
 assert.deepEqual(normalizeManualDueItems(['application-fee', { id: 'pocket-article-fee' }, 'application-fee']), [
   { id: 'application-fee', label: 'Application Fee' },
   { id: 'pocket-article-fee', label: 'Pocket Article Fee' },
 ]);
-assert.deepEqual(normalizeManualDueItems(['agent-fee']), [
-  { id: 'agent-fee', label: 'Agent Fee' },
-]);
+assert.deepEqual(normalizeManualDueItems(['agent-fee']), []);
+assert.deepEqual(normalizeManualDueItems([{ label: 'Agent Fee' }]), []);
 assert.equal(formatManualDueItems(['application-fee', 'pocket-article-fee']), 'Application Fee, Pocket Article Fee');
-assert.equal(formatManualDueItems(['agent-fee']), 'Agent Fee');
+assert.equal(formatManualDueItems(['agent-fee']), '');
 const normalizedPaymentEntries = normalizePaymentEntries([
   { amount: '20000', paymentMode: 'Cash', creditedToAccount: 'Cash Counter', referenceNo: 'B-001', paymentDate: '2026-07-01', paymentTime: '10:00', agentFeePaidAmount: '2500' },
   { amount: '40000', paymentMode: 'UPI Manual Entry', creditedToAccount: 'SBI Current', referenceNo: 'B-002', paymentDate: '2026-07-05', paymentTime: '11:30', agentFeePaidAmount: '5000' },
@@ -153,6 +152,21 @@ assert.deepEqual(
     status: 'Partially Paid',
     agentFeePaid: 7500,
     pendingAgentFeeBalance: 7500,
+  }
+);
+assert.deepEqual(
+  calculateAssignmentPaymentLedger(
+    { id: 'a3', totalAmount: 7000, tuitionFee: 2000, admissionThroughAgent: true, agentFee: 5000 },
+    [{ id: 'p1', assignmentId: 'a3', amount: 1000, agentFeePaidAmount: 1500, status: 'Posted' }]
+  ),
+  {
+    paymentCount: 1,
+    paidAmount: 1000,
+    adjustmentAmount: 0,
+    dueAmount: 1000,
+    status: 'Partially Paid',
+    agentFeePaid: 1500,
+    pendingAgentFeeBalance: 3500,
   }
 );
 assert.deepEqual(

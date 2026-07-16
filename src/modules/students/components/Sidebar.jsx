@@ -144,7 +144,8 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         <button
           onClick={handleClick}
           className={`erp-sidebar-item ${active ? 'is-active' : ''}`}
-          title={collapsed ? label : undefined}
+          data-tooltip={collapsed ? label : undefined}
+          aria-label={collapsed ? label : undefined}
           aria-expanded={submenuItems.length > 0 ? expanded : undefined}
         >
           <span className="erp-sidebar-item-icon">{icon}</span>

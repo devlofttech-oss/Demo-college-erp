@@ -34,7 +34,7 @@ export function getFeeComponentValues(source = {}) {
 
 export function totalFeeComponents(source = {}) {
   return feeComponentKeys.reduce((total, key) => {
-    if (key === agentFeeComponentField.key && !isAdmissionThroughAgent(source)) return total;
+    if (key === agentFeeComponentField.key) return total;
     return total + Number(source[key] || 0);
   }, 0);
 }
@@ -191,7 +191,8 @@ export function calculateAssignmentPaymentLedger(assignment = {}, collections = 
     ? sumCollectionAmounts(postedCollections)
     : Number(assignment.paidAmount || 0);
   const adjustmentAmount = Number(assignment.adjustmentAmount || 0);
-  const totalAmount = Number(assignment.totalAmount || 0);
+  const componentTotal = totalFeeComponents(assignment);
+  const totalAmount = componentTotal > 0 ? componentTotal : Number(assignment.totalAmount || 0);
   const dueAmount = calculateDueAmount(totalAmount, paidAmount, adjustmentAmount);
   const admissionThroughAgent = isAdmissionThroughAgent(assignment);
   const agentFeePaid = admissionThroughAgent
@@ -211,26 +212,23 @@ export function calculateAssignmentPaymentLedger(assignment = {}, collections = 
   };
 }
 
-export function getManualDueItemOptions(source = {}) {
-  return isAdmissionThroughAgent(source)
-    ? [...manualDueItemOptions, agentManualDueItemOption]
-    : manualDueItemOptions;
+export function getManualDueItemOptions() {
+  return manualDueItemOptions;
 }
 
 export function normalizeManualDueItems(items = [], source = {}) {
   if (!Array.isArray(items)) return [];
-  const shouldIncludeAgent = isAdmissionThroughAgent(source) || items.some((item) => (
-    (typeof item === 'string' ? item : item?.id) === agentManualDueItemOption.id
-  ));
-  const options = shouldIncludeAgent ? [...manualDueItemOptions, agentManualDueItemOption] : manualDueItemOptions;
+  const options = getManualDueItemOptions(source);
   const optionsById = options.reduce((map, item) => ({ ...map, [item.id]: item }), {});
   const seen = new Set();
 
   return items.reduce((normalized, item) => {
     const rawId = typeof item === 'string' ? item : item?.id;
+    if (rawId === agentManualDueItemOption.id) return normalized;
     const option = optionsById[rawId];
     const label = option?.label || (typeof item === 'string' ? item : item?.label);
     const id = option?.id || rawId || String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (id === agentManualDueItemOption.id) return normalized;
     if (!id || !label || seen.has(id)) return normalized;
     seen.add(id);
     return [...normalized, { id, label }];
@@ -332,7 +330,6 @@ export function validateFeeCollection(form, assignment) {
   const hasMissingEntryDate = paymentEntries.some((entry) => !entry.paymentDate);
   const hasMissingEntryMode = paymentEntries.some((entry) => !entry.paymentMode);
   const hasNegativeAgentFee = paymentEntries.some((entry) => Number(entry.agentFeePaidAmount || 0) < 0);
-  const hasAgentFeeOverPayment = paymentEntries.some((entry) => Number(entry.agentFeePaidAmount || 0) > Number(entry.amount || 0));
 
   if (form.entryMode === 'structure') {
     if (!form.studentRecordId) return 'Student is required.';
@@ -342,7 +339,6 @@ export function validateFeeCollection(form, assignment) {
     if (hasMissingEntryMode) return 'Payment mode is required for each payment.';
     if (hasInvalidEntryAmount) return 'Each payment amount must be greater than zero.';
     if (hasNegativeAgentFee) return 'Agent fee paid cannot be negative.';
-    if (hasAgentFeeOverPayment) return 'Agent fee paid cannot exceed the payment amount for any installment.';
     return '';
   }
   if (form.entryMode === 'manual') {
@@ -354,7 +350,6 @@ export function validateFeeCollection(form, assignment) {
   if (hasMissingEntryMode) return 'Payment mode is required for each payment.';
   if (hasInvalidEntryAmount) return 'Each payment amount must be greater than zero.';
   if (hasNegativeAgentFee) return 'Agent fee paid cannot be negative.';
-  if (hasAgentFeeOverPayment) return 'Agent fee paid cannot exceed the payment amount for any installment.';
   if (form.entryMode !== 'manual' && assignment && amount > Number(assignment.dueAmount || assignment.totalAmount || 0)) {
     return 'Collection amount cannot exceed outstanding due.';
   }

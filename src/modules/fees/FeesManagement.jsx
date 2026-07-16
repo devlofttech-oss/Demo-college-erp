@@ -32,6 +32,7 @@ import {
   summarizeFees,
   sumPaymentEntryAgentFees,
   sumPaymentEntries,
+  totalFeeComponents,
   validateFeeAdjustment,
   validateFeeCollection,
   validateFeeStructure,
@@ -186,9 +187,7 @@ export default function FeesManagement({
   const validateAgentFeePayments = (paymentEntries, pendingAgentFeeBefore, admissionThroughAgent) => {
     if (!admissionThroughAgent) return '';
     const agentFeePaidAmount = sumPaymentEntryAgentFees(paymentEntries);
-    const entryOverPayment = paymentEntries.some((entry) => Number(entry.agentFeePaidAmount || 0) > Number(entry.amount || 0));
-    if (entryOverPayment) return 'Agent fee paid cannot exceed the payment amount for any installment.';
-    if (agentFeePaidAmount > Number(pendingAgentFeeBefore || 0)) return 'Agent fee paid cannot exceed pending agent fee balance.';
+    if (agentFeePaidAmount > Number(pendingAgentFeeBefore || 0)) return 'Agent payout cannot exceed pending agent fee balance.';
     return '';
   };
 
@@ -377,26 +376,29 @@ export default function FeesManagement({
     const existingKeys = new Set(courseAssignments.map((item) => `${item.studentRecordId}-${item.feeStructureId}`));
     const payloads = targetStudents
       .filter((student) => !existingKeys.has(`${student.id}-${structure.id}`))
-      .map((student) => ({
-        feeStructureId: structure.id,
-        studentRecordId: student.id,
-        studentId: student.studentId,
-        studentName: student.name,
-        classKey: structure.classKey,
-        academicYear: structure.academicYear,
-        courseCode: structure.courseCode || student.courseCode || '',
-        courseName: structure.courseName || student.courseName || student.program || '',
-        ...getFeeValues(structure),
-        totalAmount: Number(structure.totalAmount || 0),
-        paidAmount: 0,
-        adjustmentAmount: 0,
-        dueAmount: Number(structure.totalAmount || 0),
-        dueDate: structure.dueDate,
-        status: 'Due',
-        assignedAtText: formatDisplayDate(),
-        feeYearLabel: structure.feeYearLabel || '',
-        seedSource: structure.seedSource || '',
-      }));
+      .map((student) => {
+        const studentPayableTotal = totalFeeComponents(structure) || Number(structure.totalAmount || 0);
+        return {
+          feeStructureId: structure.id,
+          studentRecordId: student.id,
+          studentId: student.studentId,
+          studentName: student.name,
+          classKey: structure.classKey,
+          academicYear: structure.academicYear,
+          courseCode: structure.courseCode || student.courseCode || '',
+          courseName: structure.courseName || student.courseName || student.program || '',
+          ...getFeeValues(structure),
+          totalAmount: studentPayableTotal,
+          paidAmount: 0,
+          adjustmentAmount: 0,
+          dueAmount: studentPayableTotal,
+          dueDate: structure.dueDate,
+          status: 'Due',
+          assignedAtText: formatDisplayDate(),
+          feeYearLabel: structure.feeYearLabel || '',
+          seedSource: structure.seedSource || '',
+        };
+      });
     if (!payloads.length) {
       toast.success('This structure is already assigned to all matching students.');
       return;

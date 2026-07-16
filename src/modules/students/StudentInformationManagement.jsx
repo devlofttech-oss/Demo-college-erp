@@ -76,6 +76,7 @@ const TimetableManagement = lazy(() => import('../timetable/TimetableManagement'
 const UserRoleManagement = lazy(() => import('../userRoles/UserRoleManagement'));
 
 const DEFAULT_ACADEMIC_YEAR = '2025-2026';
+const NEXT_ACADEMIC_YEAR = '2026-2027';
 
 function csvValue(value) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`;
@@ -432,7 +433,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
     loadStudentInformation();
   }, [academicYear]);
 
-  const academicYearOptions = useMemo(() => [DEFAULT_ACADEMIC_YEAR], []);
+  const academicYearOptions = useMemo(() => [DEFAULT_ACADEMIC_YEAR, NEXT_ACADEMIC_YEAR], []);
 
   const recordBelongsToYear = (record) => !academicYear || record.academicYear === academicYear;
   const yearStudents = useMemo(() => (
@@ -1286,19 +1287,31 @@ function StudentDetailPage({
   });
 
   const paymentHistoryRows = sortPaymentRecordsByDate(feeCollections)
-    .map((item, index) => ({
-      id: item.id || `collection-${index}`,
-      label: item.feeStructureName || item.entryMode || `Payment ${index + 1}`,
-      helper: [
-        formatPaymentDate(item.paymentDate || item.createdAtText) || 'Payment record',
-        item.paymentMode || '',
-        item.creditedToAccount ? `Account: ${item.creditedToAccount}` : '',
-        item.referenceNo ? `Ref: ${item.referenceNo}` : '',
-        formatManualDueItems(item.manualDueItems) ? `Pending: ${formatManualDueItems(item.manualDueItems)}` : '',
-      ].filter(Boolean).join(' | '),
-      value: formatCurrency(item.amount),
-      status: item.status || 'Posted',
-    }));
+    .map((item, index) => {
+      const installmentNo = Number(item.installmentNo || 0);
+      const installmentCount = Number(item.installmentCount || 0);
+      const installmentLabel = installmentNo
+        ? `Installment ${installmentNo}${installmentCount ? `/${installmentCount}` : ''}`
+        : `Installment ${index + 1}`;
+      const paymentDate = formatPaymentDate(item.paymentDate || item.createdAtText);
+      const manualDueItems = formatManualDueItems(item.manualDueItems);
+      return {
+        id: item.id || `collection-${index}`,
+        label: [installmentLabel, item.feeStructureName || item.entryMode].filter(Boolean).join(' - '),
+        helper: [
+          paymentDate && paymentDate !== '-' ? `Date: ${paymentDate}` : 'Payment record',
+          item.paymentTime ? `Time: ${item.paymentTime}` : '',
+          item.paymentMode ? `Mode: ${item.paymentMode}` : '',
+          item.creditedToAccount ? `Account: ${item.creditedToAccount}` : '',
+          item.referenceNo ? `Ref: ${item.referenceNo}` : '',
+          Number(item.dueAfterPayment || 0) > 0 ? `Due after: ${formatCurrency(item.dueAfterPayment)}` : '',
+          Number(item.agentFeePaidAmount || 0) > 0 ? `Agent payout: ${formatCurrency(item.agentFeePaidAmount)}` : '',
+          manualDueItems ? `Pending: ${manualDueItems}` : '',
+        ].filter(Boolean).join(' | '),
+        value: formatCurrency(item.amount),
+        status: item.status || 'Posted',
+      };
+    });
 
   const documentRows = documents.map((item, index) => ({
     id: item.id || `document-${index}`,

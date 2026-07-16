@@ -4510,9 +4510,15 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 
 .erp-shell .erp-payment-date-input,
 .erp-shell .erp-payment-time-input {
-  background:#f8fafc!important;
+  background:#ffffff!important;
+  border-color:#cbd5e1!important;
   color:#0f172a!important;
   color-scheme:light!important;
+}
+
+.erp-shell .erp-payment-date-input::-webkit-datetime-edit,
+.erp-shell .erp-payment-time-input::-webkit-datetime-edit {
+  color:#0f172a!important;
 }
 
 .erp-shell .erp-payment-entry-card label svg {
@@ -4526,7 +4532,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   opacity:1!important;
   width:18px;
   height:18px;
-  filter:invert(25%) sepia(13%) saturate(873%) hue-rotate(169deg) brightness(91%) contrast(89%)!important;
+  filter:invert(21%) sepia(14%) saturate(945%) hue-rotate(169deg) brightness(94%) contrast(91%)!important;
 }
 
 .erp-shell .erp-due-picker {
@@ -5119,4 +5125,65 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   border-color:#8fbc86!important;
   color:#033500!important;
   -webkit-text-fill-color:#033500!important;
+}
+
+@media (min-width:1024px) {
+  .erp-shell {
+    width:125%!important;
+    height:125vh!important;
+    min-height:125vh!important;
+    zoom:.8;
+  }
+
+  .erp-shell > .flex {
+    height:125vh!important;
+    min-height:125vh!important;
+  }
+}
+
+.erp-shell .erp-sidebar.is-collapsed,
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-sticky,
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-menu-card,
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-nav,
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-item-wrap {
+  overflow:visible!important;
+}
+
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-item {
+  position:relative!important;
+}
+
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-item::after {
+  content:attr(data-tooltip);
+  position:absolute;
+  left:calc(100% + 10px);
+  top:50%;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  min-height:32px;
+  max-width:240px;
+  padding:0 11px;
+  border:1px solid rgba(0,255,136,.18);
+  border-radius:7px;
+  background:#071117;
+  color:#f4f7f8;
+  box-shadow:0 14px 34px rgba(0,0,0,.34);
+  font-size:12px;
+  font-weight:700;
+  line-height:1;
+  opacity:0;
+  pointer-events:none;
+  transform:translate(6px,-50%);
+  visibility:hidden;
+  white-space:nowrap;
+  transition:opacity .08s ease,transform .08s ease,visibility 0s linear .08s;
+}
+
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-item:hover::after,
+.erp-shell .erp-sidebar.is-collapsed .erp-sidebar-item:focus-visible::after {
+  opacity:1;
+  transform:translate(0,-50%);
+  transition-delay:.02s;
+  visibility:visible;
 }

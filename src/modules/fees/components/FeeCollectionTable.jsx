@@ -49,7 +49,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                   <div className="font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
                   {item.admissionThroughAgent && (
                     <div className="text-[11px] font-semibold text-cyan-700">
-                      Agent {formatCurrency(item.agentFeePaidAmount)} | Pending {formatCurrency(item.pendingAgentFeeBalance)}
+                      Agent payout {formatCurrency(item.agentFeePaidAmount)} | Pending {formatCurrency(item.pendingAgentFeeBalance)}
                     </div>
                   )}
                 </td>

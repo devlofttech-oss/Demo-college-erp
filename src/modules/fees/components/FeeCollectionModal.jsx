@@ -49,12 +49,7 @@ function getInitialFeeValues({ assignment, collection, structure }) {
 }
 
 function syncAgentDueItem(items = [], admissionThroughAgent = false) {
-  const normalized = normalizeManualDueItems(items, { admissionThroughAgent: true });
-  if (admissionThroughAgent) {
-    return normalized.some((item) => item.id === 'agent-fee')
-      ? normalized
-      : [...normalized, { id: 'agent-fee', label: 'Agent Fee' }];
-  }
+  const normalized = normalizeManualDueItems(items, { admissionThroughAgent });
   return normalized.filter((item) => item.id !== 'agent-fee');
 }
 
@@ -240,9 +235,6 @@ export default function FeeCollectionModal({
     if (Number(entry?.amount || 0) <= 0) return 'Enter a payment amount before adding the next payment.';
     if (!entry?.paymentMode) return 'Select a payment mode before adding the next payment.';
     if (!entry?.paymentDate) return 'Select a payment date before adding the next payment.';
-    if (form.admissionThroughAgent && Number(entry.agentFeePaidAmount || 0) > Number(entry.amount || 0)) {
-      return 'Agent fee paid cannot exceed this payment amount.';
-    }
     return '';
   };
 
@@ -416,7 +408,7 @@ export default function FeeCollectionModal({
           {form.admissionThroughAgent && (
             <div className="erp-agent-fee-panel sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-cyan-100 bg-cyan-50/70 p-4">
               <label className="erp-fee-field">
-                <span className="block text-xs font-semibold text-cyan-700 mb-1.5">{agentFeeComponentField.label}</span>
+                <span className="block text-xs font-semibold text-cyan-700 mb-1.5">Agent Fee (College Payout)</span>
                 <input
                   type="number"
                   min="0"
@@ -427,7 +419,7 @@ export default function FeeCollectionModal({
                 />
               </label>
               <div className="erp-agent-balance-card rounded-lg bg-white p-3">
-                <div className="text-xs font-semibold text-cyan-700">Pending Agent Fee Balance</div>
+                <div className="text-xs font-semibold text-cyan-700">Pending Agent Payout Balance</div>
                 <div className="text-lg font-extrabold text-slate-900">{formatCurrency(pendingAgentFeeAfter)}</div>
                 <div className="text-[11px] font-semibold text-slate-500">Before payment: {formatCurrency(pendingAgentFeeBefore)}</div>
               </div>
@@ -613,11 +605,11 @@ export default function FeeCollectionModal({
                       </label>
                       {form.admissionThroughAgent && (
                         <label>
-                          <span className="block text-xs font-semibold text-slate-500 mb-1.5">Agent Fee Paid</span>
+                          <span className="block text-xs font-semibold text-slate-500 mb-1.5">Agent Payout Paid</span>
                           <input
                             type="number"
                             min="0"
-                            max={Math.min(Number(entry.amount || 0), pendingAgentFeeBefore)}
+                            max={pendingAgentFeeBefore}
                             value={entry.agentFeePaidAmount}
                             onChange={(event) => updatePaymentEntry(entry.rowKey, 'agentFeePaidAmount', event.target.value)}
                             className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
