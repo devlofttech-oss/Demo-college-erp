@@ -30,7 +30,7 @@ $defines = @(
   "--dart-define=FIREBASE_MESSAGING_SENDER_ID=$($envMap["VITE_FIREBASE_MESSAGING_SENDER_ID"])",
   "--dart-define=FIREBASE_APP_ID=$($envMap["VITE_FIREBASE_APP_ID"])",
   "--dart-define=FIREBASE_MEASUREMENT_ID=$($envMap["VITE_FIREBASE_MEASUREMENT_ID"])",
-  "--dart-define=FIREBASE_IOS_BUNDLE_ID=com.devloft.collegeerp"
+  "--dart-define=FIREBASE_IOS_BUNDLE_ID=com.devlofttech.collegesoft"
 )
 
 Push-Location $mobileRoot

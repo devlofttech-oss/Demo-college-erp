@@ -82,15 +82,24 @@ class ErpRepository {
 
   Future<List<Map<String, dynamic>>> documentsByIds(
     String collectionName,
-    Iterable<String> ids,
-  ) async {
+    Iterable<String> ids, {
+    bool optional = true,
+  }) async {
     if (!isReady) return const [];
     final uniqueIds = ids.where((id) => id.isNotEmpty).toSet().toList();
     if (uniqueIds.isEmpty) return const [];
     final snapshots = await Future.wait(
-      uniqueIds.map((id) => _db.collection(collectionName).doc(id).get()),
+      uniqueIds.map((id) async {
+        try {
+          return await _db.collection(collectionName).doc(id).get();
+        } catch (_) {
+          if (optional) return null;
+          rethrow;
+        }
+      }),
     );
     return snapshots
+        .whereType<DocumentSnapshot<Map<String, dynamic>>>()
         .where((snapshot) => snapshot.exists && snapshot.id != '__schema')
         .map((snapshot) => withId(snapshot.id, snapshot.data() ?? const {}))
         .toList();
@@ -101,6 +110,7 @@ class ErpRepository {
     String field,
     Iterable<String> values, {
     String academicYear = '',
+    bool optional = true,
     List<Query<Map<String, dynamic>>>? unused,
   }) async {
     if (!isReady) return const [];
@@ -120,24 +130,36 @@ class ErpRepository {
       );
     }
 
-    final groups = await Future.wait(
-      chunks.map((chunk) async {
-        Query<Map<String, dynamic>> query = _db
-            .collection(collectionName)
-            .where(field, whereIn: chunk);
-        if (academicYear.isNotEmpty) {
-          query = query.where('academicYear', isEqualTo: academicYear);
-        }
-        final snapshot = await query.get();
-        return snapshot.docs.map((doc) => withId(doc.id, doc.data())).toList();
-      }),
-    );
+    try {
+      final groups = await Future.wait(
+        chunks.map((chunk) async {
+          Query<Map<String, dynamic>> query = _db
+              .collection(collectionName)
+              .where(field, whereIn: chunk);
+          if (academicYear.isNotEmpty) {
+            query = query.where('academicYear', isEqualTo: academicYear);
+          }
+          try {
+            final snapshot = await query.get();
+            return snapshot.docs
+                .map((doc) => withId(doc.id, doc.data()))
+                .toList();
+          } catch (_) {
+            if (optional) return const <Map<String, dynamic>>[];
+            rethrow;
+          }
+        }),
+      );
 
-    final byId = <String, Map<String, dynamic>>{};
-    for (final item in groups.expand((group) => group)) {
-      byId[item['id'].toString()] = item;
+      final byId = <String, Map<String, dynamic>>{};
+      for (final item in groups.expand((group) => group)) {
+        byId[item['id'].toString()] = item;
+      }
+      return byId.values.toList();
+    } catch (_) {
+      if (optional) return const [];
+      rethrow;
     }
-    return byId.values.toList();
   }
 
   Future<List<Map<String, dynamic>>> linkedParentStudents(

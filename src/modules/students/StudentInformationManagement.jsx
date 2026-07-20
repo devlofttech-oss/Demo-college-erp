@@ -254,7 +254,7 @@ function StudentReportView({ academicYear, admissions, documents, promotions, st
 export default function StudentInformationManagement({ user, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('erpThemeMode') || 'dark');
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('erpThemeMode') || 'light');
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
   const [selectedCourseCode, setSelectedCourseCode] = useState('all');

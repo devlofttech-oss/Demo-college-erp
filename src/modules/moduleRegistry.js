@@ -219,3 +219,7 @@ export function getModuleByPath(path) {
   return moduleRegistry.find((module) => module.path === resolvedPath) || null;
 }
 
+export function getCanonicalModulePath(id) {
+  return getModuleById(id)?.path || null;
+}
+

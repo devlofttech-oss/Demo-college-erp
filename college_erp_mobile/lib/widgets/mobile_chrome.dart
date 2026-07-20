@@ -70,8 +70,17 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final trailing = [
+      if (showHome)
+        IconButton(
+          tooltip: 'Home',
+          icon: const Icon(Icons.home_rounded),
+          onPressed: onHome,
+        ),
+      ...actions,
+    ];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+      padding: const EdgeInsets.fromLTRB(14, 7, 14, 8),
       child: SizedBox(
         height: 48,
         child: Row(
@@ -99,18 +108,13 @@ class _Header extends StatelessWidget {
                 ),
               ),
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showHome)
-                  IconButton(
-                    tooltip: 'Home',
-                    icon: const Icon(Icons.home_rounded),
-                    onPressed: onHome,
-                  ),
-                ...actions,
-              ],
+            SizedBox(
+              width: trailing.isEmpty ? 40 : 40.0 * trailing.length,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: trailing,
+              ),
             ),
           ],
         ),
@@ -215,7 +219,9 @@ class InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
+    final card = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(

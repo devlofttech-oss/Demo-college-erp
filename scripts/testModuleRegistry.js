@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { getEnabledModules, getModuleById, getModuleByPath, moduleRegistry, sortModulesByDisplayOrder } from '../src/modules/moduleRegistry.js';
+import { getCanonicalModulePath, getEnabledModules, getModuleById, getModuleByPath, moduleRegistry, sortModulesByDisplayOrder } from '../src/modules/moduleRegistry.js';
 import { canAccess, defaultRoles } from '../src/modules/userRoles/rolePermissions.js';
 
 const enabled = getEnabledModules();
@@ -13,6 +13,10 @@ assert.equal(getModuleById('notice-board').id, 'communication');
 assert.equal(getModuleById('financial-reports').id, 'reports');
 assert.equal(getModuleByPath('/modules/notice-board').id, 'communication');
 assert.equal(getModuleByPath('/modules/financial-reports').id, 'reports');
+assert.equal(getCanonicalModulePath('notice-board'), '/modules/communication');
+assert.equal(getCanonicalModulePath('financial-reports'), '/modules/reports');
+assert.equal(getCanonicalModulePath('students'), '/students');
+assert.equal(getCanonicalModulePath('missing-module'), null);
 assert.equal(getModuleById('parent-portal').permission, 'parentPortal.view');
 assert.equal(getModuleById('missing-module'), null);
 

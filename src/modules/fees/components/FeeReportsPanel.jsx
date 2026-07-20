@@ -1,8 +1,9 @@
 import { formatCurrency, formatPaymentDate, sortPaymentRecordsByDate } from '../feeUtils';
 
-export default function FeeReportsPanel({ collections, adjustments }) {
+export default function FeeReportsPanel({ collections = [], adjustments = [], showCollections = true }) {
   return (
-    <div className="grid lg:grid-cols-2 gap-4 mt-5">
+    <div className={`grid ${showCollections ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-4 mt-5`}>
+      {showCollections && (
       <div className="bg-white border border-slate-100 rounded-lg p-5">
         <h3 className="font-bold text-slate-900 mb-4">Recent Collections</h3>
         <div className="space-y-3">
@@ -18,6 +19,7 @@ export default function FeeReportsPanel({ collections, adjustments }) {
           {!collections.length && <div className="text-sm text-slate-500">No collections posted yet.</div>}
         </div>
       </div>
+      )}
       <div className="bg-white border border-slate-100 rounded-lg p-5">
         <h3 className="font-bold text-slate-900 mb-4">Adjustments & Waivers</h3>
         <div className="space-y-3">

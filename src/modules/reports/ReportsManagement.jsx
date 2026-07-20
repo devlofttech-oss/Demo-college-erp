@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart3, BookOpen, ClipboardList, Download, FileText, GraduationCap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AttendanceReports from '../attendance/components/AttendanceReports';
@@ -272,6 +273,7 @@ export default function ReportsManagement({
   selectedCourseCode = 'all',
   studentResults = [],
 }) {
+  const navigate = useNavigate();
   const currentRoleId = currentUser?.roleId || 'admin';
   const categories = useMemo(() => [
     {
@@ -325,6 +327,10 @@ export default function ReportsManagement({
   ], [academicYear, admissions, attendanceRecords, currentRoleId, currentUser, documents, marksEntries, promotions, scopedStudents, selectedCourse, selectedCourseCode, studentResults]);
   const visibleCategories = categories.filter((category) => category.enabled);
   const activeCategory = visibleCategories.find((category) => category.id === initialCategoryId) || visibleCategories[0];
+  const openCategory = (categoryId) => {
+    if (categoryId === activeCategory?.id) return;
+    navigate('/modules/reports', { state: { reportCategory: categoryId } });
+  };
 
   if (!visibleCategories.length) {
     return (
@@ -342,6 +348,32 @@ export default function ReportsManagement({
           <h1 className="text-2xl font-bold text-slate-900">Reports</h1>
           <p className="text-sm text-slate-500 mt-1">Category-wise reports for the modules available to your role.</p>
         </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 py-5">
+        {visibleCategories.map((category) => {
+          const active = activeCategory?.id === category.id;
+          return (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => openCategory(category.id)}
+              aria-pressed={active}
+              className={`min-h-28 rounded-lg border p-4 text-left transition-colors ${
+                active
+                  ? 'border-emerald-300 bg-emerald-50'
+                  : 'border-slate-100 bg-white hover:border-emerald-200'
+              }`}
+            >
+              <span className="flex items-start justify-between gap-3">
+                <span className="h-10 w-10 rounded-lg bg-[#f5f5f6] text-[#34363d] flex items-center justify-center">{category.icon}</span>
+                <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-[11px] font-bold text-slate-600">{active ? 'Open' : 'View'}</span>
+              </span>
+              <span className="mt-4 block text-sm font-bold text-slate-900">{category.label}</span>
+              <span className="mt-1 block text-xs text-slate-500">{category.description}</span>
+            </button>
+          );
+        })}
       </div>
 
       <section className="min-w-0 pt-5">

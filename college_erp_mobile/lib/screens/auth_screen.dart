@@ -125,7 +125,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.page,
+      backgroundColor: const Color(0xFFF7FBFF),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 34, 22, 24),
@@ -135,35 +135,49 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Container(
                 width: 86,
                 height: 86,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.line),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFD8E8FF)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF155EEF).withValues(alpha: 0.1),
+                      blurRadius: 22,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
                 ),
-                child: Image.asset('assets/devloft_logo.png'),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(17),
+                  child: Image.asset(
+                    'assets/collegesoft.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 22),
             const Text(
-              'Devloft College ERP',
+              'Collegesoft',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 25,
+                fontSize: 28,
                 fontWeight: FontWeight.w900,
-                color: AppColors.primaryDark,
+                color: Color(0xFF102A5C),
               ),
             ),
             const SizedBox(height: 6),
             const Text(
-              'Login with the same ERP account',
+              'College Management App',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppColors.muted,
-                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 26),
+            const SizedBox(height: 24),
             InfoCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -224,8 +238,8 @@ class _AuthScreenState extends State<AuthScreen> {
                             : 'Show password',
                         icon: Icon(
                           _showPassword
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
+                              ? Icons.visibility_rounded
+                              : Icons.visibility_off_rounded,
                         ),
                         onPressed: _signingIn || _resetting
                             ? null

@@ -1,12 +1,14 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Building2, GraduationCap } from 'lucide-react';
 import AuthPage from './pages/AuthPage';
+import LegalPage from './pages/LegalPage';
 import StudentInformationManagement from './modules/students/StudentInformationManagement';
 import { logoutUser, subscribeToAuthState } from './firebase/auth';
 import { getInstituteShellData, getUserProfile } from './firebase/db';
 import ParticleBackground from './components/ParticleBackground';
 import { normalizeInstituteSettings } from './modules/settings/settingsModel';
+import { getCanonicalModulePath } from './modules/moduleRegistry';
 
 
 function buildCollegeFromInstitute(institute = {}) {
@@ -83,7 +85,40 @@ function AccessPending({ user, onLogout }) {
   );
 }
 
+function WorkspaceGate({
+  colleges,
+  hasActiveProfile,
+  needsCollegeSelection,
+  onLogout,
+  onSelectCollege,
+  selectedCollege,
+  user,
+}) {
+  if (!user) return <Navigate to="/login" replace />;
+  if (!hasActiveProfile) return <AccessPending user={user} onLogout={onLogout} />;
+  if (needsCollegeSelection) return <CollegeSelection colleges={colleges} onSelect={onSelectCollege} />;
+  return <StudentInformationManagement user={{ ...user, selectedCollege }} onLogout={onLogout} />;
+}
+
+function ModuleWorkspaceRoute(props) {
+  const { moduleSlug = '' } = useParams();
+  const location = useLocation();
+  const canonicalPath = getCanonicalModulePath(moduleSlug);
+
+  if (!canonicalPath) {
+    return <Navigate to={props.user ? '/dashboard' : '/login'} replace />;
+  }
+
+  const requestedPath = `/modules/${moduleSlug}`;
+  if (canonicalPath !== requestedPath) {
+    return <Navigate to={canonicalPath} replace state={location.state} />;
+  }
+
+  return <WorkspaceGate {...props} />;
+}
+
 export default function App() {
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [institute, setInstitute] = useState({});
   const [selectedCollege, setSelectedCollege] = useState(() => {
@@ -141,6 +176,18 @@ export default function App() {
     sessionStorage.setItem('selectedCollege', JSON.stringify(college));
   };
 
+  const publicLegalRoutes = {
+    '/privacy-policy': 'privacy',
+    '/terms-and-conditions': 'terms',
+    '/support': 'support',
+  };
+  const normalizedPath = location.pathname !== '/' ? location.pathname.replace(/\/+$/, '') : location.pathname;
+  const legalRouteType = publicLegalRoutes[normalizedPath];
+
+  if (legalRouteType) {
+    return <LegalPage type={legalRouteType} />;
+  }
+
   if (authLoading) {
     return (
       <div className="app-background">
@@ -155,51 +202,27 @@ export default function App() {
   const hasActiveProfile = user?.status === 'Active' && user?.roleId && user.roleId !== 'pending';
   const needsCollegeSelection = hasActiveProfile && user?.roleId === 'super-admin' && !selectedCollege;
   const colleges = [buildCollegeFromInstitute(institute)];
+  const workspaceProps = {
+    colleges,
+    hasActiveProfile,
+    needsCollegeSelection,
+    onLogout: logout,
+    onSelectCollege: selectCollege,
+    selectedCollege,
+    user,
+  };
 
   return (
     <div className="app-background">
       <ParticleBackground />
       <Routes>
-      <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
-      <Route path="/register" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
-      <Route
-        path="/dashboard"
-        element={user ? (
-          !hasActiveProfile ? (
-            <AccessPending user={user} onLogout={logout} />
-          ) : needsCollegeSelection ? (
-            <CollegeSelection colleges={colleges} onSelect={selectCollege} />
-          ) : (
-            <StudentInformationManagement user={{ ...user, selectedCollege }} onLogout={logout} />
-          )
-        ) : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/students"
-        element={user ? (
-          !hasActiveProfile ? (
-            <AccessPending user={user} onLogout={logout} />
-          ) : needsCollegeSelection ? (
-            <CollegeSelection colleges={colleges} onSelect={selectCollege} />
-          ) : (
-            <StudentInformationManagement user={{ ...user, selectedCollege }} onLogout={logout} />
-          )
-        ) : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/modules/:moduleSlug"
-        element={user ? (
-          !hasActiveProfile ? (
-            <AccessPending user={user} onLogout={logout} />
-          ) : needsCollegeSelection ? (
-            <CollegeSelection colleges={colleges} onSelect={selectCollege} />
-          ) : (
-            <StudentInformationManagement user={{ ...user, selectedCollege }} onLogout={logout} />
-          )
-        ) : <Navigate to="/login" replace />}
-      />
-      <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+        <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
+        <Route path="/register" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+        <Route path="/dashboard" element={<WorkspaceGate {...workspaceProps} />} />
+        <Route path="/students" element={<WorkspaceGate {...workspaceProps} />} />
+        <Route path="/modules/:moduleSlug" element={<ModuleWorkspaceRoute {...workspaceProps} />} />
+        <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
       </Routes>
     </div>
   );

@@ -17,7 +17,7 @@ class CollegeFirebaseOptions {
   );
   static const iosBundleId = String.fromEnvironment(
     'FIREBASE_IOS_BUNDLE_ID',
-    defaultValue: 'com.devloft.collegeErpMobile',
+    defaultValue: 'com.devlofttech.collegesoft',
   );
 
   static bool get isConfigured {

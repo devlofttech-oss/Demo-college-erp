@@ -89,7 +89,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   static const _activeStudentStatus = 'Active';
   static const _defaultAcademicYear = '2025-2026';
 
-  var _query = '';
+  final String _query = '';
   var _academicYear = '';
   var _studentStatusFilter = 'active';
   var _studentCourseCode = 'all';
@@ -158,8 +158,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _load());
-    await _future;
+    final nextFuture = _load();
+    setState(() {
+      _future = nextFuture;
+    });
+    await nextFuture;
   }
 
   bool _can(String permission) =>
@@ -197,15 +200,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Widget build(BuildContext context) {
     return MobileScaffold(
       title: widget.module.label,
-      showHome: true,
-      onHome: () => AppRoutes.goHome(context),
-      actions: [
-        IconButton(
-          tooltip: 'Refresh',
-          icon: const Icon(Icons.refresh_rounded),
-          onPressed: _refresh,
-        ),
-      ],
       onRefresh: _refresh,
       body: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
         future: _future,
@@ -220,38 +214,34 @@ class _ModuleScreenState extends State<ModuleScreen> {
               title: 'Unable to load ${widget.module.label}',
               message: snapshot.error.toString(),
               icon: Icons.cloud_off_rounded,
-              actionLabel: 'Retry',
-              actionIcon: Icons.refresh_rounded,
-              onAction: _refresh,
             );
           }
           final data =
               snapshot.data ?? const <String, List<Map<String, dynamic>>>{};
+          final moduleActions = _actionsForModule(data);
           return AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.02),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
             child: ListView(
               key: ValueKey('${widget.module.id}-$_academicYear'),
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
               children: [
-                SearchBox(
-                  hint: 'Search ${widget.module.label}',
-                  onChanged: (value) => setState(() => _query = value),
-                ),
-                const SizedBox(height: 12),
-                _AcademicYearField(
-                  value: _academicYear,
-                  onChanged: (value) {
-                    setState(() {
-                      _academicYear = value;
-                      _future = _load();
-                    });
-                  },
-                ),
-                _ModuleActionBar(actions: _actionsForModule(data)),
-                const SizedBox(height: 4),
+                if (moduleActions.isNotEmpty) ...[
+                  _ModuleActionBar(actions: moduleActions),
+                  const SizedBox(height: 8),
+                ],
                 _buildBody(data),
               ],
             ),
@@ -345,14 +335,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
             ),
         ];
       case 'attendance':
-        return [
-          if (_can('attendance.markStudents') || _can('attendance.markStaff'))
-            _ModuleAction(
-              label: 'Mark',
-              icon: Icons.add_task_rounded,
-              onTap: () => _showAttendanceSheet(data),
-            ),
-        ];
+        return const [];
       case 'timetable':
         return [
           if (_can('timetable.create'))
@@ -405,6 +388,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
             ),
         ];
       case 'communication':
+        if (widget.user.isParent) return const [];
         return [
           if (_can('notices.create'))
             _ModuleAction(
@@ -563,15 +547,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Students',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     Text(
                       course == null ? 'All Students' : course.label,
                       maxLines: 1,
@@ -580,11 +555,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      'Browse active and archived records.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -595,6 +565,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
         const SizedBox(height: 12),
         if (courseOptions.length > 1)
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue:
                 courseOptions.any(
                   (option) => option.courseCode == _studentCourseCode,
@@ -609,11 +580,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 .map(
                   (option) => DropdownMenuItem(
                     value: option.courseCode,
-                    child: Text(
-                      option.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: _DropdownItemText(option.label),
                   ),
                 )
                 .toList(),
@@ -655,7 +622,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
           EmptyState(
             title:
                 'No ${_studentStatusFilter == 'archived' ? 'archived' : 'active'} student records found',
-            message: 'Try a different search, course, or academic year.',
+            message: 'No records are available for the selected view.',
           )
         else
           ...visibleStudents.map(
@@ -900,25 +867,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Faculty & Staff',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'All Faculty & Staff',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Browse active and archived records.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -972,7 +925,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
           EmptyState(
             title:
                 'No ${_staffStatusFilter == 'archived' ? 'archived' : 'active'} faculty or staff records found',
-            message: 'Try a different search, type, or academic year.',
+            message: 'No records are available for the selected view.',
           )
         else
           ...staff.map(
@@ -1285,7 +1238,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
         if (staff.isEmpty)
           const EmptyState(
             title: 'No staff found',
-            message: 'Try a different search.',
+            message: 'No faculty or staff records are available.',
           )
         else
           ...staff.map(
@@ -1390,9 +1343,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
         ? canMarkStudents
         : canMarkStaff;
     final roster = _attendanceMode == 'students' ? students : staff;
-    final activeTaskTitle = _attendanceTask == 'staff'
-        ? 'Staff Attendance'
-        : 'Student Attendance';
     final activeBranchTitle = _attendanceBranch == 'mark-general-students'
         ? 'Mark General Attendance'
         : _attendanceBranch == 'mark-staff'
@@ -1423,15 +1373,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Academics / Attendance Management',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     Text(
                       _attendanceTask.isEmpty
                           ? 'Attendance Management'
@@ -1441,16 +1382,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       style: const TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _attendanceTask.isEmpty
-                          ? 'Student and faculty attendance tracking.'
-                          : '$activeTaskTitle / $dateText',
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -1577,6 +1508,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     if (_attendanceMode == 'students' &&
                         _attendanceScope == 'subject') ...[
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue:
                             subjectOptions.any(
                               (option) => option.code == _attendanceSubjectCode,
@@ -1591,10 +1523,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             .map(
                               (option) => DropdownMenuItem(
                                 value: option.code,
-                                child: Text(
-                                  option.name,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                child: _DropdownItemText(option.name),
                               ),
                             )
                             .toList(),
@@ -1634,8 +1563,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         title: _attendanceMode == 'students'
                             ? 'No students found'
                             : 'No faculty or staff found',
-                        message:
-                            'Try a different search or academic year filter.',
+                        message: 'No roster records are available.',
                       )
                     else
                       ...roster.map((entity) {
@@ -2127,25 +2055,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Academics / Timetable Management',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'Timetable Management',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Class timetable creation and schedule management.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -2775,15 +2689,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Academics / Examination & Result Management',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     Text(
                       _examTask.isEmpty
                           ? 'Examination & Result Management'
@@ -2794,11 +2699,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      'Exam scheduling, marks, results, and report cards.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -3987,25 +3887,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Finance / Payment',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'Payment',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Student payment collection, due tracking, fee setup, waivers, and receipts.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -5340,12 +5226,21 @@ class _ModuleScreenState extends State<ModuleScreen> {
     final canEdit = _can('notices.edit');
     final canArchive = _can('notices.archive');
     final canManage = canCreate || canEdit || canArchive;
+    final isParentViewer = widget.user.roleId == 'parent' && !canManage;
+    final activeCommunicationTaskId = isParentViewer
+        ? 'notices'
+        : _communicationTask;
     final roleScopedNotices = _items(
       data,
       'notices',
     ).where((notice) => _noticeVisibleForRole(notice, canManage)).toList();
     final taskScopedNotices = roleScopedNotices
-        .where((notice) => _noticeMatchesCommunicationTask(notice))
+        .where(
+          (notice) => _noticeMatchesCommunicationTask(
+            notice,
+            taskId: activeCommunicationTaskId,
+          ),
+        )
         .toList();
     final visibleNotices = taskScopedNotices
         .where((notice) => _noticeMatchesFilters(notice, canManage))
@@ -5363,32 +5258,34 @@ class _ModuleScreenState extends State<ModuleScreen> {
         icon: Icons.campaign_rounded,
         count: roleScopedNotices.length,
       ),
-      _CommunicationTaskOption(
-        id: 'alerts',
-        title: 'SMS/WhatsApp Alerts',
-        helper: 'Short alerts for urgent updates and reminders.',
-        icon: Icons.message_rounded,
-        count: roleScopedNotices
-            .where((notice) => _isAlertNotice(notice))
-            .length,
-      ),
-      _CommunicationTaskOption(
-        id: 'parents',
-        title: 'Parent Communication',
-        helper: 'Parent-facing messages and guardian updates.',
-        icon: Icons.family_restroom_rounded,
-        count: roleScopedNotices
-            .where((notice) => _isParentCommunicationNotice(notice))
-            .length,
-      ),
+      if (!isParentViewer)
+        _CommunicationTaskOption(
+          id: 'alerts',
+          title: 'SMS/WhatsApp Alerts',
+          helper: 'Short alerts for urgent updates and reminders.',
+          icon: Icons.message_rounded,
+          count: roleScopedNotices
+              .where((notice) => _isAlertNotice(notice))
+              .length,
+        ),
+      if (!isParentViewer)
+        _CommunicationTaskOption(
+          id: 'parents',
+          title: 'Parent Communication',
+          helper: 'Parent-facing messages and guardian updates.',
+          icon: Icons.family_restroom_rounded,
+          count: roleScopedNotices
+              .where((notice) => _isParentCommunicationNotice(notice))
+              .length,
+        ),
     ];
     final activeTask = tasks.firstWhere(
-      (task) => task.id == _communicationTask,
+      (task) => task.id == activeCommunicationTaskId,
       orElse: () => tasks.first,
     );
     return Column(
       key: ValueKey(
-        'communication-$_communicationTask-$_communicationTypeFilter-$_communicationAudienceFilter-$_communicationStatusFilter',
+        'communication-$activeCommunicationTaskId-$_communicationTypeFilter-$_communicationAudienceFilter-$_communicationStatusFilter',
       ),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -5414,25 +5311,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Administration / Communication',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'Communication',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Announcements, circular management, event communication, audience targeting, and publication status.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -5463,28 +5346,29 @@ class _ModuleScreenState extends State<ModuleScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        ...tasks.map(
-          (task) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _CommunicationTaskCard(
-              task: task,
-              selected: task.id == _communicationTask,
-              onTap: () => setState(() {
-                _communicationTask = task.id;
-                _communicationSelectedNoticeId = '';
-                _communicationTypeFilter = '';
-                _communicationAudienceFilter = '';
-                _communicationStatusFilter = '';
-              }),
+        if (!isParentViewer)
+          ...tasks.map(
+            (task) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _CommunicationTaskCard(
+                task: task,
+                selected: task.id == activeCommunicationTaskId,
+                onTap: () => setState(() {
+                  _communicationTask = task.id;
+                  _communicationSelectedNoticeId = '';
+                  _communicationTypeFilter = '';
+                  _communicationAudienceFilter = '';
+                  _communicationStatusFilter = '';
+                }),
+              ),
             ),
           ),
-        ),
-        if (canCreate) ...[
+        if (canCreate && !isParentViewer) ...[
           const SizedBox(height: 10),
           PrimaryActionButton(
-            label: _communicationTask == 'alerts'
+            label: activeCommunicationTaskId == 'alerts'
                 ? 'Create Alert'
-                : _communicationTask == 'parents'
+                : activeCommunicationTaskId == 'parents'
                 ? 'Create Parent Message'
                 : 'Create Announcement',
             icon: Icons.add_rounded,
@@ -5494,20 +5378,22 @@ class _ModuleScreenState extends State<ModuleScreen> {
         const SizedBox(height: 12),
         _MonthStrip(items: visibleNotices),
         SectionTitle(activeTask.title),
-        _CommunicationFilterPanel(
-          typeFilter: _communicationTypeFilter,
-          audienceFilter: _communicationAudienceFilter,
-          statusFilter: _communicationStatusFilter,
-          canManage: canManage,
-          isParentViewer: widget.user.roleId == 'parent' && !canManage,
-          onTypeChanged: (value) =>
-              setState(() => _communicationTypeFilter = value),
-          onAudienceChanged: (value) =>
-              setState(() => _communicationAudienceFilter = value),
-          onStatusChanged: (value) =>
-              setState(() => _communicationStatusFilter = value),
-        ),
-        const SizedBox(height: 12),
+        if (!isParentViewer) ...[
+          _CommunicationFilterPanel(
+            typeFilter: _communicationTypeFilter,
+            audienceFilter: _communicationAudienceFilter,
+            statusFilter: _communicationStatusFilter,
+            canManage: canManage,
+            isParentViewer: false,
+            onTypeChanged: (value) =>
+                setState(() => _communicationTypeFilter = value),
+            onAudienceChanged: (value) =>
+                setState(() => _communicationAudienceFilter = value),
+            onStatusChanged: (value) =>
+                setState(() => _communicationStatusFilter = value),
+          ),
+          const SizedBox(height: 12),
+        ],
         if (visibleNotices.isEmpty)
           const EmptyState(
             title: 'No announcements found',
@@ -5569,9 +5455,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
     }
   }
 
-  bool _noticeMatchesCommunicationTask(Map<String, dynamic> notice) {
-    if (_communicationTask == 'alerts') return _isAlertNotice(notice);
-    if (_communicationTask == 'parents') {
+  bool _noticeMatchesCommunicationTask(
+    Map<String, dynamic> notice, {
+    String? taskId,
+  }) {
+    final activeTaskId = taskId ?? _communicationTask;
+    if (activeTaskId == 'alerts') return _isAlertNotice(notice);
+    if (activeTaskId == 'parents') {
       return _isParentCommunicationNotice(notice);
     }
     return true;
@@ -5862,25 +5752,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Administration / Document Management',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'Document Management',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Search documents, inspect metadata, verify records, and open uploaded files.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -6310,25 +6186,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Campus Services / Hostel Management',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'Hostel Management',
                       style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Room allocation, hostel occupancy tracking, and hostel records management.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -6678,21 +6540,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Academics / Curriculum',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
                       'Curriculum',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Calendar view for classes, tests, holidays, admissions, and academic events.',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -7775,43 +7627,92 @@ class _ModuleScreenState extends State<ModuleScreen> {
   }
 
   Widget _reports(Map<String, List<Map<String, dynamic>>> data) {
-    final fees = _items(data, 'fees');
-    final collections = _items(data, 'collections');
-    final due = fees.fold<num>(
+    final students = _items(data, 'students');
+    final staff = _items(data, 'staff');
+    final documents = _items(data, 'documents');
+    final notices = _items(data, 'notices');
+    final exams = _items(data, 'exams');
+    final structures = _feeStructures(data);
+    final assignments = _feeAssignments(data, students);
+    final collections = _feeCollections(data, assignments, students);
+    final adjustments = _feeAdjustments(data, assignments, students);
+    final rows = assignments
+        .map(
+          (assignment) =>
+              _feeSnapshot(assignment, collections, adjustments, structures),
+        )
+        .toList();
+    final totalAssigned = rows.fold<num>(0, (total, row) => total + row.total);
+    final collected = rows.fold<num>(0, (total, row) => total + row.paid);
+    final adjusted = rows.fold<num>(0, (total, row) => total + row.adjusted);
+    final due = rows.fold<num>(0, (total, row) => total + row.due);
+    final collectionRate = totalAssigned <= 0
+        ? 0
+        : (((collected + adjusted) / totalAssigned) * 100)
+              .clamp(0, 100)
+              .round();
+    final collectionTrend = _dashboardCollectionTrend(collections);
+    final paymentSplit = [
+      _DashboardValueShare(
+        label: 'Collected',
+        value: collected,
+        color: AppColors.accent,
+      ),
+      _DashboardValueShare(
+        label: 'Outstanding',
+        value: due,
+        color: AppColors.warning,
+      ),
+      _DashboardValueShare(
+        label: 'Adjusted',
+        value: adjusted,
+        color: AppColors.danger,
+      ),
+    ];
+    final splitTotal = paymentSplit.fold<num>(
       0,
-      (total, item) =>
-          total +
-          readNumber(item, const [
-            'balanceAmount',
-            'unpaid',
-            'dueAmount',
-            'amountDue',
-          ]),
+      (total, item) => total + item.value,
     );
-    final collected = collections.fold<num>(
+    final paidRows = rows.where((row) => row.total > 0 && row.due <= 0).length;
+    final partialRows = rows
+        .where((row) => row.status == 'Partially Paid')
+        .length;
+    final dueRows = rows.where((row) => row.due > 0).length;
+    final statusSplit = [
+      _DashboardValueShare(
+        label: 'Paid',
+        value: paidRows,
+        color: AppColors.accent,
+      ),
+      _DashboardValueShare(
+        label: 'Partial',
+        value: partialRows,
+        color: AppColors.warning,
+      ),
+      _DashboardValueShare(
+        label: 'Due',
+        value: dueRows,
+        color: AppColors.danger,
+      ),
+    ];
+    final statusTotal = statusSplit.fold<num>(
       0,
-      (total, item) =>
-          total +
-          readNumber(item, const [
-            'paidAmount',
-            'amount',
-            'totalPaid',
-            'collectedAmount',
-          ]),
+      (total, item) => total + item.value,
     );
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SummaryRow(
           stats: [
             _Stat(
               'Students',
-              _items(data, 'students').length.toString(),
+              students.length.toString(),
               Icons.school_rounded,
               AppColors.accent,
             ),
             _Stat(
               'Staff',
-              _items(data, 'staff').length.toString(),
+              staff.length.toString(),
               Icons.groups_rounded,
               AppColors.primary,
             ),
@@ -7826,6 +7727,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
         const SectionTitle('Financial Snapshot'),
         InfoCard(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -7848,20 +7750,49 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 children: [
                   Expanded(
                     child: LabelValue(
+                      label: 'Assigned',
+                      value: formatMoney(totalAssigned),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(
+                      label: 'Adjusted',
+                      value: formatMoney(adjusted),
+                    ),
+                  ),
+                  Expanded(
+                    child: LabelValue(label: 'Rate', value: '$collectionRate%'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _DashboardProgressRow(
+                label: 'Collection Rate',
+                value: '$collectionRate%',
+                percent: totalAssigned <= 0
+                    ? 0
+                    : (collected + adjusted) / totalAssigned,
+                color: AppColors.accent,
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: LabelValue(
                       label: 'Documents',
-                      value: _items(data, 'documents').length.toString(),
+                      value: documents.length.toString(),
                     ),
                   ),
                   Expanded(
                     child: LabelValue(
                       label: 'Notices',
-                      value: _items(data, 'notices').length.toString(),
+                      value: notices.length.toString(),
                     ),
                   ),
                   Expanded(
                     child: LabelValue(
                       label: 'Exams',
-                      value: _items(data, 'exams').length.toString(),
+                      value: exams.length.toString(),
                     ),
                   ),
                 ],
@@ -7869,24 +7800,70 @@ class _ModuleScreenState extends State<ModuleScreen> {
             ],
           ),
         ),
-        const SectionTitle('Recent Notices'),
-        ..._items(data, 'notices')
-            .take(8)
-            .map(
-              (notice) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _CompactRow(
-                  title: readText(notice, const ['title', 'subject']),
-                  subtitle: formatDateValue(
-                    notice['publishDate'] ?? notice['createdAt'],
+        const SectionTitle('Payment Trend'),
+        InfoCard(child: _DashboardTrendChart(months: collectionTrend)),
+        const SectionTitle('Payment Mix'),
+        InfoCard(
+          child: Column(
+            children: paymentSplit
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _DashboardProgressRow(
+                      label: item.label,
+                      value: formatMoney(item.value),
+                      percent: splitTotal <= 0 ? 0 : item.value / splitTotal,
+                      color: item.color,
+                    ),
                   ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.muted,
+                )
+                .toList(),
+          ),
+        ),
+        const SectionTitle('Fee Status'),
+        InfoCard(
+          child: Column(
+            children: statusSplit
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _DashboardProgressRow(
+                      label: item.label,
+                      value: item.value.round().toString(),
+                      percent: statusTotal <= 0 ? 0 : item.value / statusTotal,
+                      color: item.color,
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        const SectionTitle('Recent Notices'),
+        if (notices.isEmpty)
+          const InfoCard(
+            child: Text(
+              'No recent notices.',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
+          )
+        else
+          ...notices
+              .take(8)
+              .map(
+                (notice) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _CompactRow(
+                    title: readText(notice, const ['title', 'subject']),
+                    subtitle: formatDateValue(
+                      notice['publishDate'] ?? notice['createdAt'],
+                    ),
+                    trailing: const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.muted,
+                    ),
                   ),
                 ),
               ),
-            ),
       ],
     );
   }
@@ -8581,108 +8558,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
     }
   }
 
-  Future<void> _showAttendanceSheet(
-    Map<String, List<Map<String, dynamic>>> data,
-  ) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          18,
-          20,
-          MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.line,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Mark Attendance',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Choose the same attendance flow used in the web ERP.',
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
-              ),
-              const SizedBox(height: 14),
-              if (_can('attendance.markStudents')) ...[
-                _AttendanceSheetChoice(
-                  icon: Icons.calendar_today_rounded,
-                  title: 'Mark General Attendance',
-                  subtitle:
-                      '${_attendanceStudents(data).length} active students',
-                  onTap: () => Navigator.of(context).pop('student-general'),
-                ),
-                const SizedBox(height: 8),
-                _AttendanceSheetChoice(
-                  icon: Icons.menu_book_rounded,
-                  title: 'Mark Subject Attendance',
-                  subtitle:
-                      '${_attendanceSubjectOptions(data).length} live subjects',
-                  onTap: () => Navigator.of(context).pop('student-subject'),
-                ),
-                const SizedBox(height: 8),
-              ],
-              if (_can('attendance.markStaff'))
-                _AttendanceSheetChoice(
-                  icon: Icons.assignment_ind_rounded,
-                  title: 'Mark Staff Attendance',
-                  subtitle: '${_attendanceStaff(data).length} active staff',
-                  onTap: () => Navigator.of(context).pop('staff'),
-                ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded, size: 18),
-                label: const Text('Cancel'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted || choice == null) return;
-    switch (choice) {
-      case 'student-general':
-        _openAttendanceBranch(
-          branch: 'mark-general-students',
-          mode: 'students',
-          scope: 'general',
-        );
-        break;
-      case 'student-subject':
-        _openAttendanceBranch(
-          branch: 'mark-students',
-          mode: 'students',
-          scope: 'subject',
-        );
-        break;
-      case 'staff':
-        _openAttendanceBranch(
-          branch: 'mark-staff',
-          mode: 'staff',
-          scope: 'staff',
-        );
-        break;
-    }
-  }
-
   void _showStudentSheet(
     Map<String, dynamic> student,
     Map<String, List<Map<String, dynamic>>> data,
@@ -8780,7 +8655,7 @@ class _ModuleActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (actions.isEmpty) return const SizedBox(height: 8);
+    if (actions.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 2),
       child: SingleChildScrollView(
@@ -14362,33 +14237,6 @@ class _RecordFormSheetState extends State<_RecordFormSheet> {
   }
 }
 
-class _AcademicYearField extends StatelessWidget {
-  const _AcademicYearField({required this.value, required this.onChanged});
-
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = TextEditingController(text: value);
-    return SizedBox(
-      height: 46,
-      child: TextField(
-        controller: controller,
-        onSubmitted: onChanged,
-        decoration: const InputDecoration(
-          prefixIcon: Icon(
-            Icons.calendar_today_rounded,
-            size: 18,
-            color: AppColors.muted,
-          ),
-          hintText: 'Academic year filter, e.g. 2026-2027',
-        ),
-      ),
-    );
-  }
-}
-
 class _SummaryRow extends StatelessWidget {
   const _SummaryRow({required this.stats});
 
@@ -15081,15 +14929,23 @@ class _DashboardTrendChart extends StatelessWidget {
                           alignment: Alignment.bottomCenter,
                           child: Tooltip(
                             message: formatMoney(month.value),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 260),
-                              curve: Curves.easeOutCubic,
-                              height: 22 + ((month.value / maxValue) * 104),
-                              width: 24,
-                              decoration: BoxDecoration(
-                                color: AppColors.early,
-                                borderRadius: BorderRadius.circular(8),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(
+                                begin: 0,
+                                end: month.value / maxValue,
                               ),
+                              duration: const Duration(milliseconds: 460),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, _) {
+                                return Container(
+                                  height: 22 + (value * 104),
+                                  width: 24,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.early,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -15159,11 +15015,18 @@ class _DashboardProgressRow extends StatelessWidget {
         const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: normalized,
-            minHeight: 8,
-            backgroundColor: AppColors.page,
-            color: color,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: normalized),
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) {
+              return LinearProgressIndicator(
+                value: value,
+                minHeight: 8,
+                backgroundColor: AppColors.page,
+                color: color,
+              );
+            },
           ),
         ),
       ],
@@ -15335,6 +15198,22 @@ class _SegmentedFilter extends StatelessWidget {
   }
 }
 
+class _DropdownItemText extends StatelessWidget {
+  const _DropdownItemText(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+    );
+  }
+}
+
 class _AttendanceDateButton extends StatelessWidget {
   const _AttendanceDateButton({required this.label, required this.onPressed});
 
@@ -15449,54 +15328,6 @@ class _AttendanceTaskCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _AttendanceSheetChoice extends StatelessWidget {
-  const _AttendanceSheetChoice({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InfoCard(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 15,
-            color: AppColors.muted,
-          ),
-        ],
       ),
     );
   }

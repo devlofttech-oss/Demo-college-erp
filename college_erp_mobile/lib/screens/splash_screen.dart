@@ -8,44 +8,66 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF7FBFF),
       body: SafeArea(
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 112,
-                height: 112,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.page,
-                  borderRadius: BorderRadius.circular(8),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.94, end: 1),
+            duration: const Duration(milliseconds: 520),
+            curve: Curves.easeOutCubic,
+            builder: (context, scale, child) {
+              return Transform.scale(
+                scale: scale,
+                child: Opacity(opacity: scale.clamp(0, 1), child: child),
+              );
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 122,
+                  height: 122,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: const Color(0xFFD8E8FF)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF155EEF).withValues(alpha: 0.12),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset(
+                      'assets/collegesoft.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
-                child: Image.asset(
-                  'assets/devloft_logo.png',
-                  fit: BoxFit.contain,
+                const SizedBox(height: 24),
+                const Text(
+                  'Collegesoft',
+                  style: TextStyle(
+                    color: Color(0xFF102A5C),
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 22),
-              const Text(
-                'Devloft ERP',
-                style: TextStyle(
-                  color: AppColors.primaryDark,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
+                const SizedBox(height: 7),
+                const Text(
+                  'College Management App',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 7),
-              const Text(
-                'College Management App',
-                style: TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

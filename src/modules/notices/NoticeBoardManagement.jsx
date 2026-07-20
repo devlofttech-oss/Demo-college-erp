@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Megaphone, MessageCircle, Plus, Search, UserRound } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   archiveNoticeItem,
@@ -22,6 +23,11 @@ import NoticeModal from './components/NoticeModal';
 import NoticePreviewPanel from './components/NoticePreviewPanel';
 import NoticeTable from './components/NoticeTable';
 
+const communicationTaskIds = ['notices', 'alerts', 'parents'];
+const normalizeCommunicationTask = (taskId) => (
+  communicationTaskIds.includes(taskId) ? taskId : 'notices'
+);
+
 export default function NoticeBoardManagement({
   currentUser,
   academicYear = '',
@@ -29,13 +35,14 @@ export default function NoticeBoardManagement({
   selectedCourse = null,
   selectedCourseCode = 'all',
 }) {
+  const navigate = useNavigate();
   const [notices, setNotices] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [filters, setFilters] = useState({ search: '', type: '', audience: '', status: '' });
   const [loadError, setLoadError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
-  const [activeCommunicationTask, setActiveCommunicationTask] = useState(initialTask || 'notices');
+  const [activeCommunicationTask, setActiveCommunicationTask] = useState(normalizeCommunicationTask(initialTask));
 
   useEffect(() => {
     const loadNotices = async () => {
@@ -209,6 +216,13 @@ export default function NoticeBoardManagement({
 
   const selectForPreview = (notice) => setSelectedId(notice.id);
   const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
+  const openCommunicationTask = (taskId) => {
+    const nextTaskId = normalizeCommunicationTask(taskId);
+    if (nextTaskId === activeCommunicationTask) return;
+    setActiveCommunicationTask(nextTaskId);
+    setSelectedId('');
+    navigate('/modules/communication', { state: { communicationTask: nextTaskId } });
+  };
 
   return (
     <div>
@@ -232,10 +246,8 @@ export default function NoticeBoardManagement({
           <button
             key={task.id}
             type="button"
-            onClick={() => {
-              setActiveCommunicationTask(task.id);
-              setSelectedId('');
-            }}
+            onClick={() => openCommunicationTask(task.id)}
+            aria-pressed={activeCommunicationTask === task.id}
             className={`erp-communication-task min-h-32 rounded-lg border p-4 text-left flex flex-col justify-between ${activeCommunicationTask === task.id ? 'is-active border-emerald-300 bg-emerald-50' : 'border-slate-100 bg-white'}`}
           >
             <span className="flex items-start justify-between gap-3">

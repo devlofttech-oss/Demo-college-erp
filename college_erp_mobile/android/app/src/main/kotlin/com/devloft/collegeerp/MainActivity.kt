@@ -1,4 +1,4 @@
-package com.devloft.collegeerp
+package com.devlofttech.collegesoft
 
 import io.flutter.embedding.android.FlutterActivity
 

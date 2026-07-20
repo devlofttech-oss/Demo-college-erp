@@ -1,18 +1,30 @@
 # Dead State Audit - 2026-07-16
 
-Checked visible disabled controls, placeholder copy, module routes, and branch cards in the web ERP.
+Checked visible disabled controls, placeholder copy, module routes, browser back behavior, and branch cards in the web ERP.
 
-## Findings
+## Fixed
 
-- Settings > Module Defaults keeps `onlinePayments`, `receiptGeneration`, and `communicationModule` disabled. This matches the README note that these excluded features remain disabled by default, so they are intentional dead states until those modules are implemented.
-- Fees > Fee Collections has an empty branch description, but the card and header button still open the record-payment page when the role has `fees.collect`. This is only missing helper copy, not a dead button.
+- Unknown `/modules/:moduleSlug` paths no longer fall through to the Dashboard while keeping a bad URL. Module slugs now resolve through the registry, legacy aliases canonicalize, and missing modules redirect out of the dead route.
+- Reports categories are now reachable from in-page category cards, not only from the sidebar submenu. Category changes use React Router state, so browser Back returns to the previous report category.
+- Communication task cards now update the module route state, so browser Back returns to the previous communication task.
+- Fees > Fee Collections now has helper copy on its branch card.
+- Fees > Adjustment History now renders an adjustment-only panel instead of showing an empty Recent Collections half.
+- Settings > Module Defaults marks reserved toggles as "Coming later" so disabled defaults do not look like broken controls.
+
+## Intentional Guard States
+
+- Settings > Module Defaults keeps `onlinePayments`, `receiptGeneration`, and `communicationModule` disabled. This matches the README note that these excluded features remain disabled by default, so they are intentional until those modules are implemented.
 - Fees > Approve Adjustment is disabled when the user lacks `fees.adjust` or there are no payable assignments. This is data/permission gated, not broken.
-- Fees > Adjustment History uses the shared reports panel, so the Recent Collections half can show "No collections posted yet" even when the user only came to see adjustments. It works, but the shared panel can feel like a dead sub-section in that context.
 - Exams branches for Internal Assessment, Generate Results, and Report Cards are permission gated and open their respective CTA panels. No dead exam branch was found in the inspected code path.
 - Document owner fields and role/permission buttons disable correctly when prerequisites or role permissions are missing. These are guard states, not dead controls.
 
-## Follow-up Candidates
+## Verification
 
-- Add a short description for the Fee Collections branch card.
-- Split Fees > Adjustment History into an adjustment-only panel so the collections empty state is not shown there.
-- Keep the excluded Settings toggles hidden or marked as coming later if they should not invite clicks.
+- `npm test`
+- `npm run lint`
+- `npm run build`
+- Browser smoke on `http://127.0.0.1:5174`: unauthenticated `/dashboard`, `/students`, `/register`, legacy module aliases, and an unknown module slug all landed on `/login` without console errors.
+
+## Remaining Manual Check
+
+- Authenticated browser traversal of protected modules still needs a valid test login supplied by the project owner. The protected shell and route/state changes build and pass unit coverage, but live Back-button traversal inside protected modules was not submitted with local credentials during this audit.

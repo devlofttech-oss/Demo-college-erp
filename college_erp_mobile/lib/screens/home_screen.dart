@@ -51,9 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(
-      () => _dashboardFuture = widget.repository.dashboard(user: widget.user),
-    );
+    final nextFuture = widget.repository.dashboard(user: widget.user);
+    setState(() {
+      _dashboardFuture = nextFuture;
+    });
     await widget.onRefreshSession();
   }
 
@@ -280,8 +281,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ];
             }),
-          const SizedBox(height: 20),
-          _ProfileCard(user: widget.user),
         ],
       ),
     );
@@ -341,54 +340,6 @@ class _ModuleTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.user});
-
-  final AppUser user;
-
-  @override
-  Widget build(BuildContext context) {
-    return InfoCard(
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.person_rounded, color: AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.roleId,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  user.displayId.isEmpty ? user.email : user.displayId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          StatusPill(label: user.status),
-        ],
       ),
     );
   }

@@ -9,6 +9,8 @@ import { buildNextId, formatDisplayDate, summarizeSettings, validateAcademicYear
 import AcademicsManagement from '../academics/AcademicsManagement';
 import UserRoleManagement from '../userRoles/UserRoleManagement';
 
+const lockedModuleDefaultKeys = new Set(['onlinePayments', 'receiptGeneration', 'communicationModule']);
+
 export default function SettingsManagement({ currentUser, selectedCourse = null, selectedCourseCode = 'all' }) {
   const [institute, setInstitute] = useState({});
   const [academicYear, setAcademicYear] = useState({});
@@ -309,12 +311,18 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
         <section className="bg-white border border-slate-100 rounded-lg p-5">
           <h3 className="font-bold mb-4">Module Defaults</h3>
           <div className="space-y-2">
-            {Object.entries(moduleDefaults).filter(([key]) => key !== 'id' && key !== 'updatedAtText').map(([key, value]) => (
-              <label key={key} className="flex items-center justify-between rounded-lg bg-[#f5f5f6] p-3 text-sm">
-                <span>{key.replace(/([A-Z])/g, ' $1')}</span>
-                <input type="checkbox" checked={Boolean(value)} onChange={() => toggleDefault(key)} disabled={['onlinePayments', 'receiptGeneration', 'communicationModule'].includes(key)} />
+            {Object.entries(moduleDefaults).filter(([key]) => key !== 'id' && key !== 'updatedAtText').map(([key, value]) => {
+              const locked = lockedModuleDefaultKeys.has(key);
+              return (
+              <label key={key} className="flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f6] p-3 text-sm">
+                <span className="min-w-0">
+                  <span className="block font-semibold text-slate-800">{key.replace(/([A-Z])/g, ' $1')}</span>
+                  {locked && <span className="mt-1 block text-[11px] font-semibold text-slate-500">Coming later</span>}
+                </span>
+                <input type="checkbox" checked={Boolean(value)} onChange={() => toggleDefault(key)} disabled={locked} title={locked ? 'This default is reserved for a future feature.' : undefined} />
               </label>
-            ))}
+              );
+            })}
           </div>
         </section>
         )}

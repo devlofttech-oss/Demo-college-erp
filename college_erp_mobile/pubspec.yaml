@@ -42,6 +42,7 @@ dependencies:
   collection: ^1.19.1
   url_launcher: ^6.3.2
   file_selector: ^1.1.0
+  google_fonts: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -66,7 +67,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/devloft_logo.png
+    - assets/collegesoft.png
     - assets/login_aliases.json
 
   # To add assets to your application, add an assets section, like this:

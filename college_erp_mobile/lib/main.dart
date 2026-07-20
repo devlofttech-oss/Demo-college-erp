@@ -100,7 +100,7 @@ class _CollegeErpMobileAppState extends State<CollegeErpMobileApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Devloft College ERP',
+      title: 'Collegesoft',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: AnimatedSwitcher(

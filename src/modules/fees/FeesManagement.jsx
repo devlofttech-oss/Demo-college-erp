@@ -291,7 +291,7 @@ export default function FeesManagement({
 
   const feeBranchOptions = {
     collections: [
-      { id: 'collect-fee', title: 'Fee Collections', description: '', icon: <Banknote size={20} />, disabled: !canCollect, openCollection: true },
+      { id: 'collect-fee', title: 'Fee Collections', description: 'Record manual fee payments and review posted collections.', icon: <Banknote size={20} />, disabled: !canCollect, openCollection: true },
     ],
     structures: [
       { id: 'create-structure', title: 'Create Structure', description: 'Open a new fee structure form.', icon: <Plus size={20} />, disabled: !canSetup, openStructure: true },
@@ -1082,7 +1082,7 @@ export default function FeesManagement({
           <FeeStructurePanel layout="grid" structures={courseStructures} canEdit={canSetup || canAssign} onEdit={setEditingStructure} onAssign={assignStructureToStudents} />
         </div>
       ) : activeFeeBranch === 'adjustment-history' ? (
-        <FeeReportsPanel collections={[]} adjustments={courseAdjustments} />
+        <FeeReportsPanel collections={[]} adjustments={courseAdjustments} showCollections={false} />
       ) : (
       <div className="flex flex-col xl:flex-row gap-5">
         <div className="xl:w-[68%] min-w-0">
