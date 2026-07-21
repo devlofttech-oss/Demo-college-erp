@@ -3,6 +3,11 @@ import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { demoDepartments, demoStaffMembers } from '../src/modules/facultyStaff/demoFacultyStaff.js';
 import { admissionCourses, admissionStudents } from '../src/modules/students/admissionSeedData.js';
+import {
+  getSemesterDisplayForRecord,
+  getSemesterLabels,
+  getSemesterNumbersForAcademicRecord,
+} from '../src/modules/shared/semesterUtils.js';
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -27,8 +32,8 @@ const destructiveResetUnlocked = process.env.FIRESTORE_DESTRUCTIVE_RESET_UNLOCK 
 
 const schemas = {
   colleges: ['id', 'name', 'code', 'location', 'logoUrl', 'logoFileName', 'status'],
-  admissionBatches: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
-  students: ['admissionNo', 'studentId', 'name', 'profilePhotoUrl', 'profilePhotoName', 'nameAsInAadhaar', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'mobileNo', 'alternatePhoneNo', 'phone', 'email', 'address', 'nationality', 'state', 'ruralUrban', 'religion', 'className', 'section', 'program', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'guardianName', 'idHolder', 'academicYear', 'seatType', 'govtSeatType', 'actualCategory', 'seatSelectCategory', 'admissionDate', 'keaCetNumber', 'sspId', 'neetRegNo', 'neetRank', 'cetRegNo', 'cetRank', 'qualifyingExamName', 'qualifyingExamRegNo', 'qualifyingMaxMarks', 'qualifyingSecuredMarks', 'qualifyingPassDate', 'qualifyingBoard', 'optionalSubject', 'optionalMaxMarks', 'optionalSecuredMarks', 'diplomaCourse', 'diplomaCourseDuration', 'diplomaPassedDate', 'diplomaBoard', 'diplomaMaxMarks', 'diplomaSecuredMarks', 'casteRdNumber', 'casteCategory', 'casteName', 'casteCertificateStudentName', 'casteCertificateFatherName', 'incomeRdNumber', 'incomeCategory', 'incomeCasteName', 'annualIncome', 'incomeCertificateStudentName', 'incomeCertificateFatherName', 'sourcePdf', 'sourcePage', 'sourceSlNo', 'sourceColumns', 'status', 'createdAtText'],
+  admissionBatches: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'semesterNumbers', 'semesterLabels', 'semesterDisplay', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
+  students: ['admissionNo', 'studentId', 'name', 'profilePhotoUrl', 'profilePhotoName', 'nameAsInAadhaar', 'fatherName', 'motherName', 'dob', 'gender', 'bloodGroup', 'mobileNo', 'alternatePhoneNo', 'phone', 'email', 'address', 'nationality', 'state', 'ruralUrban', 'religion', 'className', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'semesterDisplay', 'section', 'program', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'guardianName', 'idHolder', 'academicYear', 'seatType', 'govtSeatType', 'actualCategory', 'seatSelectCategory', 'admissionDate', 'keaCetNumber', 'sspId', 'neetRegNo', 'neetRank', 'cetRegNo', 'cetRank', 'qualifyingExamName', 'qualifyingExamRegNo', 'qualifyingMaxMarks', 'qualifyingSecuredMarks', 'qualifyingPassDate', 'qualifyingBoard', 'optionalSubject', 'optionalMaxMarks', 'optionalSecuredMarks', 'diplomaCourse', 'diplomaCourseDuration', 'diplomaPassedDate', 'diplomaBoard', 'diplomaMaxMarks', 'diplomaSecuredMarks', 'casteRdNumber', 'casteCategory', 'casteName', 'casteCertificateStudentName', 'casteCertificateFatherName', 'incomeRdNumber', 'incomeCategory', 'incomeCasteName', 'annualIncome', 'incomeCertificateStudentName', 'incomeCertificateFatherName', 'sourcePdf', 'sourcePage', 'sourceSlNo', 'sourceColumns', 'status', 'createdAtText'],
   studentAdmissions: ['studentRecordId', 'studentId', 'admissionNo', 'academicYear', 'courseCode', 'courseName', 'courseYear', 'admissionType', 'collegeName', 'collegeCode', 'idHolder', 'admissionDate', 'seatType', 'actualCategory', 'status', 'submittedAtText', 'sourcePdf', 'sourcePage', 'sourceSlNo'],
   studentDocuments: ['studentRecordId', 'studentId', 'documentType', 'academicYear', 'uploadedBy', 'fileName', 'verificationStatus', 'uploadedAtText'],
   studentPromotions: ['studentRecordId', 'studentId', 'fromClass', 'toClass', 'academicYear', 'status', 'approvedBy', 'approvedAtText'],
@@ -39,7 +44,7 @@ const schemas = {
   departments: ['name', 'headName', 'status'],
   staffLeaveRecords: ['staffRecordId', 'employeeId', 'leaveType', 'fromDate', 'toDate', 'reason', 'status'],
   staffAttendanceRecords: ['staffRecordId', 'employeeId', 'academicYear', 'dateText', 'status', 'markedAtText'],
-  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
+  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
   attendanceNotifications: ['studentRecordId', 'studentId', 'studentName', 'channel', 'academicYear', 'reason', 'status'],
   classrooms: ['roomNo', 'building', 'capacity', 'status'],
   timetableEntries: ['classKey', 'subject', 'academicYear', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status'],
@@ -60,9 +65,9 @@ const schemas = {
   noticeItems: ['type', 'title', 'referenceNo', 'audience', 'academicYear', 'priority', 'body', 'publishDate', 'expiryDate', 'status'],
   managedDocuments: ['ownerType', 'ownerRecordId', 'ownerId', 'ownerName', 'documentType', 'note', 'category', 'academicYear', 'fileName', 'verificationStatus', 'notes'],
   parentPortalLinks: ['parentEmail', 'studentRecordId', 'studentId', 'relationship', 'status'],
-  academicPrograms: ['name', 'code', 'academicYear', 'status'],
-  academicSubjects: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'syllabusCourseCode', 'syllabusCourseTitle', 'category', 'theoryHours', 'practicalHours', 'clinicalHours', 'totalHours', 'examMaxMarks', 'internalMarks', 'topics', 'topicCount', 'topicSource', 'sourceFile', 'sourcePage', 'status'],
-  academicBatches: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'academicYear', 'status'],
+  academicPrograms: ['name', 'code', 'academicYear', 'academicStructure', 'teachingSemesterCount', 'totalSemesterCount', 'internshipSemesterCount', 'semesterNumbers', 'semesterLabels', 'admissionStartSemester', 'status'],
+  academicSubjects: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'displayPeriod', 'periodType', 'sourcePeriodLabel', 'yearNumber', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'syllabusCourseCode', 'syllabusCourseTitle', 'category', 'theoryHours', 'practicalHours', 'clinicalHours', 'totalHours', 'examMaxMarks', 'internalMarks', 'topics', 'topicCount', 'topicSource', 'sourceFile', 'sourcePage', 'status'],
+  academicBatches: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'displayPeriod', 'periodType', 'sourcePeriodLabel', 'yearNumber', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'status'],
   academicCalendarEvents: ['title', 'eventType', 'eventDate', 'audience', 'academicYear', 'status'],
   systemSettings: ['id', 'name', 'instituteId', 'code', 'logoUrl', 'logoFileName', 'email', 'phone', 'startsOn', 'endsOn', 'student', 'admission', 'employee', 'moduleDefaults'],
 };
@@ -114,10 +119,22 @@ const parentPermissions = [
   'parentPortal.view',
 ];
 
+function withSemesterFields(record = {}) {
+  const semesterNumbers = getSemesterNumbersForAcademicRecord(record);
+  const semesterLabels = getSemesterLabels(semesterNumbers);
+  return {
+    ...record,
+    semesterNumber: semesterNumbers[0] || '',
+    semesterNumbers,
+    semesterLabels,
+    semesterDisplay: getSemesterDisplayForRecord({ ...record, semesterNumbers }),
+  };
+}
+
 function buildPdfAdmissionSeed() {
   const admissionBatches = Object.fromEntries(admissionCourses.map((course) => [
     course.id,
-    {
+    withSemesterFields({
       academicYear: course.academicYearNormalized,
       collegeName: course.collegeName,
       collegeCode: course.collegeCode,
@@ -128,10 +145,10 @@ function buildPdfAdmissionSeed() {
       sourcePdf: course.file,
       studentCount: course.studentCount,
       status: 'Active',
-    },
+    }),
   ]));
 
-  const students = Object.fromEntries(admissionStudents.map((student) => [student.id, student]));
+  const students = Object.fromEntries(admissionStudents.map((student) => [student.id, withSemesterFields(student)]));
 
   const studentAdmissions = Object.fromEntries(admissionStudents.map((student) => [
     `seed-admission-${student.courseCode.toLowerCase()}-${String(student.studentId).split('-').pop()}`,

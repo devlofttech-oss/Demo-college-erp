@@ -8,6 +8,13 @@ import {
   relationMatchesEntity,
   summarizeAttendance,
 } from '../src/modules/attendance/attendanceUtils.js';
+import {
+  buildSemesterOptions,
+  getSemesterDisplayForRecord,
+  getSemesterNumbersForAcademicRecord,
+  getSemesterNumbersForStudent,
+  recordMatchesSemester,
+} from '../src/modules/shared/semesterUtils.js';
 
 const student = { id: 'student-doc-id', studentId: 'STU-1001' };
 const records = [
@@ -36,5 +43,16 @@ assert.deepEqual(summarizeAttendance(records), {
 assert.equal(Object.keys(buildReport(records, 'daily')).length, 2);
 assert.equal(Object.keys(buildReport(records, 'monthly')).length, 1);
 assert.equal(Object.keys(buildReport(records, 'yearly')).length, 1);
+assert.deepEqual(getSemesterNumbersForStudent({ courseYear: '2nd Year' }), [3, 4]);
+assert.deepEqual(getSemesterNumbersForAcademicRecord({ semesterNumbers: [4, 3, 3] }), [3, 4]);
+assert.equal(getSemesterDisplayForRecord({ className: '1 St Year' }), 'Semester 1 / Semester 2');
+assert.equal(recordMatchesSemester({ courseYear: '2nd Year' }, 'Semester 4'), true);
+assert.equal(recordMatchesSemester({ courseYear: '2nd Year' }, 'Semester 2'), false);
+assert.deepEqual(buildSemesterOptions([{ courseYear: '1 St Year' }, { courseYear: '2nd Year' }]).map((item) => item.label), [
+  'Semester 1',
+  'Semester 2',
+  'Semester 3',
+  'Semester 4',
+]);
 
 console.log('Attendance tests passed.');

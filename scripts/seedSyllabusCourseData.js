@@ -2,6 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getSyllabusTopics } from './syllabusTopicLibrary.js';
+import {
+  CURRICULUM_SEMESTER_SUMMARY,
+  getSemesterLabels,
+  getSemesterNumbersForYear,
+} from '../src/modules/shared/semesterUtils.js';
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -84,8 +89,33 @@ function exam(subjectName, maxMarks, options = {}) {
   };
 }
 
+function getYearNumberFromPeriodKey(key = '') {
+  const match = String(key).match(/year(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function buildPeriodMeta(periodType, sourceLabel, semesterNumbers = []) {
+  const labels = getSemesterLabels(semesterNumbers);
+  return {
+    periodType,
+    sourcePeriodLabel: sourceLabel,
+    semesterNumbers,
+    semesterLabels: labels,
+    displayPeriod: labels.join(' / ') || sourceLabel,
+  };
+}
+
 function yearPeriod(key, label, className, subjects, exams = []) {
-  return { key, label, className, subjects, exams };
+  const yearNumber = getYearNumberFromPeriodKey(key);
+  return {
+    key,
+    label,
+    className,
+    subjects,
+    exams,
+    yearNumber,
+    ...buildPeriodMeta('Year', label, getSemesterNumbersForYear(yearNumber)),
+  };
 }
 
 function semesterPeriod(number, subjects, exams = []) {
@@ -96,6 +126,9 @@ function semesterPeriod(number, subjects, exams = []) {
     className,
     subjects,
     exams,
+    yearNumber: Math.ceil(number / 2),
+    semesterNumber: number,
+    ...buildPeriodMeta('Semester', `Semester ${number}`, [number]),
   };
 }
 
@@ -566,6 +599,20 @@ function buildSeedDocs() {
     };
 
     for (const period of curriculum.periods.filter((item) => variant.periodKeys.includes(item.key))) {
+      const variantPeriods = curriculum.periods.filter((item) => variant.periodKeys.includes(item.key));
+      const variantSemesterNumbers = [...new Set(variantPeriods.flatMap((item) => item.semesterNumbers || []))].sort((a, b) => a - b);
+      const curriculumSummary = CURRICULUM_SEMESTER_SUMMARY[curriculum.code] || {};
+      docs.academicPrograms[programId] = {
+        ...docs.academicPrograms[programId],
+        academicStructure: curriculumSummary.academicStructure || '',
+        teachingSemesterCount: curriculumSummary.teachingSemesterCount || variantSemesterNumbers.length,
+        totalSemesterCount: curriculumSummary.totalSemesterCount || variantSemesterNumbers.length,
+        internshipSemesterCount: curriculumSummary.internshipSemesterCount || 0,
+        semesterNumbers: variantSemesterNumbers,
+        semesterLabels: getSemesterLabels(variantSemesterNumbers),
+        admissionStartSemester: variantSemesterNumbers[0] || '',
+      };
+
       const classKey = `${period.className} - ${variant.section}`;
       const batchId = `syllabus-batch-${academicYear}-${slugify(variant.courseCode)}-${period.key}`;
       docs.academicBatches[batchId] = {
@@ -582,6 +629,13 @@ function buildSeedDocs() {
         courseName: variant.courseName,
         classKey,
         curriculumPeriod: period.label,
+        displayPeriod: period.displayPeriod,
+        periodType: period.periodType,
+        sourcePeriodLabel: period.sourcePeriodLabel,
+        yearNumber: period.yearNumber,
+        semesterNumber: period.semesterNumber || '',
+        semesterNumbers: period.semesterNumbers,
+        semesterLabels: period.semesterLabels,
         syllabusCourseCode: curriculum.code,
         syllabusCourseTitle: curriculum.title,
         sourceFile: curriculum.sourceFile,
@@ -606,6 +660,13 @@ function buildSeedDocs() {
           courseName: variant.courseName,
           classKey,
           curriculumPeriod: period.label,
+          displayPeriod: period.displayPeriod,
+          periodType: period.periodType,
+          sourcePeriodLabel: period.sourcePeriodLabel,
+          yearNumber: period.yearNumber,
+          semesterNumber: period.semesterNumber || '',
+          semesterNumbers: period.semesterNumbers,
+          semesterLabels: period.semesterLabels,
           syllabusCourseCode: curriculum.code,
           syllabusCourseTitle: curriculum.title,
           category: item.category,
@@ -645,6 +706,13 @@ function buildSeedDocs() {
             courseCode: variant.courseCode,
             courseName: variant.courseName,
             curriculumPeriod: period.label,
+            displayPeriod: period.displayPeriod,
+            periodType: period.periodType,
+            sourcePeriodLabel: period.sourcePeriodLabel,
+            yearNumber: period.yearNumber,
+            semesterNumber: period.semesterNumber || '',
+            semesterNumbers: period.semesterNumbers,
+            semesterLabels: period.semesterLabels,
             subjectCode,
             syllabusCourseCode: curriculum.code,
             syllabusCourseTitle: curriculum.title,
@@ -668,6 +736,13 @@ function buildSeedDocs() {
             courseCode: variant.courseCode,
             courseName: variant.courseName,
             curriculumPeriod: period.label,
+            displayPeriod: period.displayPeriod,
+            periodType: period.periodType,
+            sourcePeriodLabel: period.sourcePeriodLabel,
+            yearNumber: period.yearNumber,
+            semesterNumber: period.semesterNumber || '',
+            semesterNumbers: period.semesterNumbers,
+            semesterLabels: period.semesterLabels,
             subjectCode,
             syllabusCourseCode: curriculum.code,
             syllabusCourseTitle: curriculum.title,
@@ -700,6 +775,13 @@ function buildSeedDocs() {
           courseCode: variant.courseCode,
           courseName: variant.courseName,
           curriculumPeriod: period.label,
+          displayPeriod: period.displayPeriod,
+          periodType: period.periodType,
+          sourcePeriodLabel: period.sourcePeriodLabel,
+          yearNumber: period.yearNumber,
+          semesterNumber: period.semesterNumber || '',
+          semesterNumbers: period.semesterNumbers,
+          semesterLabels: period.semesterLabels,
           syllabusCourseCode: curriculum.code,
           syllabusCourseTitle: curriculum.title,
           sourceFile: curriculum.sourceFile,
@@ -722,6 +804,13 @@ function buildSeedDocs() {
             courseCode: variant.courseCode,
             courseName: variant.courseName,
             curriculumPeriod: period.label,
+            displayPeriod: period.displayPeriod,
+            periodType: period.periodType,
+            sourcePeriodLabel: period.sourcePeriodLabel,
+            yearNumber: period.yearNumber,
+            semesterNumber: period.semesterNumber || '',
+            semesterNumbers: period.semesterNumbers,
+            semesterLabels: period.semesterLabels,
             syllabusCourseCode: curriculum.code,
             syllabusCourseTitle: curriculum.title,
             sourceFile: curriculum.sourceFile,

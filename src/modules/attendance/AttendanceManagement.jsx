@@ -18,6 +18,15 @@ import {
 } from './attendanceUtils';
 import AttendanceTable from './components/AttendanceTable';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
+import {
+  buildSemesterOptions,
+  getSemesterDisplayForRecord,
+  getSemesterLabels,
+  getSemesterNumbersForAcademicRecord,
+  getSemesterNumbersForStudent,
+  parseSemesterNumber,
+  recordMatchesSemester,
+} from '../shared/semesterUtils';
 
 function getTodayInputValue() {
   const today = new Date();
@@ -32,7 +41,7 @@ function formatInputDate(inputDate) {
 }
 
 function getStudentSemester(student = {}) {
-  return student.semester || student.courseYear || student.yearLabel || student.className || '';
+  return getSemesterDisplayForRecord(student) || student.semester || student.courseYear || student.yearLabel || student.className || '';
 }
 
 function getStudentAttendanceScope(branchId = '', fallback = 'subject') {
@@ -140,26 +149,29 @@ export default function AttendanceManagement({
 
   const courseStudents = scopedStudents.length ? scopedStudents : filterStudentsByCourse(students, selectedCourseCode, selectedCourse);
   const semesterOptions = useMemo(() => {
-    const values = courseStudents
-      .map(getStudentSemester)
-      .filter(Boolean);
-    return [...new Set(values)];
-  }, [courseStudents]);
+    const courseSubjects = academicSubjects.filter((subject) =>
+      selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName
+    );
+    return buildSemesterOptions([...courseSubjects, ...courseStudents]);
+  }, [academicSubjects, courseStudents, selectedCourse, selectedCourseCode]);
   const semesterStudents = selectedSemester
-    ? courseStudents.filter((student) => getStudentSemester(student) === selectedSemester)
+    ? courseStudents.filter((student) => recordMatchesSemester(student, selectedSemester))
     : courseStudents;
   const facultyOptions = useMemo(() => staff.filter((member) => member.staffType === 'Faculty'), [staff]);
   const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects
       .filter((subject) => selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName)
+      .filter((subject) => !selectedSemester || recordMatchesSemester(subject, selectedSemester))
       .map((subject) => ({
         code: subject.subjectCode || subject.id || subject.subjectName,
         name: subject.subjectName || subject.name,
         topics: getSubjectTopics(subject),
+        semesterNumbers: getSemesterNumbersForAcademicRecord(subject),
+        semesterLabels: getSemesterLabels(getSemesterNumbersForAcademicRecord(subject)),
       }))
       .filter((subject) => subject.name);
-  }, [academicSubjects, selectedCourse, selectedCourseCode]);
+  }, [academicSubjects, selectedCourse, selectedCourseCode, selectedSemester]);
   const selectedSubject = subjectOptions.find((subject) => subject.code === selectedSubjectCode) || null;
   const topicSuggestions = selectedSubject?.topics || [];
   const topicDatalistId = selectedSubject?.code
@@ -172,7 +184,7 @@ export default function AttendanceManagement({
   const activeRecords = mode === 'students'
     ? allModeRecords.filter((record) => {
       const recordSubject = record.subjectName || record.subject || '';
-      if (selectedSemester && (record.semester || record.className || '') !== selectedSemester) return false;
+      if (selectedSemester && !recordMatchesSemester(record, selectedSemester)) return false;
       if (isGeneralStudentAttendance) return !recordSubject;
       if (isSubjectStudentAttendance) return !selectedSubject?.name || recordSubject === selectedSubject.name;
       return true;
@@ -286,6 +298,10 @@ export default function AttendanceManagement({
   const activeBranch = activeBranches.find((branch) => branch.id === activeAttendanceBranch);
 
   const validateAttendanceContext = () => {
+    if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedSemester) {
+      toast.error('Select a semester before marking subject attendance.');
+      return false;
+    }
     if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedSubject) {
       toast.error('Select a live subject before marking student attendance.');
       return false;
@@ -385,6 +401,9 @@ export default function AttendanceManagement({
     const subjectName = getAttendanceSubjectName();
     const normalizedTopic = topic.trim();
     const matchedTopic = topicSuggestions.find((item) => item.toLowerCase() === normalizedTopic.toLowerCase()) || '';
+    const selectedSemesterNumber = parseSemesterNumber(selectedSemester);
+    const entitySemesterNumbers = selectedSemesterNumber ? [selectedSemesterNumber] : getSemesterNumbersForStudent(entity);
+    const entitySemesterLabels = getSemesterLabels(entitySemesterNumbers);
     const payload = {
       entityType: mode === 'students' ? 'Student' : 'Staff',
       entityRecordId: entity.id,
@@ -398,6 +417,9 @@ export default function AttendanceManagement({
       className: entity.className || '',
       section: entity.section || '',
       semester: mode === 'students' ? selectedSemester || getStudentSemester(entity) : '',
+      semesterNumber: mode === 'students' ? selectedSemesterNumber || entitySemesterNumbers[0] || '' : '',
+      semesterNumbers: mode === 'students' ? entitySemesterNumbers : [],
+      semesterLabels: mode === 'students' ? entitySemesterLabels : [],
       department: entity.department || '',
       courseCode: entity.courseCode || selectedCourseCode,
       courseName: entity.courseName || entity.program || selectedCourse?.courseName || '',
@@ -633,15 +655,19 @@ export default function AttendanceManagement({
           {mode === 'students' && (
             <div className="mb-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
               <label>
-                <span className="block text-xs font-semibold text-slate-500 mb-1.5">Semester / Class</span>
+                <span className="block text-xs font-semibold text-slate-500 mb-1.5">Semester</span>
                 <select
                   value={selectedSemester}
-                  onChange={(event) => setSelectedSemester(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedSemester(event.target.value);
+                    setSelectedSubjectCode('');
+                    setTopic('');
+                  }}
                   className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="">All semesters</option>
                   {semesterOptions.map((semester) => (
-                    <option key={semester} value={semester}>{semester}</option>
+                    <option key={semester.value} value={semester.value}>{semester.label}</option>
                   ))}
                 </select>
               </label>

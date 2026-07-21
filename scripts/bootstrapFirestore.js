@@ -52,6 +52,10 @@ const collections = {
       'profilePhotoUrl',
       'profilePhotoName',
       'className',
+      'semesterNumber',
+      'semesterNumbers',
+      'semesterLabels',
+      'semesterDisplay',
       'section',
       'program',
       'guardianName',
@@ -68,7 +72,7 @@ const collections = {
   },
   admissionBatches: {
     purpose: 'Course-wise RGUHS admission statement metadata',
-    fields: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
+    fields: ['academicYear', 'collegeName', 'collegeCode', 'courseName', 'courseCode', 'courseYear', 'semesterNumbers', 'semesterLabels', 'semesterDisplay', 'admissionType', 'sourcePdf', 'studentCount', 'status'],
   },
   studentAdmissions: {
     purpose: 'Admission form, admission workflow, and status history',
@@ -126,7 +130,7 @@ const collections = {
   },
   studentAttendanceRecords: {
     purpose: 'Student daily attendance tracking',
-    fields: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
+    fields: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
   },
   attendanceNotifications: {
     purpose: 'Parent notification queue metadata for attendance events',
@@ -198,15 +202,15 @@ const collections = {
   },
   academicPrograms: {
     purpose: 'Academic program and curriculum master records',
-    fields: ['name', 'code', 'academicYear', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['name', 'code', 'academicYear', 'academicStructure', 'teachingSemesterCount', 'totalSemesterCount', 'internshipSemesterCount', 'semesterNumbers', 'semesterLabels', 'admissionStartSemester', 'status', 'createdAtText', 'updatedAtText'],
   },
   academicSubjects: {
     purpose: 'Subject master records mapped to programs',
-    fields: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'syllabusCourseCode', 'syllabusCourseTitle', 'category', 'theoryHours', 'practicalHours', 'clinicalHours', 'totalHours', 'examMaxMarks', 'internalMarks', 'topics', 'topicCount', 'topicSource', 'sourceFile', 'sourcePage', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'displayPeriod', 'periodType', 'sourcePeriodLabel', 'yearNumber', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'syllabusCourseCode', 'syllabusCourseTitle', 'category', 'theoryHours', 'practicalHours', 'clinicalHours', 'totalHours', 'examMaxMarks', 'internalMarks', 'topics', 'topicCount', 'topicSource', 'sourceFile', 'sourcePage', 'status', 'createdAtText', 'updatedAtText'],
   },
   academicBatches: {
     purpose: 'Class, section, capacity, and class teacher setup',
-    fields: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['className', 'section', 'programName', 'classTeacher', 'capacity', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'displayPeriod', 'periodType', 'sourcePeriodLabel', 'yearNumber', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'status', 'createdAtText', 'updatedAtText'],
   },
   academicCalendarEvents: {
     purpose: 'Academic calendar event records',

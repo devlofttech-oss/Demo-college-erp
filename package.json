@@ -14,6 +14,7 @@
     "firebase:seed-users": "node scripts/seedRoleAuthUsers.js",
     "firebase:maurya-credentials": "node scripts/createMauryaLoginCredentials.js",
     "firebase:login-aliases": "node scripts/generateLoginAliases.js",
+    "firebase:backfill-student-semesters": "node scripts/backfillStudentSemesters.js",
     "firebase:reset-seed": "node -e \"throw new Error('Firestore reset is locked. Use firebase:seed for merge-only seeding.')\"",
     "firebase:backfill-academic-year": "node scripts/backfillAcademicYear.js",
     "preview": "vite preview"
