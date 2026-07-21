@@ -293,7 +293,7 @@ service cloud.firestore {
     }
 
     match /staffMembers/{documentId} {
-      allow read: if staffCan('staff.view');
+      allow read: if staffCan('staff.view') || staffCan('attendance.view');
       allow create: if staffCan('staff.create');
       allow update: if staffCan('staff.edit') || staffCan('staff.archive');
       allow delete: if false;

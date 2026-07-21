@@ -55,29 +55,6 @@ function getSubjectTopics(subject = {}) {
   return [...new Set(rawTopics.map((item) => String(item).trim()).filter(Boolean))];
 }
 
-function normalizeIdentityToken(value = '') {
-  return String(value || '').trim().toLowerCase();
-}
-
-function buildFacultyIdentityTokens(source = {}) {
-  return [
-    source.id,
-    source.uid,
-    source.email,
-    source.employeeId,
-    source.staffId,
-    source.displayId,
-    source.adminId,
-    source.name,
-    source.displayName,
-  ].map(normalizeIdentityToken).filter(Boolean);
-}
-
-function facultyMatchesCurrentUser(member = {}, currentUser = {}) {
-  const memberTokens = new Set(buildFacultyIdentityTokens(member));
-  return buildFacultyIdentityTokens(currentUser).some((token) => memberTokens.has(token));
-}
-
 export default function AttendanceManagement({
   currentUser,
   academicYear = '',
@@ -180,15 +157,8 @@ export default function AttendanceManagement({
   const semesterStudents = selectedSemester
     ? courseStudents.filter((student) => recordMatchesSemester(student, selectedSemester))
     : courseStudents;
-  const facultyOptions = useMemo(() => staff.filter((member) => member.staffType === 'Faculty'), [staff]);
-  const signedInFaculty = useMemo(() => {
-    if (currentRoleId !== 'faculty') return null;
-    return facultyOptions.find((member) => facultyMatchesCurrentUser(member, currentUser)) || null;
-  }, [currentRoleId, currentUser, facultyOptions]);
-  const visibleFacultyOptions = signedInFaculty ? [signedInFaculty] : facultyOptions;
-  const facultySelectLocked = Boolean(signedInFaculty);
-  const effectiveSelectedFacultyId = signedInFaculty?.id || selectedFacultyId;
-  const selectedFaculty = visibleFacultyOptions.find((member) => member.id === effectiveSelectedFacultyId) || null;
+  const facultyOptions = useMemo(() => staff.filter((member) => String(member.staffType || '').toLowerCase() === 'faculty'), [staff]);
+  const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects
       .filter((subject) => selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName)
@@ -236,7 +206,7 @@ export default function AttendanceManagement({
     activeAttendanceBranch,
     mode,
     selectedDateInput,
-    effectiveSelectedFacultyId,
+    selectedFacultyId,
     selectedSemester,
     selectedSubjectCode,
     studentAttendanceScope,
@@ -729,21 +699,15 @@ export default function AttendanceManagement({
                   <label className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Faculty</span>
                     <select
-                      value={effectiveSelectedFacultyId}
+                      value={selectedFacultyId}
                       onChange={(event) => setSelectedFacultyId(event.target.value)}
-                      disabled={facultySelectLocked}
                       className="erp-attendance-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     >
-                      <option value="">{visibleFacultyOptions.length ? 'Select Faculty' : 'No Faculty Records'}</option>
-                      {visibleFacultyOptions.map((member) => (
+                      <option value="">{facultyOptions.length ? 'Select Faculty' : 'No Faculty Records'}</option>
+                      {facultyOptions.map((member) => (
                         <option key={member.id} value={member.id}>{member.name}</option>
                       ))}
                     </select>
-                    {facultySelectLocked && (
-                      <span className="erp-attendance-field-note mt-1 block text-[11px] font-semibold text-slate-500">
-                        Signed-in faculty selected
-                      </span>
-                    )}
                   </label>
                   <label className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>

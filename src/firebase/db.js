@@ -424,9 +424,9 @@ export async function getAttendanceManagementData(academicYear = '') {
   const yearConstraints = academicYearWhere(academicYear);
   const [students, staff, studentAttendance, staffAttendance, notifications, academicSubjects] = await Promise.all([
     listCollection('students', yearConstraints),
-    listCollection('staffMembers'),
+    listCollectionOptional('staffMembers'),
     listCollection('studentAttendanceRecords', yearConstraints),
-    listCollection('staffAttendanceRecords', yearConstraints),
+    listCollectionOptional('staffAttendanceRecords', yearConstraints),
     listCollection('attendanceNotifications', yearConstraints),
     listCollection('academicSubjects', yearConstraints),
   ]);
