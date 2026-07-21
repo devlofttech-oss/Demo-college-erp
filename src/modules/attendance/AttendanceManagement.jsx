@@ -41,6 +41,11 @@ function getStudentAttendanceScope(branchId = '', fallback = 'subject') {
   return fallback;
 }
 
+function getSubjectTopics(subject = {}) {
+  const rawTopics = Array.isArray(subject.topics) ? subject.topics : [];
+  return [...new Set(rawTopics.map((item) => String(item).trim()).filter(Boolean))];
+}
+
 export default function AttendanceManagement({
   currentUser,
   academicYear = '',
@@ -151,10 +156,15 @@ export default function AttendanceManagement({
       .map((subject) => ({
         code: subject.subjectCode || subject.id || subject.subjectName,
         name: subject.subjectName || subject.name,
+        topics: getSubjectTopics(subject),
       }))
       .filter((subject) => subject.name);
   }, [academicSubjects, selectedCourse, selectedCourseCode]);
   const selectedSubject = subjectOptions.find((subject) => subject.code === selectedSubjectCode) || null;
+  const topicSuggestions = selectedSubject?.topics || [];
+  const topicDatalistId = selectedSubject?.code
+    ? `attendance-topic-${selectedSubject.code.replace(/[^a-z0-9_-]/gi, '-')}`
+    : 'attendance-topic-suggestions';
   const courseStudentAttendance = filterStudentScopedRecords(studentAttendance, semesterStudents, selectedCourseCode, selectedCourse);
   const allModeRecords = mode === 'students' ? courseStudentAttendance : staffAttendance;
   const isSubjectStudentAttendance = mode === 'students' && Boolean(activeAttendanceBranch) && studentAttendanceScope === 'subject';
@@ -373,6 +383,8 @@ export default function AttendanceManagement({
   const buildAttendancePayload = (entity, status, sessionId, now) => {
     const entityId = entity.studentId || entity.employeeId;
     const subjectName = getAttendanceSubjectName();
+    const normalizedTopic = topic.trim();
+    const matchedTopic = topicSuggestions.find((item) => item.toLowerCase() === normalizedTopic.toLowerCase()) || '';
     const payload = {
       entityType: mode === 'students' ? 'Student' : 'Staff',
       entityRecordId: entity.id,
@@ -395,7 +407,9 @@ export default function AttendanceManagement({
       facultyRecordId: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.id || '' : '',
       facultyId: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.employeeId || '' : '',
       facultyName: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.name || '' : '',
-      topic: mode === 'students' && studentAttendanceScope === 'subject' ? topic.trim() : '',
+      topic: mode === 'students' && studentAttendanceScope === 'subject' ? normalizedTopic : '',
+      syllabusTopic: mode === 'students' && studentAttendanceScope === 'subject' ? matchedTopic : '',
+      syllabusTopicMatched: mode === 'students' && studentAttendanceScope === 'subject' ? Boolean(matchedTopic) : false,
       dateText: selectedDate,
       status,
       sessionId,
@@ -437,7 +451,15 @@ export default function AttendanceManagement({
     try {
       setSavingDraft(true);
       const now = new Date();
-      const sessionId = `attendance-${mode}-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
+      const sessionContext = [
+        mode,
+        selectedDateInput,
+        selectedSemester,
+        selectedSubjectCode,
+        draftRows.length,
+        now.getTime(),
+      ].filter(Boolean).join('-').replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
+      const sessionId = `attendance-${sessionContext}`;
       const results = await Promise.all(draftRows.map(async ({ entity, status }) => {
         const exists = findExistingAttendanceRecord(entity);
         if (exists && !isAttendanceRecordEditable(exists)) {
@@ -629,7 +651,10 @@ export default function AttendanceManagement({
                     <span className="block text-xs font-semibold text-slate-500 mb-1.5">Subject</span>
                     <select
                       value={selectedSubject?.code || ''}
-                      onChange={(event) => setSelectedSubjectCode(event.target.value)}
+                      onChange={(event) => {
+                        setSelectedSubjectCode(event.target.value);
+                        setTopic('');
+                      }}
                       className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     >
                       <option value="">{subjectOptions.length ? 'Select Subject' : 'No Live Subjects'}</option>
@@ -654,11 +679,24 @@ export default function AttendanceManagement({
                   <label>
                     <span className="block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>
                     <input
+                      list={topicSuggestions.length ? topicDatalistId : undefined}
                       value={topic}
                       onChange={(event) => setTopic(event.target.value)}
-                      placeholder="Topic taught"
+                      placeholder={topicSuggestions.length ? 'Select or type topic taught' : 'Topic taught'}
                       className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     />
+                    {topicSuggestions.length > 0 && (
+                      <>
+                        <datalist id={topicDatalistId}>
+                          {topicSuggestions.map((item) => (
+                            <option key={item} value={item} />
+                          ))}
+                        </datalist>
+                        <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                          {topicSuggestions.length} syllabus topic{topicSuggestions.length === 1 ? '' : 's'} available
+                        </p>
+                      </>
+                    )}
                   </label>
                 </>
               )}

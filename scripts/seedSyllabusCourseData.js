@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { getSyllabusTopics } from './syllabusTopicLibrary.js';
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -65,6 +66,7 @@ function subject(name, options = {}) {
     internalMarks: options.internalMarks,
     examType: options.examType,
     sourcePage: options.sourcePage,
+    topics: options.topics || [],
     note: options.note || '',
     examEligible: options.examEligible !== false,
   };
@@ -590,6 +592,7 @@ function buildSeedDocs() {
         const subjectCode = `${variant.courseCode}-${item.code}`;
         const subjectId = `syllabus-subject-${academicYear}-${slugify(variant.courseCode)}-${period.key}-${slugify(item.code)}`;
         const subjectTotalHours = totalHours(item);
+        const topics = getSyllabusTopics(curriculum.code, item);
         docs.academicSubjects[subjectId] = {
           subjectName: item.name,
           subjectCode,
@@ -612,6 +615,9 @@ function buildSeedDocs() {
           totalHours: subjectTotalHours,
           examMaxMarks: item.examMaxMarks ?? '',
           internalMarks: item.internalMarks ?? '',
+          topics,
+          topicCount: topics.length,
+          topicSource: topics.length ? seedSource : '',
           sourceFile: curriculum.sourceFile,
           sourcePage: item.sourcePage ?? '',
           note: item.note,

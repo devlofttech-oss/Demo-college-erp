@@ -126,7 +126,7 @@ const collections = {
   },
   studentAttendanceRecords: {
     purpose: 'Student daily attendance tracking',
-    fields: ['entityType', 'entityRecordId', 'entityId', 'entityName', 'className', 'section', 'courseCode', 'courseName', 'subjectCode', 'subjectName', 'dateText', 'status', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso'],
+    fields: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
   },
   attendanceNotifications: {
     purpose: 'Parent notification queue metadata for attendance events',
@@ -202,7 +202,7 @@ const collections = {
   },
   academicSubjects: {
     purpose: 'Subject master records mapped to programs',
-    fields: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'status', 'createdAtText', 'updatedAtText'],
+    fields: ['subjectName', 'subjectCode', 'programName', 'creditHours', 'academicYear', 'courseCode', 'courseName', 'classKey', 'curriculumPeriod', 'syllabusCourseCode', 'syllabusCourseTitle', 'category', 'theoryHours', 'practicalHours', 'clinicalHours', 'totalHours', 'examMaxMarks', 'internalMarks', 'topics', 'topicCount', 'topicSource', 'sourceFile', 'sourcePage', 'status', 'createdAtText', 'updatedAtText'],
   },
   academicBatches: {
     purpose: 'Class, section, capacity, and class teacher setup',
