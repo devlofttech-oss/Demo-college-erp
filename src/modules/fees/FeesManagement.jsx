@@ -1044,17 +1044,17 @@ export default function FeesManagement({
             />
           ) : (
             <>
-              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
-                <div className="grid sm:grid-cols-3 gap-6 rounded-lg bg-white border border-slate-100 p-5 flex-1">
-                  <div>
+              <div className="erp-fee-collection-toolbar flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
+                <div className="erp-fee-collection-summary grid sm:grid-cols-3 gap-6 rounded-lg bg-white border border-slate-100 p-5 flex-1">
+                  <div className="erp-fee-collection-metric">
                     <div className="text-xs font-bold text-slate-500 uppercase">Total Collected</div>
                     <div className="text-2xl font-extrabold text-emerald-600 mt-1">{formatCurrency(summary.totalCollected)}</div>
                   </div>
-                  <div>
+                  <div className="erp-fee-collection-metric">
                     <div className="text-xs font-bold text-slate-500 uppercase">Total Payments</div>
                     <div className="text-2xl font-extrabold text-slate-900 mt-1">{courseCollections.length}</div>
                   </div>
-                  <div>
+                  <div className="erp-fee-collection-metric">
                     <div className="text-xs font-bold text-slate-500 uppercase">This Year</div>
                     <div className="text-2xl font-extrabold text-slate-900 mt-1">{courseCollections.filter((item) => item.academicYear === academicYear).length}</div>
                   </div>
@@ -1067,13 +1067,13 @@ export default function FeesManagement({
                   <Plus className="erp-record-payment-icon" size={16} /> Record Payment
                 </button>
               </div>
-              <div className="relative mb-4 max-w-xl">
+              <div className="erp-fee-collection-search relative mb-4 max-w-xl">
                 <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search by student, payment mode, reference..."
-                  className="w-full h-11 rounded-lg bg-[#f0f0f2] border-0 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-orange-100"
+                  className="erp-fee-search-input w-full h-11 rounded-lg bg-[#f0f0f2] border-0 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-orange-100"
                 />
               </div>
               <FeeCollectionTable

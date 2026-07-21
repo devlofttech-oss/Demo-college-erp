@@ -11,6 +11,12 @@ function joinUnique(values = []) {
   return uniqueValues.length ? uniqueValues.join(', ') : '-';
 }
 
+function getStudentInitials(name = '') {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'ST';
+  return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
 function buildStudentCollectionGroups(collections = []) {
   const groups = collections.reduce((map, item) => {
     const key = getStudentCollectionKey(item);
@@ -72,10 +78,10 @@ export default function FeeCollectionTable({ collections, onEdit }) {
   };
 
   return (
-    <div className="overflow-hidden border border-slate-100 rounded-lg bg-white">
+    <div className="erp-fee-collection-table overflow-hidden border border-slate-100 rounded-lg bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[#f5f5f6] text-slate-500">
+        <table className="erp-fee-collection-grid w-full text-sm">
+          <thead className="erp-fee-collection-head bg-[#f5f5f6] text-slate-500">
             <tr>
               <th className="text-left px-4 py-3 font-semibold">Student</th>
               <th className="text-left px-4 py-3 font-semibold">Class</th>
@@ -91,20 +97,23 @@ export default function FeeCollectionTable({ collections, onEdit }) {
               return (
                 <Fragment key={group.key}>
                   <tr
-                    className={`erp-fee-collection-student-row hover:bg-slate-50 ${expanded ? 'is-expanded' : ''}`}
+                    className={`erp-fee-collection-student-row ${expanded ? 'is-expanded' : ''}`}
                     onClick={() => toggleStudent(group.key)}
                     onKeyDown={(event) => handleStudentRowKeyDown(event, group.key)}
+                    role="button"
                     tabIndex={0}
                     aria-expanded={expanded}
+                    aria-label={`${expanded ? 'Hide' : 'Show'} payments for ${group.studentName}`}
                   >
                     <td className="px-4 py-3">
                       <button
                         type="button"
                         onClick={(event) => handleStudentToggleClick(event, group.key)}
-                        className="text-left inline-flex min-w-0 items-center gap-2 rounded-md text-slate-900"
+                        className="erp-fee-student-toggle text-left inline-flex min-w-0 items-center gap-2 rounded-md text-slate-900"
                         aria-expanded={expanded}
                       >
-                        <ChevronDown className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} size={16} />
+                        <ChevronDown className={`erp-fee-student-chevron shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} size={16} />
+                        <span className="erp-fee-student-avatar" aria-hidden="true">{getStudentInitials(group.studentName)}</span>
                         <span className="min-w-0">
                           <span className="block font-semibold text-slate-900">{group.studentName}</span>
                           <span className="block text-xs text-slate-500">{group.studentId || '-'}</span>
@@ -123,21 +132,21 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                       <button
                         type="button"
                         onClick={(event) => handleStudentToggleClick(event, group.key)}
-                        className="h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold text-slate-700 inline-flex items-center gap-1"
+                        className="erp-fee-payment-pill h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold text-slate-700 inline-flex items-center gap-1"
                       >
                         {group.payments.length} payment{group.payments.length === 1 ? '' : 's'}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="font-bold text-emerald-700">{formatCurrency(group.totalAmount)}</div>
+                      <div className="erp-fee-collection-amount font-bold text-emerald-700">{formatCurrency(group.totalAmount)}</div>
                     </td>
                   </tr>
                   {expanded && (
-                    <tr key={`${group.key}-payments`}>
-                      <td colSpan="6" className="bg-[#f8fafc] px-4 py-3">
-                        <div className="overflow-x-auto rounded-lg border border-slate-100 bg-white">
-                          <table className="w-full text-xs">
-                            <thead className="bg-[#f5f5f6] text-slate-500">
+                    <tr key={`${group.key}-payments`} className="erp-fee-payment-detail-row">
+                      <td colSpan="6" className="erp-fee-payment-detail-cell bg-[#f8fafc] px-4 py-3">
+                        <div className="erp-fee-payment-detail-panel overflow-x-auto rounded-lg border border-slate-100 bg-white">
+                          <table className="erp-fee-payment-detail-table w-full text-xs">
+                            <thead className="erp-fee-payment-detail-head bg-[#f5f5f6] text-slate-500">
                               <tr>
                                 <th className="px-3 py-2 text-left font-semibold">No.</th>
                                 <th className="px-3 py-2 text-left font-semibold">Date</th>
@@ -151,7 +160,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                               {group.payments.map((item) => (
-                                <tr key={item.id} className="hover:bg-slate-50">
+                                <tr key={item.id} className="erp-fee-payment-detail-item hover:bg-slate-50">
                                   <td className="px-3 py-2 text-slate-600">
                                     <div className="font-bold text-slate-800">
                                       {item.installmentNo ? `${item.installmentNo}/${item.installmentCount || item.installmentNo}` : '-'}
@@ -164,7 +173,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                                   <td className="px-3 py-2 text-slate-600">{item.referenceNo || '-'}</td>
                                   <td className="px-3 py-2 text-slate-600">{formatManualDueItems(item.paidDueItems) || '-'}</td>
                                   <td className="px-3 py-2 text-right">
-                                    <div className="font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
+                                    <div className="erp-fee-collection-amount font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
                                     {item.admissionThroughAgent && (
                                       <div className="text-[11px] font-semibold text-cyan-700">
                                         Agent payout {formatCurrency(item.agentFeePaidAmount)} | Pending {formatCurrency(item.pendingAgentFeeBalance)}
@@ -175,7 +184,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                                     <button
                                       type="button"
                                       onClick={() => onEdit?.(item)}
-                                      className="h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold text-slate-700 inline-flex items-center gap-1"
+                                      className="erp-fee-payment-edit-button h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold text-slate-700 inline-flex items-center gap-1"
                                     >
                                       <Edit3 size={13} /> Edit
                                     </button>
