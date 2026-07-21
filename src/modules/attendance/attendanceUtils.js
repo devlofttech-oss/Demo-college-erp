@@ -72,3 +72,13 @@ export function buildSubjectReport(records = []) {
     return acc;
   }, {});
 }
+
+export function buildSemesterReport(records = []) {
+  return records.reduce((acc, record) => {
+    const key = record.semester || record.className || record.classKey;
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(record);
+    return acc;
+  }, {});
+}

@@ -18,12 +18,14 @@ import {
   calculateAssignmentPaymentLedger,
   calculatePendingAgentFeeBalance,
   calculateFeeStatus,
+  filterPaidDueItems,
   formatManualDueItems,
   formatCurrency,
   formatDisplayDate,
   getFeeComponentValues,
   getCollectionsForAssignment,
   getCollectionsForFeeContext,
+  getRemainingDueItems,
   getStudentClassKey,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
@@ -527,6 +529,8 @@ export default function FeesManagement({
     }
     const amount = Number(collectionForm.amount || 0);
     const manualDueItems = normalizeManualDueItems(collectionForm.manualDueItems, collectionForm);
+    const paidDueItems = filterPaidDueItems(collectionForm.paidDueItems, manualDueItems, collectionForm);
+    const remainingManualDueItems = getRemainingDueItems(manualDueItems, paidDueItems, collectionForm);
     const now = new Date();
     const nowText = formatDisplayDate(now);
     const batchPaymentId = editingCollection?.batchPaymentId || createBatchPaymentId(now);
@@ -617,7 +621,7 @@ export default function FeesManagement({
             dueAmount: totalAmount,
             agentFeePaid: 0,
             pendingAgentFeeBalance: admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, 0) : 0,
-            manualDueItems,
+            manualDueItems: remainingManualDueItems,
             status: calculateFeeStatus(totalAmount, 0, 0),
             assignedAtText: nowText,
           };
@@ -627,7 +631,7 @@ export default function FeesManagement({
         } else {
           nextAssignment = { ...targetAssignment, ...assignmentBase };
         }
-        const assignmentForLedger = { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems };
+        const assignmentForLedger = { ...nextAssignment, ...assignmentBase, adjustmentAmount, manualDueItems: remainingManualDueItems };
 
         const collectionBase = {
           assignmentId: nextAssignmentId,
@@ -644,6 +648,8 @@ export default function FeesManagement({
           installmentCount: editingCollection?.installmentCount || 0,
           totalAmount,
           manualDueItems,
+          paidDueItems,
+          pendingDueItemsAfterPayment: remainingManualDueItems,
           academicYear,
           collectedBy: collectionForm.collectedBy,
           status: 'Posted',
@@ -674,7 +680,7 @@ export default function FeesManagement({
         const nextAssignmentUpdates = {
           ...assignmentBase,
           adjustmentAmount,
-          manualDueItems,
+          manualDueItems: remainingManualDueItems,
           ...getLedgerAssignmentUpdates(
             assignmentForLedger,
             [...ledgerBaseCollections, ...savedCollections],
@@ -756,6 +762,8 @@ export default function FeesManagement({
           createdAtText: nowText,
           entryMode: 'Manual',
           manualDueItems,
+          paidDueItems,
+          pendingDueItemsAfterPayment: remainingManualDueItems,
           admissionThroughAgent,
           agentFee,
           agentFeePaidAmount: entryAgentFeePaid,
@@ -814,6 +822,8 @@ export default function FeesManagement({
       status: 'Posted',
       createdAtText: nowText,
       manualDueItems,
+      paidDueItems,
+      pendingDueItemsAfterPayment: remainingManualDueItems,
       admissionThroughAgent,
       agentFee,
     };
@@ -830,7 +840,7 @@ export default function FeesManagement({
       ...collectionsToSave.map((collection, index) => ({ id: `__pending_payment_${index}`, ...collection })),
     ];
     const assignmentUpdates = {
-      manualDueItems,
+      manualDueItems: remainingManualDueItems,
       ...getLedgerAssignmentUpdates(assignment, projectedCollections, nowText),
     };
     try {

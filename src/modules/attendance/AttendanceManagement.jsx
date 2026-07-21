@@ -31,6 +31,10 @@ function formatInputDate(inputDate) {
   return formatDisplayDate(new Date(`${inputDate}T00:00:00`));
 }
 
+function getStudentSemester(student = {}) {
+  return student.semester || student.courseYear || student.yearLabel || student.className || '';
+}
+
 function getStudentAttendanceScope(branchId = '', fallback = 'subject') {
   if (branchId === 'mark-general-students') return 'general';
   if (branchId === 'mark-students' || branchId === 'mark-subject-students') return 'subject';
@@ -62,6 +66,11 @@ export default function AttendanceManagement({
   const [activeAttendanceBranch, setActiveAttendanceBranch] = useState(initialBranch || '');
   const [studentAttendanceScope, setStudentAttendanceScope] = useState(getStudentAttendanceScope(initialBranch, 'subject'));
   const [selectedEntityId, setSelectedEntityId] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
+  const [selectedFacultyId, setSelectedFacultyId] = useState('');
+  const [topic, setTopic] = useState('');
+  const [draftAttendance, setDraftAttendance] = useState({ contextKey: '', statuses: {} });
+  const [savingDraft, setSavingDraft] = useState(false);
 
   useEffect(() => {
     const loadAttendance = async () => {
@@ -125,6 +134,17 @@ export default function AttendanceManagement({
   const canMarkStaff = canAccess(defaultRoles, currentRoleId, 'attendance.markStaff');
 
   const courseStudents = scopedStudents.length ? scopedStudents : filterStudentsByCourse(students, selectedCourseCode, selectedCourse);
+  const semesterOptions = useMemo(() => {
+    const values = courseStudents
+      .map(getStudentSemester)
+      .filter(Boolean);
+    return [...new Set(values)];
+  }, [courseStudents]);
+  const semesterStudents = selectedSemester
+    ? courseStudents.filter((student) => getStudentSemester(student) === selectedSemester)
+    : courseStudents;
+  const facultyOptions = useMemo(() => staff.filter((member) => member.staffType === 'Faculty'), [staff]);
+  const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects
       .filter((subject) => selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName)
@@ -135,13 +155,14 @@ export default function AttendanceManagement({
       .filter((subject) => subject.name);
   }, [academicSubjects, selectedCourse, selectedCourseCode]);
   const selectedSubject = subjectOptions.find((subject) => subject.code === selectedSubjectCode) || null;
-  const courseStudentAttendance = filterStudentScopedRecords(studentAttendance, courseStudents, selectedCourseCode, selectedCourse);
+  const courseStudentAttendance = filterStudentScopedRecords(studentAttendance, semesterStudents, selectedCourseCode, selectedCourse);
   const allModeRecords = mode === 'students' ? courseStudentAttendance : staffAttendance;
   const isSubjectStudentAttendance = mode === 'students' && Boolean(activeAttendanceBranch) && studentAttendanceScope === 'subject';
   const isGeneralStudentAttendance = mode === 'students' && Boolean(activeAttendanceBranch) && studentAttendanceScope === 'general';
   const activeRecords = mode === 'students'
     ? allModeRecords.filter((record) => {
       const recordSubject = record.subjectName || record.subject || '';
+      if (selectedSemester && (record.semester || record.className || '') !== selectedSemester) return false;
       if (isGeneralStudentAttendance) return !recordSubject;
       if (isSubjectStudentAttendance) return !selectedSubject?.name || recordSubject === selectedSubject.name;
       return true;
@@ -151,14 +172,34 @@ export default function AttendanceManagement({
   const selectedDateRecords = activeRecords.filter((record) => record.dateText === selectedDate);
   const activeEntities = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const source = mode === 'students' ? courseStudents : staff;
+    const source = mode === 'students' ? semesterStudents : staff;
     if (!term) return source;
     return source.filter((entity) =>
       [entity.name, entity.studentId, entity.employeeId, entity.className, entity.department]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(term))
     );
-  }, [courseStudents, mode, search, staff]);
+  }, [mode, search, semesterStudents, staff]);
+  const attendanceDraftContextKey = [
+    activeAttendanceBranch,
+    mode,
+    selectedDateInput,
+    selectedSemester,
+    selectedSubjectCode,
+    studentAttendanceScope,
+  ].join('|');
+  const draftStatuses = draftAttendance.contextKey === attendanceDraftContextKey ? draftAttendance.statuses : {};
+  const draftCount = Object.keys(draftStatuses).length;
+  const setScopedDraftStatuses = (updater) => {
+    setDraftAttendance((prev) => {
+      const currentStatuses = prev.contextKey === attendanceDraftContextKey ? prev.statuses : {};
+      const nextStatuses = typeof updater === 'function' ? updater(currentStatuses) : updater;
+      return { contextKey: attendanceDraftContextKey, statuses: nextStatuses };
+    });
+  };
+  const clearScopedDraftStatuses = () => {
+    setDraftAttendance({ contextKey: attendanceDraftContextKey, statuses: {} });
+  };
 
   const summary = summarizeAttendance(selectedDateRecords);
   const stats = [
@@ -233,17 +274,53 @@ export default function AttendanceManagement({
   const activeTask = attendanceTaskOptions.find((task) => task.id === activeAttendanceTask);
   const activeBranches = attendanceBranchOptions[activeAttendanceTask] || [];
   const activeBranch = activeBranches.find((branch) => branch.id === activeAttendanceBranch);
-  const markAttendance = async (entity, status) => {
-    const entityId = entity.studentId || entity.employeeId;
+
+  const validateAttendanceContext = () => {
     if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedSubject) {
       toast.error('Select a live subject before marking student attendance.');
+      return false;
+    }
+    if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedFaculty) {
+      toast.error('Select the faculty member before saving subject attendance.');
+      return false;
+    }
+    if (mode === 'students' && studentAttendanceScope === 'subject' && !topic.trim()) {
+      toast.error('Enter the class topic before saving subject attendance.');
+      return false;
+    }
+    return true;
+  };
+
+  const getAttendanceSubjectName = () => (
+    mode === 'students' && studentAttendanceScope === 'subject' ? selectedSubject?.name || '' : ''
+  );
+
+  const findExistingAttendanceRecord = (entity) => {
+    const entityId = entity.studentId || entity.employeeId;
+    const subjectName = getAttendanceSubjectName();
+    const key = buildAttendanceKey(entityId, selectedDate, subjectName);
+    return allModeRecords.find((record) => buildAttendanceKey(record.entityId || record.studentId || record.employeeId, record.dateText, record.subjectName || record.subject || '') === key);
+  };
+
+  const markAttendance = (entity, status) => {
+    if (mode === 'students' && !canMarkStudents) {
+      toast.error('You do not have permission to mark student attendance.');
       return;
     }
-    const subjectName = mode === 'students' && studentAttendanceScope === 'subject' ? selectedSubject.name : '';
-    const key = buildAttendanceKey(entityId, selectedDate, subjectName);
-    const exists = allModeRecords.find((record) => buildAttendanceKey(record.entityId, record.dateText, record.subjectName || record.subject || '') === key);
+    if (mode === 'staff' && !canMarkStaff) {
+      toast.error('You do not have permission to mark staff attendance.');
+      return;
+    }
+    if (!validateAttendanceContext()) return;
+    const entityId = entity.studentId || entity.employeeId;
+    const exists = findExistingAttendanceRecord(entity);
     if (exists) {
       if (exists.status === status) {
+        setScopedDraftStatuses((prev) => {
+          const next = { ...prev };
+          delete next[entityId];
+          return next;
+        });
         toast.success(`${entity.name} is already marked ${status.toLowerCase()}`);
         return;
       }
@@ -251,60 +328,167 @@ export default function AttendanceManagement({
         toast.error('Attendance can only be edited within 24 hours of marking.');
         return;
       }
-      const updates = {
-        status,
-        editedAtText: formatDisplayDate(),
-        editedAtIso: new Date().toISOString(),
-      };
-      try {
-        if (mode === 'students') {
-          await updateStudentAttendanceRecord(exists.id, updates);
-          setStudentAttendance((prev) => prev.map((record) => record.id === exists.id ? { ...record, ...updates } : record));
-        } else {
-          await updateStaffAttendanceRecord(exists.id, updates);
-          setStaffAttendance((prev) => prev.map((record) => record.id === exists.id ? { ...record, ...updates } : record));
-        }
-        toast.success(`${entity.name} updated to ${status.toLowerCase()}`);
-      } catch (error) {
-        console.error('Unable to update live attendance record.', error);
-        toast.error('Attendance was not updated in live data.');
-      }
-      return;
     }
+    setScopedDraftStatuses((prev) => ({ ...prev, [entityId]: status }));
+  };
 
+  const markRemainingPresent = () => {
+    if (!validateAttendanceContext()) return;
+    let changed = 0;
+    const nextDraftStatuses = { ...draftStatuses };
+    activeEntities.forEach((entity) => {
+      const entityId = entity.studentId || entity.employeeId;
+      const exists = findExistingAttendanceRecord(entity);
+      if (exists && !isAttendanceRecordEditable(exists)) return;
+      if (nextDraftStatuses[entityId] === 'Absent') return;
+      if (exists?.status === 'Present' && !nextDraftStatuses[entityId]) return;
+      nextDraftStatuses[entityId] = 'Present';
+      changed += 1;
+    });
+    setScopedDraftStatuses(nextDraftStatuses);
+    toast.success(changed ? `${changed} remaining record${changed === 1 ? '' : 's'} set to present in draft` : 'No remaining records to mark present.');
+  };
+
+  const clearDraftAttendance = () => {
+    clearScopedDraftStatuses();
+    toast.success('Attendance draft cleared');
+  };
+
+  const closeAttendanceSession = () => {
+    setActiveAttendanceBranch('');
+    setSelectedEntityId('');
+    setSearch('');
+    clearScopedDraftStatuses();
+    window.history.replaceState({
+      ...(window.history.state || {}),
+      attendanceFlow: {
+        task: activeAttendanceTask,
+        branch: '',
+        mode,
+        scope: studentAttendanceScope,
+      },
+    }, '');
+  };
+
+  const buildAttendancePayload = (entity, status, sessionId, now) => {
+    const entityId = entity.studentId || entity.employeeId;
+    const subjectName = getAttendanceSubjectName();
     const payload = {
       entityType: mode === 'students' ? 'Student' : 'Staff',
       entityRecordId: entity.id,
       entityId,
+      studentRecordId: mode === 'students' ? entity.id : '',
+      studentId: mode === 'students' ? entity.studentId || '' : '',
+      staffRecordId: mode === 'staff' ? entity.id : '',
+      employeeId: mode === 'staff' ? entity.employeeId || '' : '',
       entityName: entity.name,
       academicYear,
       className: entity.className || '',
       section: entity.section || '',
+      semester: mode === 'students' ? selectedSemester || getStudentSemester(entity) : '',
       department: entity.department || '',
       courseCode: entity.courseCode || selectedCourseCode,
       courseName: entity.courseName || entity.program || selectedCourse?.courseName || '',
       attendanceScope: mode === 'students' ? studentAttendanceScope : 'staff',
       subjectCode: mode === 'students' && studentAttendanceScope === 'subject' ? selectedSubject?.code || '' : '',
       subjectName,
+      facultyRecordId: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.id || '' : '',
+      facultyId: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.employeeId || '' : '',
+      facultyName: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.name || '' : '',
+      topic: mode === 'students' && studentAttendanceScope === 'subject' ? topic.trim() : '',
       dateText: selectedDate,
       status,
-      markedAtText: formatDisplayDate(),
-      markedAtIso: new Date().toISOString(),
+      sessionId,
+      markedAtText: formatDisplayDate(now),
+      markedAtIso: now.toISOString(),
       parentNotified: false,
     };
+    return payload;
+  };
+
+  const saveDraftAttendance = async () => {
+    if (savingDraft) return;
+    if (!isFirebaseConfigured) {
+      toast.error('Live Firebase data is not configured.');
+      return;
+    }
+    if (mode === 'students' && !canMarkStudents) {
+      toast.error('You do not have permission to mark student attendance.');
+      return;
+    }
+    if (mode === 'staff' && !canMarkStaff) {
+      toast.error('You do not have permission to mark staff attendance.');
+      return;
+    }
+    if (!validateAttendanceContext()) return;
+
+    const draftRows = activeEntities
+      .map((entity) => {
+        const entityId = entity.studentId || entity.employeeId;
+        return { entity, entityId, status: draftStatuses[entityId] };
+      })
+      .filter((row) => row.status);
+
+    if (!draftRows.length) {
+      toast.error('No attendance changes to save.');
+      return;
+    }
 
     try {
-      const id = mode === 'students'
-        ? await createStudentAttendanceRecord(payload)
-        : await createStaffAttendanceRecord(payload);
-      if (!id) throw new Error('Live attendance record was not created.');
-      const record = { id, ...payload };
-      if (mode === 'students') setStudentAttendance((prev) => [record, ...prev]);
-      else setStaffAttendance((prev) => [record, ...prev]);
-      toast.success(`${payload.entityName} marked ${status.toLowerCase()}`);
+      setSavingDraft(true);
+      const now = new Date();
+      const sessionId = `attendance-${mode}-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
+      const results = await Promise.all(draftRows.map(async ({ entity, status }) => {
+        const exists = findExistingAttendanceRecord(entity);
+        if (exists && !isAttendanceRecordEditable(exists)) {
+          return { skipped: true, name: entity.name };
+        }
+        const payload = buildAttendancePayload(entity, status, sessionId, now);
+        if (exists) {
+          const updates = {
+            ...payload,
+            editedAtText: formatDisplayDate(now),
+            editedAtIso: now.toISOString(),
+          };
+          if (mode === 'students') await updateStudentAttendanceRecord(exists.id, updates);
+          else await updateStaffAttendanceRecord(exists.id, updates);
+          return { action: 'updated', record: { ...exists, ...updates } };
+        }
+        const id = mode === 'students'
+          ? await createStudentAttendanceRecord(payload)
+          : await createStaffAttendanceRecord(payload);
+        if (!id) throw new Error('Live attendance record was not created.');
+        return { action: 'created', record: { id, ...payload } };
+      }));
+
+      const savedRecords = results.filter((result) => result.record).map((result) => result.record);
+      const savedIds = new Set(savedRecords.map((record) => record.id));
+      const createdRecords = results.filter((result) => result.action === 'created').map((result) => result.record);
+
+      if (mode === 'students') {
+        setStudentAttendance((prev) => [
+          ...createdRecords,
+          ...prev.map((record) => savedIds.has(record.id)
+            ? savedRecords.find((savedRecord) => savedRecord.id === record.id) || record
+            : record),
+        ]);
+      } else {
+        setStaffAttendance((prev) => [
+          ...createdRecords,
+          ...prev.map((record) => savedIds.has(record.id)
+            ? savedRecords.find((savedRecord) => savedRecord.id === record.id) || record
+            : record),
+        ]);
+      }
+
+      const skipped = results.filter((result) => result.skipped).length;
+      toast.success(`${savedRecords.length} attendance record${savedRecords.length === 1 ? '' : 's'} saved${skipped ? `, ${skipped} skipped` : ''}`);
+      closeAttendanceSession();
     } catch (error) {
-      console.error('Unable to create live attendance record.', error);
+      console.error('Unable to save live attendance records.', error);
       toast.error('Attendance was not saved to live data.');
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -323,19 +507,6 @@ export default function AttendanceManagement({
             <span className="hidden rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 sm:inline-flex">
               {studentAttendanceScope === 'general' ? 'General Attendance' : 'Subject Attendance'}
             </span>
-          )}
-          {mode === 'students' && activeAttendanceBranch && studentAttendanceScope === 'subject' && (
-            <select
-              value={selectedSubject?.code || ''}
-              onChange={(event) => setSelectedSubjectCode(event.target.value)}
-              className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-              title="Subject"
-            >
-              <option value="">{subjectOptions.length ? 'Select Subject' : 'No Live Subjects'}</option>
-              {subjectOptions.map((subject) => (
-                <option key={subject.code} value={subject.code}>{subject.name}</option>
-              ))}
-            </select>
           )}
           <input
             type="date"
@@ -437,6 +608,63 @@ export default function AttendanceManagement({
             </div>
           )}
 
+          {mode === 'students' && (
+            <div className="mb-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
+              <label>
+                <span className="block text-xs font-semibold text-slate-500 mb-1.5">Semester / Class</span>
+                <select
+                  value={selectedSemester}
+                  onChange={(event) => setSelectedSemester(event.target.value)}
+                  className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                >
+                  <option value="">All semesters</option>
+                  {semesterOptions.map((semester) => (
+                    <option key={semester} value={semester}>{semester}</option>
+                  ))}
+                </select>
+              </label>
+              {studentAttendanceScope === 'subject' && (
+                <>
+                  <label>
+                    <span className="block text-xs font-semibold text-slate-500 mb-1.5">Subject</span>
+                    <select
+                      value={selectedSubject?.code || ''}
+                      onChange={(event) => setSelectedSubjectCode(event.target.value)}
+                      className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    >
+                      <option value="">{subjectOptions.length ? 'Select Subject' : 'No Live Subjects'}</option>
+                      {subjectOptions.map((subject) => (
+                        <option key={subject.code} value={subject.code}>{subject.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="block text-xs font-semibold text-slate-500 mb-1.5">Faculty</span>
+                    <select
+                      value={selectedFacultyId}
+                      onChange={(event) => setSelectedFacultyId(event.target.value)}
+                      className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    >
+                      <option value="">{facultyOptions.length ? 'Select Faculty' : 'No Faculty Records'}</option>
+                      {facultyOptions.map((member) => (
+                        <option key={member.id} value={member.id}>{member.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>
+                    <input
+                      value={topic}
+                      onChange={(event) => setTopic(event.target.value)}
+                      placeholder="Topic taught"
+                      className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="relative mb-4">
             <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -447,8 +675,44 @@ export default function AttendanceManagement({
             />
           </div>
 
+          <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase text-slate-500">Draft Attendance</div>
+              <div className="text-sm font-bold text-slate-900">
+                {draftCount} unsaved change{draftCount === 1 ? '' : 's'}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={markRemainingPresent}
+                disabled={mode === 'students' ? !canMarkStudents : !canMarkStaff}
+                className="h-10 px-4 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm font-bold disabled:opacity-50"
+              >
+                Mark Remaining Present
+              </button>
+              <button
+                type="button"
+                onClick={clearDraftAttendance}
+                disabled={!draftCount}
+                className="h-10 px-4 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold disabled:opacity-50"
+              >
+                Clear Draft
+              </button>
+              <button
+                type="button"
+                onClick={saveDraftAttendance}
+                disabled={!draftCount || savingDraft || (mode === 'students' ? !canMarkStudents : !canMarkStaff)}
+                className="h-10 px-4 rounded-lg bg-[#033500] text-white text-sm font-bold shadow-[0_10px_22px_rgba(3,53,0,0.2)] disabled:opacity-50"
+              >
+                {savingDraft ? 'Saving...' : 'Save & Close'}
+              </button>
+            </div>
+          </div>
+
           <AttendanceTable
             canMark={mode === 'students' ? canMarkStudents : canMarkStaff}
+            draftStatuses={draftStatuses}
             entities={activeEntities}
             isRecordEditable={isAttendanceRecordEditable}
             mode={mode}

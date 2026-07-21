@@ -1295,6 +1295,7 @@ function StudentDetailPage({
         : `Installment ${index + 1}`;
       const paymentDate = formatPaymentDate(item.paymentDate || item.createdAtText);
       const manualDueItems = formatManualDueItems(item.manualDueItems);
+      const paidDueItems = formatManualDueItems(item.paidDueItems);
       return {
         id: item.id || `collection-${index}`,
         label: [installmentLabel, item.feeStructureName || item.entryMode].filter(Boolean).join(' - '),
@@ -1305,6 +1306,7 @@ function StudentDetailPage({
           item.referenceNo ? `Ref: ${item.referenceNo}` : '',
           Number(item.dueAfterPayment || 0) > 0 ? `Due after: ${formatCurrency(item.dueAfterPayment)}` : '',
           Number(item.agentFeePaidAmount || 0) > 0 ? `Agent payout: ${formatCurrency(item.agentFeePaidAmount)}` : '',
+          paidDueItems ? `Paid items: ${paidDueItems}` : '',
           manualDueItems ? `Pending: ${manualDueItems}` : '',
         ].filter(Boolean).join(' | '),
         value: formatCurrency(item.amount),

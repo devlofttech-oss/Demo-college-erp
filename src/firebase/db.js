@@ -307,15 +307,23 @@ export async function updateRole(id, data) {
 
 export async function getFacultyStaffData(academicYear = '') {
   const yearConstraints = academicYearWhere(academicYear);
-  const [staff, departments, leaveRecords, attendanceRecords, timetableEntries] = await Promise.all([
+  const [staff, departments, leaveRecords, attendanceRecords, timetableEntries, studentAttendanceRecords] = await Promise.all([
     listCollection('staffMembers'),
     listCollection('departments'),
     listCollection('staffLeaveRecords', yearConstraints),
     listCollection('staffAttendanceRecords', yearConstraints),
     listCollection('timetableEntries', yearConstraints),
+    listCollectionOptional('studentAttendanceRecords', yearConstraints),
   ]);
 
-  return { staff, departments, leaveRecords: filterByAcademicYear(leaveRecords, academicYear), attendanceRecords: filterByAcademicYear(attendanceRecords, academicYear), timetableEntries: filterByAcademicYear(timetableEntries, academicYear) };
+  return {
+    staff,
+    departments,
+    leaveRecords: filterByAcademicYear(leaveRecords, academicYear),
+    attendanceRecords: filterByAcademicYear(attendanceRecords, academicYear),
+    timetableEntries: filterByAcademicYear(timetableEntries, academicYear),
+    studentAttendanceRecords: filterByAcademicYear(studentAttendanceRecords, academicYear),
+  };
 }
 
 export async function getDashboardData(academicYear = '') {

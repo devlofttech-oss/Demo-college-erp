@@ -32,12 +32,17 @@ function StaffDetailPage({
   onLeaveDecision,
   onOpenDocuments,
   staffMember,
+  teachingRecords = [],
   timetableEntries,
 }) {
   const [showAllDetails, setShowAllDetails] = useState(false);
+  const [activeDetailTab, setActiveDetailTab] = useState('overview');
   const attendanceTotal = attendanceRecords.length;
   const presentCount = attendanceRecords.filter((item) => item.status === 'Present').length;
   const attendanceRate = attendanceTotal ? Math.round((presentCount / attendanceTotal) * 100) : 0;
+  const topicRows = [...teachingRecords]
+    .filter((record) => record.topic || record.subjectName)
+    .sort((first, second) => Date.parse(second.markedAtIso || second.dateText || '') - Date.parse(first.markedAtIso || first.dateText || ''));
 
   return (
     <div>
@@ -71,6 +76,57 @@ function StaffDetailPage({
         showExtendedDetails={showAllDetails}
         staffMember={staffMember}
       />
+      <div className="mb-5 flex flex-wrap gap-2">
+        {[
+          ['overview', 'Overview'],
+          ['topics', 'Topics Taken'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setActiveDetailTab(value)}
+            className={`h-10 px-4 rounded-lg border text-sm font-bold ${activeDetailTab === value ? 'bg-[#33373e] text-white border-[#33373e]' : 'bg-white text-slate-600 border-slate-200'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeDetailTab === 'topics' ? (
+        <section className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm mb-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-bold text-slate-900">Topics Taken</h3>
+            <span className="text-xs font-bold text-slate-500">{topicRows.length} class session{topicRows.length === 1 ? '' : 's'}</span>
+          </div>
+          {topicRows.length ? (
+            <div className="overflow-x-auto rounded-lg border border-slate-100">
+              <table className="w-full text-sm">
+                <thead className="bg-[#f5f5f6] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left font-semibold">Semester / Class</th>
+                    <th className="px-4 py-3 text-left font-semibold">Subject</th>
+                    <th className="px-4 py-3 text-left font-semibold">Topic</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {topicRows.map((record) => (
+                    <tr key={record.id}>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{record.dateText || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{record.semester || record.className || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{record.subjectName || '-'}</td>
+                      <td className="px-4 py-3 text-slate-700">{record.topic || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-[#f5f5f6] p-4 text-sm text-slate-500">No saved topic sessions for this faculty member yet.</div>
+          )}
+        </section>
+      ) : (
+      <>
       <div className="grid xl:grid-cols-[1fr_1fr] gap-5 mb-5">
         <section className="bg-white border border-slate-100 rounded-lg p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-4">
@@ -106,6 +162,8 @@ function StaffDetailPage({
       >
         {showAllDetails ? 'Hide all details' : 'View all details'}
       </button>
+      </>
+      )}
     </div>
   );
 }
@@ -115,6 +173,7 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '',
   const [departments, setDepartments] = useState([]);
   const [leaveRecords, setLeaveRecords] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [studentAttendanceRecords, setStudentAttendanceRecords] = useState([]);
   const [timetableEntries, setTimetableEntries] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
@@ -156,6 +215,7 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '',
         setSelectedId('');
         setLeaveRecords(data.leaveRecords || []);
         setAttendanceRecords(data.attendanceRecords || []);
+        setStudentAttendanceRecords(data.studentAttendanceRecords || []);
         setTimetableEntries(data.timetableEntries || []);
         setLoadError('');
       } catch (error) {
@@ -172,6 +232,11 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '',
   const selectedAttendance = attendanceRecords.filter((record) => relationMatchesStaff(record, selectedStaff));
   const selectedTimetableEntries = timetableEntries.filter((entry) => (
     entry.facultyId === selectedStaff?.id || entry.facultyName === selectedStaff?.name
+  ));
+  const selectedTeachingRecords = studentAttendanceRecords.filter((record) => (
+    record.facultyRecordId === selectedStaff?.id ||
+    record.facultyId === selectedStaff?.employeeId ||
+    record.facultyName === selectedStaff?.name
   ));
 
   const selectStaff = (staffId) => {
@@ -420,6 +485,7 @@ export default function FacultyStaffManagement({ currentUser, academicYear = '',
             ownerType: 'Staff',
           })}
           staffMember={selectedStaff}
+          teachingRecords={selectedTeachingRecords}
           timetableEntries={selectedTimetableEntries}
         />
       ) : (

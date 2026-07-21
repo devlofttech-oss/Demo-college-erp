@@ -1,5 +1,5 @@
 import { Edit3 } from 'lucide-react';
-import { formatCurrency, formatPaymentDate } from '../feeUtils';
+import { formatCurrency, formatManualDueItems, formatPaymentDate } from '../feeUtils';
 
 export default function FeeCollectionTable({ collections, onEdit }) {
   return (
@@ -16,6 +16,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
               <th className="text-left px-4 py-3 font-semibold">Mode</th>
               <th className="text-left px-4 py-3 font-semibold">Credited To</th>
               <th className="text-left px-4 py-3 font-semibold">Reference</th>
+              <th className="text-left px-4 py-3 font-semibold">Paid Items</th>
               <th className="text-right px-4 py-3 font-semibold">Amount</th>
               <th className="text-right px-4 py-3 font-semibold">Actions</th>
             </tr>
@@ -44,6 +45,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                 <td className="px-4 py-3 text-slate-600">{item.paymentMode || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{item.creditedToAccount || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{item.referenceNo || '-'}</td>
+                <td className="px-4 py-3 text-slate-600">{formatManualDueItems(item.paidDueItems) || '-'}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="font-bold text-emerald-700">{formatCurrency(item.amount)}</div>
                   {item.admissionThroughAgent && (
@@ -65,7 +67,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
             ))}
             {!collections.length && (
               <tr>
-                <td colSpan="10" className="px-4 py-10 text-center text-slate-500">No fee collections found.</td>
+                <td colSpan="11" className="px-4 py-10 text-center text-slate-500">No fee collections found.</td>
               </tr>
             )}
           </tbody>

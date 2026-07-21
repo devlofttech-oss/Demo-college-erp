@@ -235,6 +235,17 @@ export function normalizeManualDueItems(items = [], source = {}) {
   }, []);
 }
 
+export function filterPaidDueItems(paidItems = [], pendingItems = [], source = {}) {
+  const pending = normalizeManualDueItems(pendingItems, source);
+  const pendingIds = new Set(pending.map((item) => item.id));
+  return normalizeManualDueItems(paidItems, source).filter((item) => pendingIds.has(item.id));
+}
+
+export function getRemainingDueItems(pendingItems = [], paidItems = [], source = {}) {
+  const paidIds = new Set(filterPaidDueItems(paidItems, pendingItems, source).map((item) => item.id));
+  return normalizeManualDueItems(pendingItems, source).filter((item) => !paidIds.has(item.id));
+}
+
 export function formatManualDueItems(items = []) {
   return normalizeManualDueItems(items).map((item) => item.label).join(', ');
 }

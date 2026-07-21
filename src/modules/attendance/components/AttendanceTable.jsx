@@ -34,6 +34,7 @@ function AttendanceStatusControl({ canMark, record, entity, onMark, recordEditab
         })}
       </div>
       {!currentStatus && <div className="erp-attendance-status-hint">Not marked</div>}
+      {record?.isDraft && <div className="erp-attendance-status-hint">Draft</div>}
       {currentStatus && !recordEditable && <div className="erp-attendance-status-hint">Edit window closed</div>}
     </div>
   );
@@ -41,6 +42,7 @@ function AttendanceStatusControl({ canMark, record, entity, onMark, recordEditab
 
 function AttendanceTable({
   canMark,
+  draftStatuses = {},
   entities,
   mode,
   records,
@@ -52,8 +54,9 @@ function AttendanceTable({
   showActions = true,
 }) {
   const recordsByEntityId = useMemo(() => records.reduce((map, record) => {
-    if (record.entityId && record.dateText === selectedDate) {
-      map.set(record.entityId, record);
+    const recordEntityId = record.entityId || record.studentId || record.employeeId;
+    if (recordEntityId && record.dateText === selectedDate) {
+      map.set(recordEntityId, record);
     }
     return map;
   }, new Map()), [records, selectedDate]);
@@ -72,6 +75,8 @@ function AttendanceTable({
           {entities.map((entity) => {
             const entityId = entity.studentId || entity.employeeId;
             const record = recordsByEntityId.get(entityId);
+            const draftStatus = draftStatuses[entityId];
+            const effectiveRecord = draftStatus ? { ...(record || {}), status: draftStatus, isDraft: true } : record;
             const recordEditable = isRecordEditable ? isRecordEditable(record) : true;
             return (
               <tr
@@ -88,7 +93,7 @@ function AttendanceTable({
                     canMark={canMark}
                     entity={entity}
                     mode={mode}
-                    record={record}
+                    record={effectiveRecord}
                     recordEditable={recordEditable}
                     onMark={onMark}
                   />

@@ -6,12 +6,15 @@ import {
   calculateAssignmentPaymentLedger,
   calculatePendingAgentFeeBalance,
   calculateDueAmount,
+  filterPaidDueItems,
   feeComponentFields,
   formatCurrency,
+  formatManualDueItems,
   formatPaymentDate,
   getFeeComponentValues,
   getCollectionsForFeeContext,
   getManualDueItemOptions,
+  getRemainingDueItems,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
   normalizePaymentEntries,
@@ -98,6 +101,7 @@ export default function FeeCollectionModal({
       agentFeePaidAmount: initialCollection?.agentFeePaidAmount || '',
     })],
     manualDueItems: syncAgentDueItem(initialCollection?.manualDueItems || initialAssignment?.manualDueItems || [], initialAdmissionThroughAgent),
+    paidDueItems: syncAgentDueItem(initialCollection?.paidDueItems || [], initialAdmissionThroughAgent),
   });
   const [activePaymentIndex, setActivePaymentIndex] = useState(0);
   const [paymentStepError, setPaymentStepError] = useState('');
@@ -110,6 +114,8 @@ export default function FeeCollectionModal({
   ));
   const editedTotal = totalFromForm(form);
   const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems, form);
+  const selectedPaidDueItems = filterPaidDueItems(form.paidDueItems, selectedManualDueItems, form);
+  const remainingDueItemsAfterThisPayment = getRemainingDueItems(selectedManualDueItems, selectedPaidDueItems, form);
   const dueItemOptions = getManualDueItemOptions(form);
   const paymentContext = {
     assignmentId: matchingAssignment?.id || form.assignmentId,
@@ -190,6 +196,7 @@ export default function FeeCollectionModal({
         agentFeePaidAmount: nextAdmissionThroughAgent ? entry.agentFeePaidAmount : 0,
       })),
       manualDueItems: syncAgentDueItem(nextAssignment?.manualDueItems || [], nextAdmissionThroughAgent),
+      paidDueItems: [],
     };
   };
 
@@ -209,9 +216,24 @@ export default function FeeCollectionModal({
     setForm((prev) => {
       const currentItems = normalizeManualDueItems(prev.manualDueItems);
       const exists = currentItems.some((currentItem) => currentItem.id === item.id);
+      const nextManualDueItems = exists
+        ? currentItems.filter((currentItem) => currentItem.id !== item.id)
+        : [...currentItems, item];
       return {
         ...prev,
-        manualDueItems: exists
+        manualDueItems: nextManualDueItems,
+        paidDueItems: filterPaidDueItems(prev.paidDueItems, nextManualDueItems, prev),
+      };
+    });
+  };
+
+  const togglePaidDueItem = (item) => {
+    setForm((prev) => {
+      const currentItems = filterPaidDueItems(prev.paidDueItems, prev.manualDueItems, prev);
+      const exists = currentItems.some((currentItem) => currentItem.id === item.id);
+      return {
+        ...prev,
+        paidDueItems: exists
           ? currentItems.filter((currentItem) => currentItem.id !== item.id)
           : [...currentItems, item],
       };
@@ -289,6 +311,8 @@ export default function FeeCollectionModal({
     event.preventDefault();
     const normalizedEntries = normalizePaymentEntries(form.paymentEntries, form);
     const firstPayment = normalizedEntries[0] || {};
+    const manualDueItems = syncAgentDueItem(form.manualDueItems, form.admissionThroughAgent);
+    const paidDueItems = filterPaidDueItems(form.paidDueItems, manualDueItems, form);
     onSave({
       ...form,
       amount: sumPaymentEntries(normalizedEntries),
@@ -299,7 +323,9 @@ export default function FeeCollectionModal({
       paymentEntries: normalizedEntries,
       totalAmount: editedTotal,
       feeStructureName: selectedStructure?.name || '',
-      manualDueItems: syncAgentDueItem(form.manualDueItems, form.admissionThroughAgent),
+      manualDueItems,
+      paidDueItems,
+      remainingDueItems: getRemainingDueItems(manualDueItems, paidDueItems, form),
       admissionThroughAgent: Boolean(form.admissionThroughAgent),
       agentFee: form.admissionThroughAgent ? Number(form.agentFee || 0) : 0,
       agentFeePaidAmount: agentFeePaidInThisPayment,
@@ -362,6 +388,9 @@ export default function FeeCollectionModal({
                   agentFeePaidAmount: event.target.checked ? entry.agentFeePaidAmount : 0,
                 })),
                 manualDueItems: syncAgentDueItem(prev.manualDueItems, event.target.checked),
+                paidDueItems: event.target.checked
+                  ? filterPaidDueItems(prev.paidDueItems, syncAgentDueItem(prev.manualDueItems, true), prev)
+                  : filterPaidDueItems(prev.paidDueItems, syncAgentDueItem(prev.manualDueItems, false), prev),
               }))}
               className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
             />
@@ -437,7 +466,12 @@ export default function FeeCollectionModal({
           </div>
 
           <div className="erp-due-picker sm:col-span-2 rounded-lg border border-amber-100 bg-amber-50/60 p-4">
-            <div className="erp-due-picker-title text-xs font-bold uppercase text-amber-700 mb-3">Pending Due Items</div>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div className="erp-due-picker-title text-xs font-bold uppercase text-amber-700">Pending Due Items</div>
+              <div className="text-[11px] font-semibold text-amber-800">
+                {selectedManualDueItems.length ? `${selectedManualDueItems.length} item${selectedManualDueItems.length === 1 ? '' : 's'} currently due` : 'Select due items'}
+              </div>
+            </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
               {dueItemOptions.map((item) => {
                 const checked = selectedManualDueItems.some((currentItem) => currentItem.id === item.id);
@@ -454,6 +488,42 @@ export default function FeeCollectionModal({
                 );
               })}
             </div>
+          </div>
+
+          <div className="erp-paid-picker sm:col-span-2 rounded-lg border border-emerald-100 bg-emerald-50/60 p-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div>
+                <div className="erp-due-picker-title text-xs font-bold uppercase text-emerald-700">Paid Due Items</div>
+                <div className="text-xs text-emerald-800">Choose the pending items this payment clears.</div>
+              </div>
+              <div className="text-[11px] font-semibold text-emerald-800">
+                {remainingDueItemsAfterThisPayment.length
+                  ? `${remainingDueItemsAfterThisPayment.length} still pending after save`
+                  : selectedManualDueItems.length ? 'All selected due items will clear' : 'No due items selected'}
+              </div>
+            </div>
+            {selectedManualDueItems.length ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {selectedManualDueItems.map((item) => {
+                  const checked = selectedPaidDueItems.some((currentItem) => currentItem.id === item.id);
+                  return (
+                    <label key={item.id} className={`erp-due-chip min-h-10 rounded-lg bg-white border border-emerald-100 px-3 py-2 text-xs font-semibold text-slate-700 flex items-center gap-2 ${checked ? 'is-selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePaidDueItem(item)}
+                        className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
+                      />
+                      <span>{item.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-white/80 border border-emerald-100 px-3 py-3 text-sm font-semibold text-emerald-800">
+                Select items in Pending Due Items first.
+              </div>
+            )}
           </div>
 
           <div className="erp-payment-history sm:col-span-2 rounded-lg border border-slate-100 bg-white p-4">
@@ -474,6 +544,7 @@ export default function FeeCollectionModal({
                       <th className="px-3 py-2 text-left font-semibold">Mode</th>
                       <th className="px-3 py-2 text-left font-semibold">Credited To</th>
                       <th className="px-3 py-2 text-left font-semibold">Reference</th>
+                      <th className="px-3 py-2 text-left font-semibold">Paid Items</th>
                       <th className="px-3 py-2 text-right font-semibold">Amount</th>
                     </tr>
                   </thead>
@@ -487,6 +558,7 @@ export default function FeeCollectionModal({
                         <td className="px-3 py-2 text-slate-600">{payment.paymentMode || '-'}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.creditedToAccount || '-'}</td>
                         <td className="px-3 py-2 text-slate-600">{payment.referenceNo || '-'}</td>
+                        <td className="px-3 py-2 text-slate-600">{formatManualDueItems(payment.paidDueItems) || '-'}</td>
                         <td className="px-3 py-2 text-right font-bold text-emerald-700">{formatCurrency(payment.amount)}</td>
                       </tr>
                     ))}
