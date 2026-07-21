@@ -57,7 +57,7 @@ import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { normalizeInstituteSettings } from '../settings/settingsModel';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 import { getParentLinkedStudents } from '../parentPortal/parentPortalUtils';
-import { formatCurrency, formatManualDueItems, formatPaymentDate, sortPaymentRecordsByDate } from '../fees/feeUtils';
+import { calculateAssignmentPaymentLedger, formatCurrency, formatManualDueItems, formatPaymentDate, sortPaymentRecordsByDate, totalFeeComponents } from '../fees/feeUtils';
 
 const AcademicsManagement = lazy(() => import('../academics/AcademicsManagement'));
 const AttendanceManagement = lazy(() => import('../attendance/AttendanceManagement'));
@@ -1200,10 +1200,40 @@ function StudentDetailPage({
   const examRecordCount = marksEntries.length + results.length;
   const examPercentages = [...marksEntries, ...results].map((item) => Number(item.percentage || 0)).filter((value) => value > 0);
   const examAverage = examPercentages.length ? Math.round(examPercentages.reduce((sum, value) => sum + value, 0) / examPercentages.length) : 0;
-  const feeAssigned = feeAssignments.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
-  const feePaid = feeAssignments.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
-  const feeAdjusted = feeAssignments.reduce((sum, item) => sum + Number(item.adjustmentAmount || 0), 0);
-  const feeDue = feeAssignments.reduce((sum, item) => sum + Number(item.dueAmount || 0), 0);
+  const feeCollectionsByAssignment = feeCollections.reduce((map, item) => {
+    if (!item.assignmentId) return map;
+    map[item.assignmentId] = [...(map[item.assignmentId] || []), item];
+    return map;
+  }, {});
+  const paymentRows = feeAssignments.map((item, index) => {
+    const ledger = calculateAssignmentPaymentLedger(item, feeCollectionsByAssignment[item.id] || []);
+    const componentTotal = totalFeeComponents(item);
+    const total = componentTotal > 0 ? componentTotal : Number(item.totalAmount || 0);
+    const paid = Number(ledger.paidAmount || 0);
+    const adjusted = Number(ledger.adjustmentAmount || 0);
+    const due = Number(ledger.dueAmount || 0);
+    return {
+      id: item.id || `fee-${index}`,
+      label: item.feeStructureName || item.structureName || item.classKey || `Fee Assignment ${index + 1}`,
+      helper: [
+        item.dueDate ? `Due date: ${item.dueDate}` : item.academicYear || 'Fee assignment',
+        formatManualDueItems(item.manualDueItems) ? `Pending: ${formatManualDueItems(item.manualDueItems)}` : '',
+      ].filter(Boolean).join(' | '),
+      value: formatCurrency(due),
+      valueTone: due > 0 ? 'danger' : 'success',
+      percentage: total ? Math.min(100, Math.round(((paid + adjusted) / total) * 100)) : 0,
+      status: ledger.status || item.status || (due > 0 ? 'Due' : 'Paid'),
+      statusTone: due > 0 ? 'danger' : 'success',
+      total,
+      paid,
+      adjusted,
+      due,
+    };
+  });
+  const feeAssigned = paymentRows.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const feePaid = paymentRows.reduce((sum, item) => sum + Number(item.paid || 0), 0);
+  const feeAdjusted = paymentRows.reduce((sum, item) => sum + Number(item.adjusted || 0), 0);
+  const feeDue = paymentRows.reduce((sum, item) => sum + Number(item.due || 0), 0);
   const feeCollected = feeCollections.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const feeCompletion = feeAssigned ? Math.min(100, Math.round(((feePaid + feeAdjusted) / feeAssigned) * 100)) : 0;
   const admissionStatus = latestAdmission?.status || student.status || PENDING_ADMISSION_STATUS;
@@ -1215,7 +1245,7 @@ function StudentDetailPage({
     { id: 'profile', label: 'Profile', icon: <UserRound size={14} />, active: activeTab === 'profile' },
     { id: 'attendance', label: 'Attendance', value: `${generalAttendancePercentage}%`, icon: <Bell size={14} />, active: activeTab === 'attendance' },
     { id: 'exams', label: 'Exams', value: `${examRecordCount}`, icon: <BookOpen size={14} />, active: activeTab === 'exams' },
-    { id: 'payment', label: 'Payment', value: feeDue ? formatCurrency(feeDue) : 'No due', icon: <Wallet size={14} />, active: activeTab === 'payment' },
+    { id: 'payment', label: 'Payment', icon: <Wallet size={14} />, active: activeTab === 'payment' },
     { id: 'documents', label: 'Docs', value: `${documents.length}`, icon: <FileText size={14} />, active: activeTab === 'documents' },
     { id: 'health', label: 'Health Record', value: healthRecord ? 'Uploaded' : 'Empty', icon: <HeartPulse size={14} />, active: activeTab === 'health' },
   ];
@@ -1263,28 +1293,6 @@ function StudentDetailPage({
       };
     }),
   ];
-
-  const paymentRows = feeAssignments.map((item, index) => {
-    const total = Number(item.totalAmount || 0);
-    const paid = Number(item.paidAmount || 0);
-    const adjusted = Number(item.adjustmentAmount || 0);
-    const due = Number(item.dueAmount || Math.max(0, total - paid - adjusted));
-    return {
-      id: item.id || `fee-${index}`,
-      label: item.feeStructureName || item.structureName || item.classKey || `Fee Assignment ${index + 1}`,
-      helper: [
-        item.dueDate ? `Due date: ${item.dueDate}` : item.academicYear || 'Fee assignment',
-        formatManualDueItems(item.manualDueItems) ? `Pending: ${formatManualDueItems(item.manualDueItems)}` : '',
-      ].filter(Boolean).join(' | '),
-      value: formatCurrency(due),
-      percentage: total ? Math.min(100, Math.round(((paid + adjusted) / total) * 100)) : 0,
-      status: item.status || (due > 0 ? 'Due' : 'Paid'),
-      total,
-      paid,
-      adjusted,
-      due,
-    };
-  });
 
   const paymentHistoryRows = sortPaymentRecordsByDate(feeCollections)
     .map((item, index) => {
@@ -1373,12 +1381,24 @@ function StudentDetailPage({
     if (summaryTabs.some((tab) => tab.id === tabId)) setActiveTab(tabId);
   };
 
-  const renderMetricGrid = (items) => (
+  const getPaymentMetricTone = (label) => {
+    if (['Paid', 'Collected'].includes(label)) return 'success';
+    if (label === 'Due') return 'danger';
+    return '';
+  };
+
+  const getToneClass = (tone, fallback = 'text-slate-900') => {
+    if (tone === 'success') return 'erp-student-payment-value-success';
+    if (tone === 'danger') return 'erp-student-payment-value-danger';
+    return fallback;
+  };
+
+  const renderMetricGrid = (items, context = '') => (
     <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
       {items.map(([label, value]) => (
-        <div key={label} className="rounded-lg border border-slate-100 bg-white p-3">
+        <div key={label} className={`rounded-lg border border-slate-100 bg-white p-3 ${context === 'payment' ? 'erp-student-payment-metric' : ''}`}>
           <div className="text-xs font-semibold text-slate-500">{label}</div>
-          <div className="mt-1 text-lg font-extrabold text-slate-900">{value}</div>
+          <div className={`mt-1 text-lg font-extrabold ${context === 'payment' ? getToneClass(getPaymentMetricTone(label)) : 'text-slate-900'}`}>{value}</div>
         </div>
       ))}
     </div>
@@ -1392,8 +1412,8 @@ function StudentDetailPage({
           <div className="text-xs text-slate-500 mt-1">{row.helper}</div>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="font-extrabold text-slate-900">{row.value}</span>
-          <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold text-slate-600">{row.status}</span>
+          <span className={`font-extrabold ${getToneClass(row.valueTone)}`}>{row.value}</span>
+          <span className={`rounded-full bg-[#f5f5f6] px-3 py-1 text-xs font-bold ${getToneClass(row.statusTone, 'text-slate-600')}`}>{row.status}</span>
         </div>
       </div>
       <div className="mt-3 h-3 rounded-full bg-[#f5f5f6] overflow-hidden">
@@ -1507,7 +1527,7 @@ function StudentDetailPage({
             In-page stats
           </span>
         </div>
-        {renderMetricGrid(selectedStat.items)}
+        {renderMetricGrid(selectedStat.items, activeTab)}
 
         {activeTab === 'attendance' && (
           <div className="mt-5 grid xl:grid-cols-[.7fr_1.3fr] gap-4">

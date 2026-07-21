@@ -55,6 +55,29 @@ function getSubjectTopics(subject = {}) {
   return [...new Set(rawTopics.map((item) => String(item).trim()).filter(Boolean))];
 }
 
+function normalizeIdentityToken(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function buildFacultyIdentityTokens(source = {}) {
+  return [
+    source.id,
+    source.uid,
+    source.email,
+    source.employeeId,
+    source.staffId,
+    source.displayId,
+    source.adminId,
+    source.name,
+    source.displayName,
+  ].map(normalizeIdentityToken).filter(Boolean);
+}
+
+function facultyMatchesCurrentUser(member = {}, currentUser = {}) {
+  const memberTokens = new Set(buildFacultyIdentityTokens(member));
+  return buildFacultyIdentityTokens(currentUser).some((token) => memberTokens.has(token));
+}
+
 export default function AttendanceManagement({
   currentUser,
   academicYear = '',
@@ -158,7 +181,14 @@ export default function AttendanceManagement({
     ? courseStudents.filter((student) => recordMatchesSemester(student, selectedSemester))
     : courseStudents;
   const facultyOptions = useMemo(() => staff.filter((member) => member.staffType === 'Faculty'), [staff]);
-  const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
+  const signedInFaculty = useMemo(() => {
+    if (currentRoleId !== 'faculty') return null;
+    return facultyOptions.find((member) => facultyMatchesCurrentUser(member, currentUser)) || null;
+  }, [currentRoleId, currentUser, facultyOptions]);
+  const visibleFacultyOptions = signedInFaculty ? [signedInFaculty] : facultyOptions;
+  const facultySelectLocked = Boolean(signedInFaculty);
+  const effectiveSelectedFacultyId = signedInFaculty?.id || selectedFacultyId;
+  const selectedFaculty = visibleFacultyOptions.find((member) => member.id === effectiveSelectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects
       .filter((subject) => selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName)
@@ -206,6 +236,7 @@ export default function AttendanceManagement({
     activeAttendanceBranch,
     mode,
     selectedDateInput,
+    effectiveSelectedFacultyId,
     selectedSemester,
     selectedSubjectCode,
     studentAttendanceScope,
@@ -659,9 +690,9 @@ export default function AttendanceManagement({
           )}
 
           {mode === 'students' && (
-            <div className="mb-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
-              <label>
-                <span className="block text-xs font-semibold text-slate-500 mb-1.5">Semester</span>
+            <div className="erp-attendance-context-panel mb-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
+              <label className="erp-attendance-field">
+                <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Semester</span>
                 <select
                   value={selectedSemester}
                   onChange={(event) => {
@@ -669,7 +700,7 @@ export default function AttendanceManagement({
                     setSelectedSubjectCode('');
                     setTopic('');
                   }}
-                  className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  className="erp-attendance-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="">All semesters</option>
                   {semesterOptions.map((semester) => (
@@ -679,15 +710,15 @@ export default function AttendanceManagement({
               </label>
               {studentAttendanceScope === 'subject' && (
                 <>
-                  <label>
-                    <span className="block text-xs font-semibold text-slate-500 mb-1.5">Subject</span>
+                  <label className="erp-attendance-field">
+                    <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Subject</span>
                     <select
                       value={selectedSubject?.code || ''}
                       onChange={(event) => {
                         setSelectedSubjectCode(event.target.value);
                         setTopic('');
                       }}
-                      className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      className="erp-attendance-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     >
                       <option value="">{subjectOptions.length ? 'Select Subject' : 'No Live Subjects'}</option>
                       {subjectOptions.map((subject) => (
@@ -695,27 +726,33 @@ export default function AttendanceManagement({
                       ))}
                     </select>
                   </label>
-                  <label>
-                    <span className="block text-xs font-semibold text-slate-500 mb-1.5">Faculty</span>
+                  <label className="erp-attendance-field">
+                    <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Faculty</span>
                     <select
-                      value={selectedFacultyId}
+                      value={effectiveSelectedFacultyId}
                       onChange={(event) => setSelectedFacultyId(event.target.value)}
-                      className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      disabled={facultySelectLocked}
+                      className="erp-attendance-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     >
-                      <option value="">{facultyOptions.length ? 'Select Faculty' : 'No Faculty Records'}</option>
-                      {facultyOptions.map((member) => (
+                      <option value="">{visibleFacultyOptions.length ? 'Select Faculty' : 'No Faculty Records'}</option>
+                      {visibleFacultyOptions.map((member) => (
                         <option key={member.id} value={member.id}>{member.name}</option>
                       ))}
                     </select>
+                    {facultySelectLocked && (
+                      <span className="erp-attendance-field-note mt-1 block text-[11px] font-semibold text-slate-500">
+                        Signed-in faculty selected
+                      </span>
+                    )}
                   </label>
-                  <label>
-                    <span className="block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>
+                  <label className="erp-attendance-field">
+                    <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>
                     <input
                       list={topicSuggestions.length ? topicDatalistId : undefined}
                       value={topic}
                       onChange={(event) => setTopic(event.target.value)}
                       placeholder={topicSuggestions.length ? 'Select or type topic taught' : 'Topic taught'}
-                      className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                      className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     />
                     {topicSuggestions.length > 0 && (
                       <>
@@ -741,7 +778,7 @@ export default function AttendanceManagement({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search attendance roster..."
-              className="w-full h-11 rounded-lg bg-[#f0f0f2] border-0 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-orange-100"
+              className="erp-attendance-search-input w-full h-11 rounded-lg bg-[#f0f0f2] border-0 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-orange-100"
             />
           </div>
 
