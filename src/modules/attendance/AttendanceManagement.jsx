@@ -191,6 +191,12 @@ export default function AttendanceManagement({
     })
     : allModeRecords;
   const selectedDate = formatInputDate(selectedDateInput);
+  const selectedDateObject = new Date(`${selectedDateInput}T00:00:00`);
+  const selectedDateSummary = {
+    weekday: selectedDateObject.toLocaleDateString('en-GB', { weekday: 'short' }),
+    day: selectedDateObject.toLocaleDateString('en-GB', { day: '2-digit' }),
+    monthYear: selectedDateObject.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+  };
   const selectedDateRecords = activeRecords.filter((record) => record.dateText === selectedDate);
   const activeEntities = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -553,16 +559,23 @@ export default function AttendanceManagement({
             </span>
           )}
           <label className="erp-attendance-date-control">
-            <span className="erp-attendance-date-label">
-              <CalendarDays size={14} />
-              Date
+            <span className="erp-attendance-calendar-card" aria-hidden="true">
+              <span>{selectedDateSummary.weekday}</span>
+              <strong>{selectedDateSummary.day}</strong>
+              <span>{selectedDateSummary.monthYear}</span>
             </span>
-            <input
-              type="date"
-              value={selectedDateInput}
-              onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
-              className="erp-attendance-date-input"
-            />
+            <span className="erp-attendance-date-field">
+              <span className="erp-attendance-date-label">
+                <CalendarDays size={14} />
+                Attendance Date
+              </span>
+              <input
+                type="date"
+                value={selectedDateInput}
+                onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
+                className="erp-attendance-date-input"
+              />
+            </span>
           </label>
         </div>
       </div>
