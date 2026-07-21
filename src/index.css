@@ -3497,52 +3497,18 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-attendance-date-control {
-  position:relative;
-  min-height:90px;
-  min-width:210px;
+  min-height:74px;
+  min-width:250px;
   padding:10px 12px;
   border:1px solid rgba(125,211,252,.24);
   border-radius:10px;
   display:inline-flex;
   flex-direction:column;
-  align-items:center;
+  align-items:flex-start;
   justify-content:center;
-  gap:8px;
+  gap:7px;
   background:rgba(255,255,255,.045);
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);
-  cursor:pointer;
-  overflow:hidden;
-}
-
-.erp-attendance-calendar-card {
-  width:100%;
-  min-width:0;
-  min-height:52px;
-  border-radius:9px;
-  display:flex;
-  flex-direction:row;
-  align-items:center;
-  justify-content:space-between;
-  gap:9px;
-  padding:8px 10px;
-  background:rgba(0,255,136,.12);
-  border:1px solid rgba(0,255,136,.26);
-  color:#dfffee;
-  line-height:1;
-}
-
-.erp-attendance-calendar-card strong {
-  color:#ffffff;
-  font-size:30px;
-  font-weight:900;
-  line-height:1;
-}
-
-.erp-attendance-calendar-card span {
-  color:currentColor;
-  font-size:10px;
-  font-weight:850;
-  text-transform:uppercase;
 }
 
 .erp-attendance-date-label {
@@ -3561,46 +3527,36 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-shell input.erp-attendance-date-input {
-  position:absolute!important;
-  inset:0!important;
   width:100%!important;
-  min-width:0!important;
-  height:100%!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:10px!important;
-  background:transparent!important;
-  color:transparent!important;
+  min-width:220px!important;
+  height:42px!important;
+  padding:0 12px!important;
+  border:1px solid #cbd5e1!important;
+  border-radius:8px!important;
+  background:#ffffff!important;
+  color:#0f172a!important;
   color-scheme:light!important;
-  opacity:0!important;
-  cursor:pointer;
+  font-size:20px!important;
+  font-weight:850;
+  letter-spacing:0!important;
 }
 
 .erp-shell input.erp-attendance-date-input::-webkit-datetime-edit {
-  color:transparent!important;
+  color:#0f172a!important;
 }
 
 .erp-shell input.erp-attendance-date-input::-webkit-calendar-picker-indicator {
   cursor:pointer;
-  width:100%;
-  height:100%;
-  opacity:0!important;
+  width:20px;
+  height:20px;
+  opacity:1!important;
+  filter:invert(21%) sepia(14%) saturate(945%) hue-rotate(169deg) brightness(94%) contrast(91%)!important;
 }
 
 .erp-shell.light-mode .erp-attendance-date-control {
   background:#ffffff;
   border-color:#d8e1ee;
   box-shadow:0 8px 20px rgba(15,23,42,.05);
-}
-
-.erp-shell.light-mode .erp-attendance-calendar-card {
-  background:#e1f0de;
-  border-color:#b8d4b0;
-  color:#033500;
-}
-
-.erp-shell.light-mode .erp-attendance-calendar-card strong {
-  color:#033500;
 }
 
 .erp-shell.light-mode .erp-attendance-date-label {
@@ -3618,7 +3574,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   }
 
   .erp-shell input.erp-attendance-date-input {
-    width:auto!important;
+    width:100%!important;
     min-width:0;
   }
 }

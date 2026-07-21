@@ -191,12 +191,6 @@ export default function AttendanceManagement({
     })
     : allModeRecords;
   const selectedDate = formatInputDate(selectedDateInput);
-  const selectedDateObject = new Date(`${selectedDateInput}T00:00:00`);
-  const selectedDateSummary = {
-    weekday: selectedDateObject.toLocaleDateString('en-GB', { weekday: 'short' }),
-    day: selectedDateObject.toLocaleDateString('en-GB', { day: '2-digit' }),
-    monthYear: selectedDateObject.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-  };
   const selectedDateRecords = activeRecords.filter((record) => record.dateText === selectedDate);
   const activeEntities = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -563,17 +557,11 @@ export default function AttendanceManagement({
               <CalendarDays size={15} />
               Attendance Date
             </span>
-            <span className="erp-attendance-calendar-card" aria-hidden="true">
-              <span>{selectedDateSummary.weekday}</span>
-              <strong>{selectedDateSummary.day}</strong>
-              <span>{selectedDateSummary.monthYear}</span>
-            </span>
             <input
               type="date"
               value={selectedDateInput}
               onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
               className="erp-attendance-date-input"
-              aria-label="Attendance date"
             />
           </label>
         </div>
