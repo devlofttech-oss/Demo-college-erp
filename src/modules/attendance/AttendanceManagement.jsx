@@ -559,23 +559,22 @@ export default function AttendanceManagement({
             </span>
           )}
           <label className="erp-attendance-date-control">
+            <span className="erp-attendance-date-label">
+              <CalendarDays size={15} />
+              Attendance Date
+            </span>
             <span className="erp-attendance-calendar-card" aria-hidden="true">
               <span>{selectedDateSummary.weekday}</span>
               <strong>{selectedDateSummary.day}</strong>
               <span>{selectedDateSummary.monthYear}</span>
             </span>
-            <span className="erp-attendance-date-field">
-              <span className="erp-attendance-date-label">
-                <CalendarDays size={14} />
-                Attendance Date
-              </span>
-              <input
-                type="date"
-                value={selectedDateInput}
-                onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
-                className="erp-attendance-date-input"
-              />
-            </span>
+            <input
+              type="date"
+              value={selectedDateInput}
+              onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
+              className="erp-attendance-date-input"
+              aria-label="Attendance date"
+            />
           </label>
         </div>
       </div>
