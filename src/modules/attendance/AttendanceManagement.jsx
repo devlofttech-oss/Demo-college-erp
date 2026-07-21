@@ -546,18 +546,24 @@ export default function AttendanceManagement({
           {!isFirebaseConfigured && <p className="text-xs text-rose-600 mt-2">Live Firebase data is not configured.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
           {mode === 'students' && activeAttendanceBranch && (
             <span className="hidden rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 sm:inline-flex">
               {studentAttendanceScope === 'general' ? 'General Attendance' : 'Subject Attendance'}
             </span>
           )}
-          <input
-            type="date"
-            value={selectedDateInput}
-            onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-          />
+          <label className="erp-attendance-date-control">
+            <span className="erp-attendance-date-label">
+              <CalendarDays size={14} />
+              Date
+            </span>
+            <input
+              type="date"
+              value={selectedDateInput}
+              onChange={(event) => event.target.value && setSelectedDateInput(event.target.value)}
+              className="erp-attendance-date-input"
+            />
+          </label>
         </div>
       </div>
 

@@ -712,13 +712,16 @@ export default function FeeCollectionModal({
             )}
 
             {!initialCollection && (
-              <button
-                type="button"
-                onClick={addPaymentEntry}
-                className="erp-add-payment-box mt-3 w-full min-h-12 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/70 text-emerald-800 text-sm font-extrabold flex items-center justify-center gap-2"
-              >
-                <Plus size={16} /> {safeActivePaymentIndex < paymentEntries.length - 1 ? 'Save & Proceed' : 'Save & Add Next Payment'}
-              </button>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={addPaymentEntry}
+                  className="erp-add-payment-button w-full sm:w-auto h-9 px-3 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-extrabold inline-flex items-center justify-center gap-2"
+                >
+                  <Plus className="erp-add-payment-icon" size={14} />
+                  {safeActivePaymentIndex < paymentEntries.length - 1 ? 'Save & Proceed' : 'Save & Add Next Payment'}
+                </button>
+              </div>
             )}
           </div>
         </div>
