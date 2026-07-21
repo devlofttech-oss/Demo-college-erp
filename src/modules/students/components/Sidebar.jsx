@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   BookOpenCheck,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -63,6 +64,14 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
 
   const submenuItemsByModule = useMemo(() => ({
     attendance: [
+      {
+        id: 'general-attendance',
+        label: 'General Attendance',
+        icon: <CalendarDays size={16} />,
+        moduleId: 'attendance',
+        state: { attendanceSubmenu: 'general-attendance', attendanceTask: 'students', attendanceBranch: 'mark-general-students', attendanceMode: 'students' },
+        enabled: canAccess(defaultRoles, currentRoleId, 'attendance.view'),
+      },
       {
         id: 'student-attendance',
         label: 'Student Attendance',

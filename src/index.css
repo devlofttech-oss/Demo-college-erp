@@ -5429,6 +5429,19 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   justify-content:space-between!important;
 }
 
+.erp-shell .erp-fee-collection-student-row {
+  cursor:pointer;
+}
+
+.erp-shell .erp-fee-collection-student-row.is-expanded {
+  background:rgba(16,185,129,.06);
+}
+
+.erp-shell .erp-fee-collection-student-row:focus-visible {
+  outline:2px solid rgba(16,185,129,.65);
+  outline-offset:-2px;
+}
+
 /* Laptop sidebar access: keep collapsed light-mode icons aligned and scrollable. */
 @media (min-width:768px) {
   .erp-shell .erp-sidebar.is-collapsed,

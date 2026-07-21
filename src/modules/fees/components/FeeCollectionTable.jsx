@@ -60,6 +60,17 @@ export default function FeeCollectionTable({ collections, onEdit }) {
     setExpandedStudentKey((currentKey) => (currentKey === studentKey ? '' : studentKey));
   };
 
+  const handleStudentRowKeyDown = (event, studentKey) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleStudent(studentKey);
+  };
+
+  const handleStudentToggleClick = (event, studentKey) => {
+    event.stopPropagation();
+    toggleStudent(studentKey);
+  };
+
   return (
     <div className="overflow-hidden border border-slate-100 rounded-lg bg-white">
       <div className="overflow-x-auto">
@@ -79,11 +90,17 @@ export default function FeeCollectionTable({ collections, onEdit }) {
               const expanded = expandedStudentKey === group.key;
               return (
                 <Fragment key={group.key}>
-                  <tr className="hover:bg-slate-50">
+                  <tr
+                    className={`erp-fee-collection-student-row hover:bg-slate-50 ${expanded ? 'is-expanded' : ''}`}
+                    onClick={() => toggleStudent(group.key)}
+                    onKeyDown={(event) => handleStudentRowKeyDown(event, group.key)}
+                    tabIndex={0}
+                    aria-expanded={expanded}
+                  >
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => toggleStudent(group.key)}
+                        onClick={(event) => handleStudentToggleClick(event, group.key)}
                         className="text-left inline-flex min-w-0 items-center gap-2 rounded-md text-slate-900"
                         aria-expanded={expanded}
                       >
@@ -105,7 +122,7 @@ export default function FeeCollectionTable({ collections, onEdit }) {
                     <td className="px-4 py-3 text-right text-slate-600">
                       <button
                         type="button"
-                        onClick={() => toggleStudent(group.key)}
+                        onClick={(event) => handleStudentToggleClick(event, group.key)}
                         className="h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold text-slate-700 inline-flex items-center gap-1"
                       >
                         {group.payments.length} payment{group.payments.length === 1 ? '' : 's'}
