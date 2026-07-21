@@ -17,6 +17,7 @@ import {
   summarizeAttendance,
 } from './attendanceUtils';
 import AttendanceTable from './components/AttendanceTable';
+import { demoStaffMembers } from '../facultyStaff/demoFacultyStaff';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 import {
   buildSemesterOptions,
@@ -82,6 +83,15 @@ function addTeacherOption(map, option = {}) {
   };
   map.set(identity, normalized);
   map.set(nameKey, normalized);
+}
+
+function addCurrentUserTeacherOption(map, currentUser = {}) {
+  if (!currentUser?.name && !currentUser?.displayName && !currentUser?.email) return;
+  addTeacherOption(map, {
+    id: currentUser.staffRecordId || currentUser.uid || currentUser.employeeId || currentUser.email || 'current-faculty',
+    employeeId: currentUser.employeeId || currentUser.displayId || '',
+    name: currentUser.name || currentUser.displayName || currentUser.email,
+  });
 }
 
 export default function AttendanceManagement({
@@ -193,6 +203,12 @@ export default function AttendanceManagement({
     const activeStaff = staff.filter((member) => member.status !== 'Archived');
     const typedTeachers = activeStaff.filter(isTeacherStaffRecord);
     (typedTeachers.length ? typedTeachers : activeStaff).forEach((member) => addTeacherOption(teacherMap, member));
+    if (currentRoleId === 'faculty') {
+      demoStaffMembers
+        .filter((member) => member.status !== 'Archived' && isTeacherStaffRecord(member))
+        .forEach((member) => addTeacherOption(teacherMap, member));
+      addCurrentUserTeacherOption(teacherMap, currentUser);
+    }
     timetableEntries
       .filter((entry) => entry.status !== 'Archived')
       .forEach((entry, index) => addTeacherOption(teacherMap, {
@@ -215,7 +231,7 @@ export default function AttendanceManagement({
         name: record.facultyName,
       }));
     return [...new Set(teacherMap.values())].sort((first, second) => first.name.localeCompare(second.name));
-  }, [academicSubjects, staff, studentAttendance, timetableEntries]);
+  }, [academicSubjects, currentRoleId, currentUser, staff, studentAttendance, timetableEntries]);
   const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects

@@ -91,8 +91,6 @@ export default function TopHeader({
   const isSuperAdmin = currentRoleId === 'super-admin';
   const isParent = currentRoleId === 'parent';
   const userDisplayId = user?.displayId || user?.adminId || user?.employeeId || user?.uid?.slice(0, 8) || '-';
-  const instituteId = user?.selectedCollege?.code || institute?.instituteId || institute?.code || '-';
-  const collegeName = institute?.name || user?.selectedCollege?.name || 'College Management';
   const roleLabel = (currentRole?.name || 'Admin').toUpperCase();
   const selectedCourseValue = isParent && !courses.some((course) => course.courseCode === courseCode)
     ? courses[0]?.courseCode || ''
@@ -103,6 +101,8 @@ export default function TopHeader({
   );
   const courseGroups = useMemo(() => buildDepartmentCourseGroups(courses), [courses]);
   const selectedDepartmentName = selectedCourse ? getDepartmentLabel(selectedCourse) : '';
+  const collegeName = selectedDepartmentName || institute?.name || user?.selectedCollege?.name || 'College Management';
+  const instituteId = selectedCourse?.collegeCode || user?.selectedCollege?.code || institute?.instituteId || institute?.code || '-';
   const selectedCourseLabel = selectedCourse
     ? getCourseLabel(selectedCourse)
     : isParent && !courses.length
