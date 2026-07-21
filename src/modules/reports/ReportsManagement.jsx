@@ -359,15 +359,15 @@ export default function ReportsManagement({
               type="button"
               onClick={() => openCategory(category.id)}
               aria-pressed={active}
-              className={`min-h-28 rounded-lg border p-4 text-left transition-colors ${
+              className={`erp-report-category-card min-h-28 rounded-lg border p-4 text-left transition-colors ${
                 active
-                  ? 'border-emerald-300 bg-emerald-50'
+                  ? 'is-active border-emerald-300 bg-emerald-50'
                   : 'border-slate-100 bg-white hover:border-emerald-200'
               }`}
             >
               <span className="flex items-start justify-between gap-3">
-                <span className="h-10 w-10 rounded-lg bg-[#f5f5f6] text-[#34363d] flex items-center justify-center">{category.icon}</span>
-                <span className="rounded-full bg-[#f5f5f6] px-3 py-1 text-[11px] font-bold text-slate-600">{active ? 'Open' : 'View'}</span>
+                <span className="erp-report-category-icon h-10 w-10 rounded-lg bg-[#f5f5f6] text-[#34363d] flex items-center justify-center">{category.icon}</span>
+                <span className="erp-report-category-pill rounded-full bg-[#f5f5f6] px-3 py-1 text-[11px] font-bold text-slate-600">{active ? 'Open' : 'View'}</span>
               </span>
               <span className="mt-4 block text-sm font-bold text-slate-900">{category.label}</span>
               <span className="mt-1 block text-xs text-slate-500">{category.description}</span>

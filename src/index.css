@@ -1079,6 +1079,49 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   stroke:#00ff88!important;
 }
 
+.erp-shell:not(.light-mode) .erp-report-category-card {
+  background:rgba(255,255,255,.035)!important;
+  border-color:rgba(255,255,255,.10)!important;
+  color:#dce7eb!important;
+}
+
+.erp-shell:not(.light-mode) .erp-report-category-card:hover,
+.erp-shell:not(.light-mode) .erp-report-category-card.is-active {
+  background:rgba(0,255,136,.085)!important;
+  border-color:rgba(0,255,136,.34)!important;
+}
+
+.erp-shell:not(.light-mode) .erp-report-category-icon {
+  background:rgba(0,255,136,.12)!important;
+  border:1px solid rgba(0,255,136,.24)!important;
+  color:#00ff88!important;
+}
+
+.erp-shell:not(.light-mode) .erp-report-category-icon svg {
+  color:#00ff88!important;
+  stroke:#00ff88!important;
+}
+
+.erp-shell:not(.light-mode) .erp-report-category-pill {
+  background:rgba(255,255,255,.08)!important;
+  color:#b9ffd9!important;
+}
+
+.erp-shell.light-mode .erp-report-category-card.is-active {
+  background:#ecfdf3!important;
+  border-color:#86efac!important;
+}
+
+.erp-shell.light-mode .erp-report-category-icon {
+  background:#f1f5f9!important;
+  color:#033500!important;
+}
+
+.erp-shell.light-mode .erp-report-category-icon svg {
+  color:#033500!important;
+  stroke:#033500!important;
+}
+
 /* Sidebar uses its own palette so navigation is visually separate from workspace actions. */
 .erp-shell:not(.light-mode) .erp-sidebar {
   background:#04070c!important;
