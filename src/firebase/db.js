@@ -422,16 +422,17 @@ export async function updateStaffAttendanceRecord(id, data) {
 
 export async function getAttendanceManagementData(academicYear = '') {
   const yearConstraints = academicYearWhere(academicYear);
-  const [students, staff, studentAttendance, staffAttendance, notifications, academicSubjects] = await Promise.all([
+  const [students, staff, studentAttendance, staffAttendance, notifications, academicSubjects, timetableEntries] = await Promise.all([
     listCollection('students', yearConstraints),
     listCollectionOptional('staffMembers'),
     listCollection('studentAttendanceRecords', yearConstraints),
     listCollectionOptional('staffAttendanceRecords', yearConstraints),
     listCollection('attendanceNotifications', yearConstraints),
     listCollection('academicSubjects', yearConstraints),
+    listCollectionOptional('timetableEntries', yearConstraints),
   ]);
 
-  return { students: filterByAcademicYear(students, academicYear), staff, studentAttendance: filterByAcademicYear(studentAttendance, academicYear), staffAttendance: filterByAcademicYear(staffAttendance, academicYear), notifications: filterByAcademicYear(notifications, academicYear), academicSubjects: filterByAcademicYear(academicSubjects, academicYear) };
+  return { students: filterByAcademicYear(students, academicYear), staff, studentAttendance: filterByAcademicYear(studentAttendance, academicYear), staffAttendance: filterByAcademicYear(staffAttendance, academicYear), notifications: filterByAcademicYear(notifications, academicYear), academicSubjects: filterByAcademicYear(academicSubjects, academicYear), timetableEntries: filterByAcademicYear(timetableEntries, academicYear) };
 }
 
 export async function createStudentAttendanceRecord(data) {

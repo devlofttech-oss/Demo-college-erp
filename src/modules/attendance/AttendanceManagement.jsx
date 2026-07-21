@@ -55,6 +55,35 @@ function getSubjectTopics(subject = {}) {
   return [...new Set(rawTopics.map((item) => String(item).trim()).filter(Boolean))];
 }
 
+function normalizeTeacherKey(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isTeacherStaffRecord(member = {}) {
+  const type = normalizeTeacherKey(member.staffType || member.role || member.designation);
+  if (!type) return true;
+  return type.includes('faculty') || type.includes('teacher') || type.includes('teaching');
+}
+
+function buildTeacherOptionId(prefix, index, name = '') {
+  return `${prefix}-${index}-${normalizeTeacherKey(name).replace(/[^a-z0-9]+/g, '-') || 'teacher'}`;
+}
+
+function addTeacherOption(map, option = {}) {
+  const name = String(option.name || option.facultyName || '').trim();
+  if (!name) return;
+  const identity = normalizeTeacherKey(option.id || option.employeeId || option.facultyId || option.facultyRecordId || name);
+  const nameKey = normalizeTeacherKey(name);
+  if (map.has(identity) || map.has(nameKey)) return;
+  const normalized = {
+    id: option.id || option.facultyRecordId || option.facultyId || name,
+    employeeId: option.employeeId || option.facultyId || '',
+    name,
+  };
+  map.set(identity, normalized);
+  map.set(nameKey, normalized);
+}
+
 export default function AttendanceManagement({
   currentUser,
   academicYear = '',
@@ -70,6 +99,7 @@ export default function AttendanceManagement({
   const [studentAttendance, setStudentAttendance] = useState([]);
   const [staffAttendance, setStaffAttendance] = useState([]);
   const [academicSubjects, setAcademicSubjects] = useState([]);
+  const [timetableEntries, setTimetableEntries] = useState([]);
   const [mode, setMode] = useState(initialMode || 'students');
   const [selectedSubjectCode, setSelectedSubjectCode] = useState('');
   const [search, setSearch] = useState('');
@@ -100,6 +130,7 @@ export default function AttendanceManagement({
         setStudentAttendance(data.studentAttendance);
         setStaffAttendance(data.staffAttendance);
         setAcademicSubjects(data.academicSubjects || []);
+        setTimetableEntries(data.timetableEntries || []);
         setLoadError('');
       } catch (error) {
         console.warn('Unable to load live attendance data.', error);
@@ -157,7 +188,34 @@ export default function AttendanceManagement({
   const semesterStudents = selectedSemester
     ? courseStudents.filter((student) => recordMatchesSemester(student, selectedSemester))
     : courseStudents;
-  const facultyOptions = useMemo(() => staff.filter((member) => String(member.staffType || '').toLowerCase() === 'faculty'), [staff]);
+  const facultyOptions = useMemo(() => {
+    const teacherMap = new Map();
+    const activeStaff = staff.filter((member) => member.status !== 'Archived');
+    const typedTeachers = activeStaff.filter(isTeacherStaffRecord);
+    (typedTeachers.length ? typedTeachers : activeStaff).forEach((member) => addTeacherOption(teacherMap, member));
+    timetableEntries
+      .filter((entry) => entry.status !== 'Archived')
+      .forEach((entry, index) => addTeacherOption(teacherMap, {
+        id: entry.facultyRecordId || entry.facultyId || buildTeacherOptionId('timetable', index, entry.facultyName),
+        employeeId: entry.facultyId || '',
+        name: entry.facultyName,
+      }));
+    academicSubjects
+      .filter((subject) => subject.status !== 'Archived')
+      .forEach((subject, index) => addTeacherOption(teacherMap, {
+        id: subject.facultyRecordId || subject.facultyId || buildTeacherOptionId('subject', index, subject.facultyName),
+        employeeId: subject.facultyId || '',
+        name: subject.facultyName,
+      }));
+    studentAttendance
+      .filter((record) => record.attendanceScope === 'subject' || record.subjectName || record.subject)
+      .forEach((record, index) => addTeacherOption(teacherMap, {
+        id: record.facultyRecordId || record.facultyId || buildTeacherOptionId('attendance', index, record.facultyName),
+        employeeId: record.facultyId || '',
+        name: record.facultyName,
+      }));
+    return [...new Set(teacherMap.values())].sort((first, second) => first.name.localeCompare(second.name));
+  }, [academicSubjects, staff, studentAttendance, timetableEntries]);
   const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects
