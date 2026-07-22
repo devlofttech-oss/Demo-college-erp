@@ -6,12 +6,14 @@ import { loginWithEmail, logoutUser, sendResetPasswordEmail } from '../firebase/
 import { isFirebaseConfigured } from '../firebase/config';
 import { getUserProfile } from '../firebase/db';
 import { canResolveLoginIdentifier, resolveLoginEmail } from '../firebase/loginAliases';
+import { clearStoredSuperAdminAccessMode, setStoredSuperAdminAccessMode } from '../firebase/accessMode';
 import devloftLogo from '../../assets/logo.png';
 
 const roleOptions = [
   { id: 'parent', label: 'Parent', aliases: ['parent'] },
   { id: 'faculty', label: 'Staff', aliases: ['faculty'] },
-  { id: 'admin', label: 'Admin', aliases: ['admin', 'super-admin'] },
+  { id: 'admin', label: 'Admin', aliases: ['admin'] },
+  { id: 'super-admin', label: 'Super Admin', aliases: ['super-admin'] },
 ];
 
 function getAuthErrorMessage(error) {
@@ -51,9 +53,18 @@ export default function AuthPage() {
       const signedInUser = await loginWithEmail(resolveLoginEmail(identifier), form.password);
       const profile = await getUserProfile(signedInUser.uid).catch(() => null);
       const profileRoleId = profile?.roleId || signedInUser.roleId;
+      const isSuperAdminCredential = profileRoleId === 'super-admin';
 
-      if (profileRoleId && profileRoleId !== 'pending' && !selectedRole.aliases.includes(profileRoleId)) {
+      if (isSuperAdminCredential) {
+        setStoredSuperAdminAccessMode(selectedRole.id);
+        window.dispatchEvent(new Event('super-admin-access-mode-updated'));
+      } else {
+        clearStoredSuperAdminAccessMode();
+      }
+
+      if (profileRoleId && profileRoleId !== 'pending' && !isSuperAdminCredential && !selectedRole.aliases.includes(profileRoleId)) {
         await logoutUser().catch(() => {});
+        toast.error(`This login is not assigned to ${selectedRole.label}.`);
         return;
       }
 
@@ -110,7 +121,7 @@ export default function AuthPage() {
 
           <fieldset className="space-y-2">
             <legend className="text-xs font-semibold text-slate-500">I am a</legend>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {roleOptions.map((role) => {
                 const selected = form.roleId === role.id;
                 return (
@@ -130,7 +141,7 @@ export default function AuthPage() {
                       onChange={(event) => setForm((prev) => ({ ...prev, roleId: event.target.value }))}
                       className="sr-only"
                     />
-                    {role.id === 'admin' ? <ShieldCheck size={16} /> : <Users size={16} />}
+                    {['admin', 'super-admin'].includes(role.id) ? <ShieldCheck size={16} /> : <Users size={16} />}
                     {role.label}
                   </label>
                 );

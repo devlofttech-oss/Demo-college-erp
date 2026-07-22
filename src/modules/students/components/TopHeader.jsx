@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, LogOut, UserRound } from 'lucide-react';
 import { defaultRoles, getRoleById } from '../../userRoles/rolePermissions';
+import { setStoredSuperAdminAccessMode } from '../../../firebase/accessMode';
 import mauryaLogo from '../../../../assets/maurya.png';
 
 const departmentOrder = [
   'Maurya College of Nursing',
   'Maurya College of Physiotherapy',
   'Maurya College of Allied Health Sciences',
+];
+
+const accessModeOptions = [
+  { id: 'parent', label: 'Parent' },
+  { id: 'faculty', label: 'Staff' },
+  { id: 'admin', label: 'Admin' },
+  { id: 'super-admin', label: 'Super Admin' },
 ];
 
 function getCourseLabel(course = {}) {
@@ -87,8 +95,10 @@ export default function TopHeader({
   const courseMenuRef = useRef(null);
   const yearMenuRef = useRef(null);
   const currentRoleId = user?.roleId || 'admin';
+  const actualRoleId = user?.actualRoleId || currentRoleId;
   const currentRole = getRoleById(defaultRoles, currentRoleId);
   const isSuperAdmin = currentRoleId === 'super-admin';
+  const canSwitchAccessMode = actualRoleId === 'super-admin';
   const isParent = currentRoleId === 'parent';
   const userDisplayId = user?.displayId || user?.adminId || user?.employeeId || user?.uid?.slice(0, 8) || '-';
   const roleLabel = (currentRole?.name || 'Admin').toUpperCase();
@@ -125,6 +135,11 @@ export default function TopHeader({
   const selectAcademicYear = (nextYear) => {
     onAcademicYearChange?.(nextYear);
     setYearMenuOpen(false);
+  };
+
+  const selectAccessMode = (event) => {
+    setStoredSuperAdminAccessMode(event.target.value);
+    window.dispatchEvent(new Event('super-admin-access-mode-updated'));
   };
 
   useEffect(() => {
@@ -262,6 +277,21 @@ export default function TopHeader({
               )}
             </div>
           </label>
+          )}
+          {canSwitchAccessMode && (
+            <label className="erp-course-picker-label text-xs font-semibold text-slate-500">
+              <span className="sr-only">Access Mode</span>
+              <select
+                value={currentRoleId}
+                onChange={selectAccessMode}
+                className="erp-header-select bg-white border border-slate-200 rounded-lg shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-3 text-xs text-slate-600 outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
+                title="Access mode"
+              >
+                {accessModeOptions.map((mode) => (
+                  <option key={mode.id} value={mode.id}>{mode.label}</option>
+                ))}
+              </select>
+            </label>
           )}
         </div>
         <div className="erp-header-user-cluster">

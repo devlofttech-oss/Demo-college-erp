@@ -6,6 +6,10 @@ import LegalPage from './pages/LegalPage';
 import StudentInformationManagement from './modules/students/StudentInformationManagement';
 import { logoutUser, subscribeToAuthState } from './firebase/auth';
 import { getInstituteShellData, getUserProfile } from './firebase/db';
+import {
+  clearStoredSuperAdminAccessMode,
+  getStoredSuperAdminAccessMode,
+} from './firebase/accessMode';
 import ParticleBackground from './components/ParticleBackground';
 import { normalizeInstituteSettings } from './modules/settings/settingsModel';
 import { getCanonicalModulePath } from './modules/moduleRegistry';
@@ -117,6 +121,30 @@ function ModuleWorkspaceRoute(props) {
   return <WorkspaceGate {...props} />;
 }
 
+function buildEffectiveUser(nextUser, profile = {}) {
+  const actualRoleId = profile?.roleId || 'pending';
+  const accessMode = actualRoleId === 'super-admin'
+    ? getStoredSuperAdminAccessMode()
+    : actualRoleId;
+
+  if (actualRoleId !== 'super-admin') {
+    clearStoredSuperAdminAccessMode();
+  }
+
+  return {
+    ...nextUser,
+    roleId: actualRoleId === 'super-admin' ? accessMode : actualRoleId,
+    actualRoleId,
+    superAdminAccessMode: actualRoleId === 'super-admin' ? accessMode : '',
+    status: profile?.status || 'Pending Approval',
+    permissions: profile?.permissions || [],
+    displayId: profile?.displayId || profile?.adminId || profile?.employeeId || '',
+    collegeIds: profile?.collegeIds || ['main-campus'],
+    linkedStudentIds: profile?.linkedStudentIds || [],
+    linkedStudentRecordIds: profile?.linkedStudentRecordIds || [],
+  };
+}
+
 export default function App() {
   const location = useLocation();
   const [user, setUser] = useState(null);
@@ -138,19 +166,27 @@ export default function App() {
       }
 
       const profile = await getUserProfile(nextUser.uid).catch(() => null);
-      setUser({
-        ...nextUser,
-        roleId: profile?.roleId || 'pending',
-        status: profile?.status || 'Pending Approval',
-        permissions: profile?.permissions || [],
-        displayId: profile?.displayId || profile?.adminId || profile?.employeeId || '',
-        collegeIds: profile?.collegeIds || ['main-campus'],
-        linkedStudentIds: profile?.linkedStudentIds || [],
-        linkedStudentRecordIds: profile?.linkedStudentRecordIds || [],
-      });
+      setUser(buildEffectiveUser(nextUser, profile || {}));
       setAuthLoading(false);
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const syncSuperAdminAccessMode = () => {
+      setUser((currentUser) => {
+        if (currentUser?.actualRoleId !== 'super-admin') return currentUser;
+        const accessMode = getStoredSuperAdminAccessMode();
+        if (currentUser.roleId === accessMode && currentUser.superAdminAccessMode === accessMode) return currentUser;
+        return { ...currentUser, roleId: accessMode, superAdminAccessMode: accessMode };
+      });
+    };
+    window.addEventListener('storage', syncSuperAdminAccessMode);
+    window.addEventListener('super-admin-access-mode-updated', syncSuperAdminAccessMode);
+    return () => {
+      window.removeEventListener('storage', syncSuperAdminAccessMode);
+      window.removeEventListener('super-admin-access-mode-updated', syncSuperAdminAccessMode);
+    };
   }, []);
 
   useEffect(() => {
@@ -168,6 +204,7 @@ export default function App() {
   const logout = async () => {
     setSelectedCollege(null);
     sessionStorage.removeItem('selectedCollege');
+    clearStoredSuperAdminAccessMode();
     await logoutUser();
   };
 
@@ -200,7 +237,7 @@ export default function App() {
   }
 
   const hasActiveProfile = user?.status === 'Active' && user?.roleId && user.roleId !== 'pending';
-  const needsCollegeSelection = hasActiveProfile && user?.roleId === 'super-admin' && !selectedCollege;
+  const needsCollegeSelection = hasActiveProfile && user?.actualRoleId === 'super-admin' && user?.roleId === 'super-admin' && !selectedCollege;
   const colleges = [buildCollegeFromInstitute(institute)];
   const workspaceProps = {
     colleges,
