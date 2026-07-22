@@ -840,6 +840,21 @@ export async function getAcademicsData(academicYear = '') {
   return { academicPrograms: filterByAcademicYear(academicPrograms, academicYear), academicSubjects: filterByAcademicYear(academicSubjects, academicYear), academicBatches: filterByAcademicYear(academicBatches, academicYear), academicCalendarEvents: filterByAcademicYear(academicCalendarEvents, academicYear) };
 }
 
+export async function getSubjectNotesData(academicYear = '') {
+  const yearConstraints = academicYearWhere(academicYear);
+  const [academicSubjects, staff, subjectNotes] = await Promise.all([
+    listCollection('academicSubjects', yearConstraints),
+    listCollection('staffMembers'),
+    listCollectionOptional('subjectNotes', yearConstraints),
+  ]);
+
+  return {
+    academicSubjects: filterByAcademicYear(academicSubjects, academicYear),
+    staff,
+    subjectNotes: filterByAcademicYear(subjectNotes, academicYear),
+  };
+}
+
 export async function createAcademicProgram(data) {
   return createCollectionDocument('academicPrograms', data);
 }
@@ -860,6 +875,28 @@ export async function updateAcademicCalendarEvent(id, data) {
   const store = requireWritableDocId(id, 'Academic calendar event');
   await updateDoc(doc(store, 'academicCalendarEvents', id), {
     ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function createSubjectNote(data) {
+  return createCollectionDocument('subjectNotes', data);
+}
+
+export async function updateSubjectNote(id, data) {
+  const store = requireWritableDocId(id, 'Subject note');
+  await updateDoc(doc(store, 'subjectNotes', id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function archiveSubjectNote(id, data = {}) {
+  const store = requireWritableDocId(id, 'Subject note');
+  await updateDoc(doc(store, 'subjectNotes', id), {
+    ...data,
+    status: 'Archived',
+    archivedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 }

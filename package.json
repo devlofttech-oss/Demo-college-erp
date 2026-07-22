@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node scripts/testAuthRoles.js && node scripts/testStudentUtils.js && node scripts/testCourseFilters.js && node scripts/testUserRoles.js && node scripts/testFacultyStaff.js && node scripts/testAttendance.js && node scripts/testTimetable.js && node scripts/testExams.js && node scripts/testFees.js && node scripts/testHostel.js && node scripts/testFinancialReports.js && node scripts/testNotices.js && node scripts/testDocuments.js && node scripts/testParentPortal.js && node scripts/testDashboard.js && node scripts/testThemeSwitchContrast.js && node scripts/testModuleRegistry.js && node scripts/testAcademicsSettings.js",
+    "test": "node scripts/testAuthRoles.js && node scripts/testStudentUtils.js && node scripts/testCourseFilters.js && node scripts/testUserRoles.js && node scripts/testFacultyStaff.js && node scripts/testAttendance.js && node scripts/testTimetable.js && node scripts/testSubjectNotes.js && node scripts/testExams.js && node scripts/testFees.js && node scripts/testHostel.js && node scripts/testFinancialReports.js && node scripts/testNotices.js && node scripts/testDocuments.js && node scripts/testParentPortal.js && node scripts/testDashboard.js && node scripts/testThemeSwitchContrast.js && node scripts/testModuleRegistry.js && node scripts/testAcademicsSettings.js",
     "firebase:seed": "node scripts/resetAndSeedFirebase.js",
     "firebase:seed-syllabus": "node scripts/seedSyllabusCourseData.js",
     "firebase:seed-fees": "node scripts/seedOfficialFeeStructureData.js",

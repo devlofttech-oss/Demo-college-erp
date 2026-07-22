@@ -49,6 +49,7 @@ const schemas = {
   classrooms: ['roomNo', 'building', 'capacity', 'status'],
   timetableEntries: ['classKey', 'subject', 'academicYear', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status'],
   timetablePublications: ['classKey', 'academicYear', 'status', 'publishedAtText', 'entryCount'],
+  subjectNotes: ['title', 'description', 'subjectRecordId', 'subjectCode', 'subjectName', 'programName', 'courseCode', 'courseName', 'classKey', 'displayPeriod', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'academicYear', 'facultyRecordId', 'facultyId', 'facultyName', 'uploadedByUid', 'uploadedByEmail', 'uploadedById', 'uploadedByName', 'fileName', 'fileSize', 'fileType', 'fileUrl', 'storagePath', 'status', 'uploadedAtText', 'updatedAtText'],
   examSchedules: ['examName', 'classKey', 'subject', 'examType', 'academicYear', 'examDate', 'startTime', 'durationMinutes', 'roomNo', 'maxMarks', 'facultyId', 'facultyName', 'status'],
   internalAssessments: ['title', 'classKey', 'subject', 'academicYear', 'maxMarks', 'status'],
   marksEntries: ['examScheduleId', 'studentRecordId', 'studentId', 'studentName', 'classKey', 'subject', 'academicYear', 'marksObtained', 'maxMarks', 'percentage', 'grade', 'status'],
@@ -78,6 +79,7 @@ const allPermissions = [
   'users.view', 'users.create', 'users.edit', 'roles.view', 'roles.edit',
   'attendance.view', 'academicCurriculum.view', 'academics.view', 'academics.manage', 'attendance.markStudents', 'attendance.markStaff', 'attendance.reports', 'attendance.notifyParents',
   'timetable.view', 'timetable.create', 'timetable.edit', 'timetable.publish', 'timetable.classrooms',
+  'subjectNotes.view', 'subjectNotes.upload', 'subjectNotes.edit', 'subjectNotes.archive',
   'exams.view', 'exams.schedule', 'exams.assessments', 'exams.marks', 'exams.results', 'exams.reportCards',
   'fees.view', 'fees.setup', 'fees.assign', 'fees.collect', 'fees.adjust', 'fees.reports',
   'hostel.view', 'hostel.manage',
@@ -92,6 +94,7 @@ const adminPermissions = [
   'staff.view', 'staff.create', 'staff.edit', 'staff.archive', 'staff.leave', 'staff.attendance',
   'attendance.view', 'academicCurriculum.view', 'academics.view', 'academics.manage', 'attendance.markStudents', 'attendance.markStaff', 'attendance.reports', 'attendance.notifyParents',
   'timetable.view', 'timetable.create', 'timetable.edit', 'timetable.publish', 'timetable.classrooms',
+  'subjectNotes.view', 'subjectNotes.upload', 'subjectNotes.edit', 'subjectNotes.archive',
   'exams.view', 'exams.schedule', 'exams.assessments', 'exams.marks', 'exams.results', 'exams.reportCards',
   'fees.view', 'fees.setup', 'fees.assign', 'fees.collect', 'fees.adjust', 'fees.reports',
   'hostel.view', 'hostel.manage',
@@ -105,6 +108,7 @@ const facultyPermissions = [
   'attendance.view', 'attendance.markStudents', 'attendance.reports', 'reports.view',
   'academicCurriculum.view',
   'timetable.view',
+  'subjectNotes.view', 'subjectNotes.upload', 'subjectNotes.edit',
   'exams.view', 'exams.marks',
   'notices.view',
   'documents.view',
@@ -323,6 +327,9 @@ const seed = {
   },
   academicSubjects: {
     'seed-subject-physics': { subjectName: 'Physics', subjectCode: 'PHY-12', programName: 'CBSE Science', creditHours: 6, academicYear: '2026-2027', status: 'Active', createdAtText: '02 Jun 2026' },
+  },
+  subjectNotes: {
+    'seed-subject-note-physics': { title: 'Physics Revision Notes', description: 'Chapter-wise revision handout.', subjectRecordId: 'seed-subject-physics', subjectCode: 'PHY-12', subjectName: 'Physics', programName: 'CBSE Science', academicYear: '2026-2027', facultyRecordId: 'seed-staff-kavita', facultyId: 'EMP-1001', facultyName: 'Dr. Kavita Menon', uploadedById: 'EMP-1001', uploadedByName: 'Dr. Kavita Menon', fileName: 'physics-revision-notes.pdf', fileSize: 420000, fileType: 'application/pdf', fileUrl: '', storagePath: '', status: 'Published', uploadedAtText: '15 Jun 2026', updatedAtText: '15 Jun 2026' },
   },
   academicBatches: {
     'seed-batch-xii-a': { className: 'Class XII', section: 'A', programName: 'CBSE Science', classTeacher: 'Dr. Kavita Menon', capacity: 45, academicYear: '2026-2027', status: 'Active', createdAtText: '03 Jun 2026' },

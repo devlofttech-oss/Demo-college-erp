@@ -36,6 +36,7 @@ assert.deepEqual(adminSidebarVisible, [
   'faculty-staff',
   'attendance',
   'timetable',
+  'subject-notes',
   'examination-results',
   'communication',
   'calendar',
@@ -50,6 +51,7 @@ assert.deepEqual(visibleSidebarIds('super-admin'), [
   'faculty-staff',
   'attendance',
   'timetable',
+  'subject-notes',
   'examination-results',
   'communication',
   'calendar',
@@ -74,6 +76,7 @@ assert.deepEqual(superAdminVisible, [
   'faculty-staff',
   'attendance',
   'timetable',
+  'subject-notes',
   'examination-results',
   'communication',
   'calendar',
@@ -96,6 +99,7 @@ assert.equal(facultyVisible.includes('students'), true);
 assert.equal(facultyVisible.includes('calendar'), true);
 assert.equal(facultyVisible.includes('academics'), false);
 assert.equal(facultyVisible.includes('attendance'), true);
+assert.equal(facultyVisible.includes('subject-notes'), true);
 assert.equal(facultyVisible.includes('communication'), true);
 assert.equal(facultyVisible.includes('document-management'), true);
 assert.equal(facultyVisible.includes('fees'), false);
@@ -109,6 +113,7 @@ assert.deepEqual(adminVisible, [
   'faculty-staff',
   'attendance',
   'timetable',
+  'subject-notes',
   'examination-results',
   'communication',
   'calendar',

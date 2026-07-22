@@ -148,6 +148,10 @@ const collections = {
     purpose: 'Timetable publishing metadata',
     fields: ['classKey', 'academicYear', 'status', 'publishedAtText', 'entryCount'],
   },
+  subjectNotes: {
+    purpose: 'Faculty-uploaded PDF notes mapped to academic subjects',
+    fields: ['title', 'description', 'subjectRecordId', 'subjectCode', 'subjectName', 'programName', 'courseCode', 'courseName', 'classKey', 'displayPeriod', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'academicYear', 'facultyRecordId', 'facultyId', 'facultyName', 'uploadedByUid', 'uploadedByEmail', 'uploadedById', 'uploadedByName', 'fileName', 'fileSize', 'fileType', 'fileUrl', 'storagePath', 'status', 'uploadedAtText', 'updatedAtText', 'archivedAtText'],
+  },
   examSchedules: {
     purpose: 'Exam schedule records',
     fields: ['examName', 'classKey', 'subject', 'examType', 'academicYear', 'examDate', 'startTime', 'durationMinutes', 'roomNo', 'maxMarks', 'facultyId', 'facultyName', 'status', 'createdAtText', 'updatedAtText'],

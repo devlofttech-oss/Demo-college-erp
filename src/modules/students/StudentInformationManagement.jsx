@@ -72,6 +72,7 @@ const NoticeBoardManagement = lazy(() => import('../notices/NoticeBoardManagemen
 const ParentPortal = lazy(() => import('../parentPortal/ParentPortal'));
 const ReportsManagement = lazy(() => import('../reports/ReportsManagement'));
 const SettingsManagement = lazy(() => import('../settings/SettingsManagement'));
+const SubjectNotesManagement = lazy(() => import('../subjectNotes/SubjectNotesManagement'));
 const TimetableManagement = lazy(() => import('../timetable/TimetableManagement'));
 const UserRoleManagement = lazy(() => import('../userRoles/UserRoleManagement'));
 
@@ -1063,6 +1064,13 @@ export default function StudentInformationManagement({ user, onLogout }) {
                   />
                 ) : activePage === 'timetable' ? (
                   <TimetableManagement currentUser={user} academicYear={academicYear} selectedCourse={selectedCourse} selectedCourseCode={effectiveSelectedCourseCode} scopedStudents={courseStudents} />
+                ) : activePage === 'subject-notes' ? (
+                  <SubjectNotesManagement
+                    currentUser={user}
+                    academicYear={academicYear}
+                    selectedCourse={selectedCourse}
+                    selectedCourseCode={effectiveSelectedCourseCode}
+                  />
                 ) : activePage === 'examination-results' ? (
                   <ExaminationResultManagement
                     key={`exams-${location.state?.examTask || 'home'}-${location.state?.examBranch || ''}`}
