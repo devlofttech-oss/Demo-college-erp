@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, BookOpen, Building2, CalendarDays, Hash, Save, Settings, Upload, Users } from 'lucide-react';
+import { ArrowLeft, BookOpen, Building2, CalendarDays, Hash, Save, Settings, Upload, Users, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getSettingsData, saveSystemSetting } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
@@ -8,10 +8,16 @@ import { normalizeInstituteSettings } from './settingsModel';
 import { buildNextId, formatDisplayDate, summarizeSettings, validateAcademicYearSettings, validateInstituteSettings } from './settingsUtils';
 import AcademicsManagement from '../academics/AcademicsManagement';
 import UserRoleManagement from '../userRoles/UserRoleManagement';
+import PaymentSettingsPanel from '../fees/components/PaymentSettingsPanel';
 
 const lockedModuleDefaultKeys = new Set(['onlinePayments', 'receiptGeneration', 'communicationModule']);
 
-export default function SettingsManagement({ currentUser, selectedCourse = null, selectedCourseCode = 'all' }) {
+export default function SettingsManagement({
+  currentUser,
+  activeAcademicYear = '',
+  selectedCourse = null,
+  selectedCourseCode = 'all',
+}) {
   const [institute, setInstitute] = useState({});
   const [academicYear, setAcademicYear] = useState({});
   const [idFormats, setIdFormats] = useState({});
@@ -64,6 +70,9 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
   const canManage = canAccess(defaultRoles, currentRoleId, 'settings.manage');
   const canManageUsers = canAccess(defaultRoles, currentRoleId, 'users.view');
   const canViewAcademics = canAccess(defaultRoles, currentRoleId, 'academics.view');
+  const canViewPaymentSettings = canAccess(defaultRoles, currentRoleId, 'fees.view');
+  const canManagePaymentSettings = canAccess(defaultRoles, currentRoleId, 'fees.setup') || canAccess(defaultRoles, currentRoleId, 'fees.assign');
+  const paymentSettingsAcademicYear = activeAcademicYear || academicYear.name || '';
   const summary = summarizeSettings(institute, academicYear, idFormats, moduleDefaults);
   const setupSections = [
     {
@@ -87,6 +96,14 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
       icon: <BookOpen size={24} />,
       meta: loading ? '-' : canViewAcademics ? 'Open' : 'No access',
       disabled: !canViewAcademics,
+    },
+    {
+      id: 'payment-settings',
+      title: 'Payment Settings',
+      description: 'Create, edit, and assign fee structures.',
+      icon: <Wallet size={24} />,
+      meta: loading ? '-' : canManagePaymentSettings ? 'Setup enabled' : 'View only',
+      disabled: !canViewPaymentSettings && !canManagePaymentSettings,
     },
     {
       id: 'people-setup',
@@ -184,12 +201,12 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Administration / <span className="text-[#f39a5f]">Settings</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-          <p className="text-sm text-slate-500 mt-1">Institute profile, academic year, ID formats, and module defaults.</p>
+          <p className="text-sm text-slate-500 mt-1">Institute profile, academic year, payment settings, ID formats, and module defaults.</p>
           {!isFirebaseConfigured && <p className="text-xs text-orange-600 mt-2">Live Firebase data is not configured.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!['academic-setup', 'people-setup'].includes(activeSection) && (
+          {!['academic-setup', 'payment-settings', 'people-setup'].includes(activeSection) && (
             <button onClick={saveSettings} disabled={!canManage} className="h-10 px-5 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2 disabled:bg-slate-300">
               <Save size={16} /> Save Settings
             </button>
@@ -236,6 +253,22 @@ export default function SettingsManagement({ currentUser, selectedCourse = null,
             </button>
           </div>
           <UserRoleManagement currentUser={currentUser} />
+        </div>
+      )}
+
+      {activeSection === 'payment-settings' && (
+        <div className="pt-5">
+          <div className="mb-5 flex items-center gap-3">
+            <button onClick={goBackOneSettingsStep} className="erp-back-button h-10 px-4 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold text-sm flex items-center gap-2">
+              <ArrowLeft size={15} /> Back
+            </button>
+          </div>
+          <PaymentSettingsPanel
+            currentUser={currentUser}
+            academicYear={paymentSettingsAcademicYear}
+            selectedCourse={selectedCourse}
+            selectedCourseCode={selectedCourseCode}
+          />
         </div>
       )}
 

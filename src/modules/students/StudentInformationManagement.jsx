@@ -1110,7 +1110,12 @@ export default function StudentInformationManagement({ user, onLogout }) {
                 ) : activePage === 'user-roles' ? (
                   <UserRoleManagement currentUser={user} />
                 ) : activePage === 'settings' ? (
-                  <SettingsManagement currentUser={user} selectedCourse={selectedCourse} selectedCourseCode={effectiveSelectedCourseCode} />
+                  <SettingsManagement
+                    currentUser={user}
+                    activeAcademicYear={academicYear}
+                    selectedCourse={selectedCourse}
+                    selectedCourseCode={effectiveSelectedCourseCode}
+                  />
                 ) : (
                   <div className="rounded-lg bg-[#f5f5f6] p-6 text-sm text-slate-600">
                     This module is not available.

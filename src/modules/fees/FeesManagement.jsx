@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Banknote, FileText, MessageCircle, Plus, Search, Settings, TrendingUp, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Banknote, FileText, MessageCircle, Plus, Search, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   createFeeAdjustment,
   createFeeAssignment,
   createFeeCollection,
-  createFeeStructure,
   getFeesManagementData,
   updateFeeAssignment,
   updateFeeCollection,
-  updateFeeStructure,
 } from '../../firebase/db';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
-import { getClassOptions } from '../timetable/timetableUtils';
 import {
   calculateAssignmentPaymentLedger,
   calculatePendingAgentFeeBalance,
@@ -34,18 +31,14 @@ import {
   summarizeFees,
   sumPaymentEntryAgentFees,
   sumPaymentEntries,
-  totalFeeComponents,
   validateFeeAdjustment,
   validateFeeCollection,
-  validateFeeStructure,
 } from './feeUtils';
 import FeeAdjustmentModal from './components/FeeAdjustmentModal';
 import FeeCollectionTable from './components/FeeCollectionTable';
 import FeeAssignmentTable from './components/FeeAssignmentTable';
 import FeeCollectionModal from './components/FeeCollectionModal';
 import FeeReportsPanel from './components/FeeReportsPanel';
-import FeeStructureModal from './components/FeeStructureModal';
-import FeeStructurePanel from './components/FeeStructurePanel';
 import { filterByCourse, filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 
 function getFeeValues(form = {}) {
@@ -68,8 +61,6 @@ export default function FeesManagement({
   const [adjustments, setAdjustments] = useState([]);
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState('');
-  const [showStructureModal, setShowStructureModal] = useState(false);
-  const [editingStructure, setEditingStructure] = useState(null);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [collectionAssignmentId, setCollectionAssignmentId] = useState('');
   const [editingCollection, setEditingCollection] = useState(null);
@@ -109,8 +100,6 @@ export default function FeesManagement({
 
     const handleHistoryBack = (event) => {
       const flow = event.state?.feeFlow;
-      setShowStructureModal(false);
-      setEditingStructure(null);
       setShowCollectionModal(false);
       setEditingCollection(null);
       setShowAdjustmentModal(false);
@@ -131,8 +120,6 @@ export default function FeesManagement({
   }, [initialBranch, initialTask]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
-  const canSetup = canAccess(defaultRoles, currentRoleId, 'fees.setup');
-  const canAssign = canAccess(defaultRoles, currentRoleId, 'fees.assign');
   const canCollect = canAccess(defaultRoles, currentRoleId, 'fees.collect');
   const canAdjust = canAccess(defaultRoles, currentRoleId, 'fees.adjust');
   const courseStudents = useMemo(
@@ -158,7 +145,6 @@ export default function FeesManagement({
       .filter((item) => selectedCourseCode === 'all' || !item.assignmentId || courseAssignmentIds.has(item.assignmentId)),
     [adjustments, courseAssignmentIds, courseStudents, selectedCourse, selectedCourseCode]
   );
-  const classOptions = getClassOptions(courseStudents);
   const summary = summarizeFees(courseAssignments, courseCollections, courseAdjustments);
 
   const visibleAssignments = useMemo(() => {
@@ -228,7 +214,6 @@ export default function FeesManagement({
     setSelectedAssignmentId('');
     setSearch('');
     window.history.pushState({ ...(window.history.state || {}), feeFlow: { task: activeFeeTask, branch: branch.id } }, '');
-    if (branch.openStructure) setShowStructureModal(true);
     if (branch.openCollection) {
       setCollectionAssignmentId('');
       setEditingCollection(null);
@@ -269,13 +254,6 @@ export default function FeesManagement({
       meta: [formatCurrency(summary.totalCollected), 'Manual entry'],
     },
     {
-      id: 'structures',
-      title: 'Payment Settings',
-      description: 'Create, edit, and assign fee structures.',
-      icon: <Settings size={22} />,
-      meta: [`${courseStructures.length} active`, canSetup ? 'Setup enabled' : 'View only'],
-    },
-    {
       id: 'adjustments',
       title: 'Adjustments',
       description: 'Approve waivers and fee corrections.',
@@ -295,10 +273,6 @@ export default function FeesManagement({
     collections: [
       { id: 'collect-fee', title: 'Fee Collections', description: 'Record manual fee payments and review posted collections.', icon: <Banknote size={20} />, disabled: !canCollect, openCollection: true },
     ],
-    structures: [
-      { id: 'create-structure', title: 'Create Structure', description: 'Open a new fee structure form.', icon: <Plus size={20} />, disabled: !canSetup, openStructure: true },
-      { id: 'manage-structures', title: 'Manage Structures', description: 'Edit or assign existing structures.', icon: <Settings size={20} /> },
-    ],
     adjustments: [
       { id: 'approve-adjustment', title: 'Approve Adjustment', description: 'Select a student fee, then approve adjustment.', icon: <Wallet size={20} />, disabled: !canAdjust || !payableAssignments.length },
       { id: 'adjustment-history', title: 'Adjustment History', description: 'Review recent waivers and corrections.', icon: <FileText size={20} /> },
@@ -311,110 +285,6 @@ export default function FeesManagement({
   const activeTask = feeTaskOptions.find((task) => task.id === activeFeeTask);
   const activeBranches = feeBranchOptions[activeFeeTask] || [];
   const activeBranch = activeBranches.find((branch) => branch.id === activeFeeBranch);
-  const saveStructure = async (form) => {
-    if (!canSetup) {
-      toast.error('You do not have permission to manage fee structures.');
-      return;
-    }
-    const validationMessage = validateFeeStructure(form);
-    if (validationMessage) {
-      toast.error(validationMessage);
-      return;
-    }
-    const payload = {
-      ...form,
-      name: form.name.trim(),
-      academicYear: form.academicYear.trim(),
-      ...getFeeValues(form),
-      totalAmount: Number(form.totalAmount || 0),
-      status: form.status || 'Active',
-    };
-
-    if (editingStructure) {
-      const updates = { ...payload, updatedAtText: formatDisplayDate() };
-      try {
-        await updateFeeStructure(editingStructure.id, updates);
-        setStructures((prev) => prev.map((item) => item.id === editingStructure.id ? { ...item, ...updates } : item));
-        toast.success('Fee structure updated');
-      } catch (error) {
-        console.error('Unable to update live fee structure.', error);
-        toast.error('Fee structure was not saved to live data.');
-      } finally {
-        setEditingStructure(null);
-      }
-      return;
-    }
-
-    const createPayload = { ...payload, createdAtText: formatDisplayDate() };
-    try {
-      const id = await createFeeStructure(createPayload);
-      if (!id) throw new Error('Live fee structure was not created.');
-      setStructures((prev) => [{ id, ...createPayload }, ...prev]);
-      toast.success('Fee structure created');
-    } catch (error) {
-      console.error('Unable to create live fee structure.', error);
-      toast.error('Fee structure was not saved to live data.');
-    } finally {
-      setShowStructureModal(false);
-    }
-  };
-
-  const assignStructureToStudents = async (structure) => {
-    if (!canAssign) {
-      toast.error('You do not have permission to assign fees.');
-      return;
-    }
-    const structureCourse = structure.courseCode
-      ? { courseCode: structure.courseCode, courseName: structure.courseName }
-      : selectedCourse;
-    const structureStudents = structure.courseCode
-      ? filterStudentsByCourse(courseStudents, structure.courseCode, structureCourse)
-      : courseStudents;
-    const targetStudents = structureStudents.filter((student) => getStudentClassKey(student) === structure.classKey);
-    if (!targetStudents.length) {
-      toast.error('No active students found for this class.');
-      return;
-    }
-    const existingKeys = new Set(courseAssignments.map((item) => `${item.studentRecordId}-${item.feeStructureId}`));
-    const payloads = targetStudents
-      .filter((student) => !existingKeys.has(`${student.id}-${structure.id}`))
-      .map((student) => {
-        const studentPayableTotal = totalFeeComponents(structure) || Number(structure.totalAmount || 0);
-        return {
-          feeStructureId: structure.id,
-          studentRecordId: student.id,
-          studentId: student.studentId,
-          studentName: student.name,
-          classKey: structure.classKey,
-          academicYear: structure.academicYear,
-          courseCode: structure.courseCode || student.courseCode || '',
-          courseName: structure.courseName || student.courseName || student.program || '',
-          ...getFeeValues(structure),
-          totalAmount: studentPayableTotal,
-          paidAmount: 0,
-          adjustmentAmount: 0,
-          dueAmount: studentPayableTotal,
-          dueDate: structure.dueDate,
-          status: 'Due',
-          assignedAtText: formatDisplayDate(),
-          feeYearLabel: structure.feeYearLabel || '',
-          seedSource: structure.seedSource || '',
-        };
-      });
-    if (!payloads.length) {
-      toast.success('This structure is already assigned to all matching students.');
-      return;
-    }
-    try {
-      const ids = await Promise.all(payloads.map((payload) => createFeeAssignment(payload)));
-      if (ids.some((id) => !id)) throw new Error('One or more live fee assignments were not created.');
-      setAssignments((prev) => [...payloads.map((payload, index) => ({ id: ids[index], ...payload })), ...prev]);
-      toast.success('Fee structure assigned');
-    } catch (error) {
-      console.error('Unable to assign live fee structure.', error);
-      toast.error('Fee assignments were not saved to live data.');
-    }
-  };
 
   const getPaymentDateTime = (form, now = new Date()) => {
     const paymentDate = form.paymentDate || now.toISOString().slice(0, 10);
@@ -950,7 +820,7 @@ export default function FeesManagement({
         <div>
           <div className="text-sm font-bold text-slate-500 mb-2">Finance / <span className="text-[#f39a5f]">Payment</span></div>
           <h1 className="text-2xl font-bold text-slate-900">Payment</h1>
-          <p className="text-sm text-slate-500 mt-1">Student payment collection, due tracking, fee setup, waivers, and receipts.</p>
+          <p className="text-sm text-slate-500 mt-1">Student payment collection, due tracking, waivers, and receipts.</p>
           {!isFirebaseConfigured && <p className="text-xs text-rose-600 mt-2">Live Firebase data is not configured.</p>}
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
@@ -958,7 +828,7 @@ export default function FeesManagement({
 
       {!activeFeeTask ? (
       <>
-      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {feeTaskOptions.map((task) => (
           <button key={task.id} onClick={() => openFeeTask(task.id)} className="group min-h-40 text-left rounded-lg border border-slate-100 bg-white p-5 shadow-sm hover:-translate-y-1 transition-all">
             <div className="flex items-start justify-between gap-4">
@@ -1021,11 +891,7 @@ export default function FeesManagement({
             <h2 className="text-2xl font-extrabold text-slate-900">{activeBranch?.title}</h2>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {activeFeeBranch === 'create-structure' && canSetup && (
-            <button onClick={() => setShowStructureModal(true)} className="h-10 px-4 rounded-full bg-[#fb9a5b] text-white font-semibold text-sm flex items-center gap-2"><Plus size={16} /> Open Form</button>
-          )}
-        </div>
+        <div className="flex flex-wrap gap-2" />
       </div>
 
       {activeFeeBranch === 'collect-fee' ? (
@@ -1086,10 +952,6 @@ export default function FeesManagement({
               />
             </>
           )}
-        </div>
-      ) : ['create-structure', 'manage-structures'].includes(activeFeeBranch) ? (
-        <div className="w-full">
-          <FeeStructurePanel layout="grid" structures={courseStructures} canEdit={canSetup || canAssign} onEdit={setEditingStructure} onAssign={assignStructureToStudents} />
         </div>
       ) : activeFeeBranch === 'adjustment-history' ? (
         <FeeReportsPanel collections={[]} adjustments={courseAdjustments} showCollections={false} />
@@ -1177,8 +1039,6 @@ export default function FeesManagement({
       </>
       )}
 
-      {showStructureModal && <FeeStructureModal classOptions={classOptions} onClose={() => setShowStructureModal(false)} onSave={saveStructure} />}
-      {editingStructure && <FeeStructureModal mode="edit" initialStructure={editingStructure} classOptions={classOptions} onClose={() => setEditingStructure(null)} onSave={saveStructure} />}
       {showAdjustmentModal && <FeeAdjustmentModal assignments={payableAssignments} initialAssignmentId={collectionAssignmentId} onClose={() => setShowAdjustmentModal(false)} onSave={saveAdjustment} />}
     </div>
   );

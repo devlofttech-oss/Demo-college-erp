@@ -81,7 +81,7 @@ function getGroupedStructures(structures = []) {
     ));
 }
 
-export default function FeeStructurePanel({ structures, canEdit, onEdit, onAssign, layout = 'inspector' }) {
+export default function FeeStructurePanel({ structures, canEdit, canAssign = canEdit, onEdit, onAssign, layout = 'inspector' }) {
   const isGrid = layout === 'grid';
   const [selectedCourse, setSelectedCourse] = useState('all');
   const groupedStructures = useMemo(() => (isGrid ? getGroupedStructures(structures) : []), [isGrid, structures]);
@@ -123,7 +123,7 @@ export default function FeeStructurePanel({ structures, canEdit, onEdit, onAssig
             <div className="font-bold text-slate-900">{formatCurrency(item.totalAmount)}</div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button onClick={() => onAssign(item)} disabled={!canEdit} className="h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold disabled:text-slate-300">Assign</button>
+            <button onClick={() => onAssign(item)} disabled={!canAssign} className="h-8 px-3 rounded-md bg-white border border-slate-200 text-xs font-semibold disabled:text-slate-300">Assign</button>
             <button onClick={() => onEdit(item)} disabled={!canEdit} className="h-8 px-3 rounded-md bg-[#33373e] text-white text-xs font-semibold disabled:bg-slate-300">Edit</button>
           </div>
         </div>
