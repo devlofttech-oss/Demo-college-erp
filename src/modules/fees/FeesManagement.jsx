@@ -31,6 +31,7 @@ import {
   summarizeFees,
   sumPaymentEntryAgentFees,
   sumPaymentEntries,
+  totalManualDueItems,
   validateFeeAdjustment,
   validateFeeCollection,
 } from './feeUtils';
@@ -179,6 +180,34 @@ export default function FeesManagement({
     return '';
   };
 
+  const getDueItemPaymentLimit = (paidDueItems, source, fallbackLimit = 0) => {
+    const dueItemTotal = totalManualDueItems(paidDueItems, source);
+    if (!paidDueItems.length) return Number(fallbackLimit || 0);
+    return Number(fallbackLimit || 0) > 0
+      ? Math.min(Number(fallbackLimit || 0), dueItemTotal)
+      : dueItemTotal;
+  };
+
+  const validateDueItemPaymentBalance = (amount, pendingDueItems, paidDueItems, source, fallbackLimit = 0) => {
+    if (pendingDueItems.length && !paidDueItems.length) return 'Select the due items being paid before saving.';
+    if (!paidDueItems.length) return '';
+    const dueItemTotal = totalManualDueItems(paidDueItems, source);
+    if (dueItemTotal <= 0) return 'Selected due items do not have a payable amount.';
+    if (amount > getDueItemPaymentLimit(paidDueItems, source, fallbackLimit)) {
+      return 'Collection amount cannot exceed selected due items balance.';
+    }
+    return '';
+  };
+
+  const getDueItemLedgerOverride = (pendingDueItems, remainingDueItems, source, paidAmount = 0) => {
+    if (!pendingDueItems.length) return {};
+    const remainingDueAmount = totalManualDueItems(remainingDueItems, source);
+    return {
+      dueAmount: remainingDueAmount,
+      status: remainingDueAmount <= 0 ? 'Paid' : Number(paidAmount || 0) > 0 ? 'Partially Paid' : 'Due',
+    };
+  };
+
   const payableAssignments = courseAssignments.filter((item) => Number(item.dueAmount || 0) > 0);
   const selectedAssignment = selectedAssignmentId ? courseAssignments.find((item) => item.id === selectedAssignmentId) || null : null;
 
@@ -321,17 +350,20 @@ export default function FeesManagement({
     editingCollectionId = '',
   }) => {
     let runningCollections = [...previousCollections];
+    let runningDueItemPaid = 0;
     return paymentEntries.map((entry, index) => {
       const entryAmount = Number(entry.amount || 0);
       const paymentDateTime = getPaymentDateTime(entry, now);
       const entryAgentFeePaid = collectionBase.admissionThroughAgent
         ? Number(entry.agentFeePaidAmount || 0)
         : 0;
+      const usesDueItemBalance = Boolean(collectionBase.paidDueItems?.length && Number(collectionBase.dueItemBalance || 0) > 0);
       const beforeLedger = calculateAssignmentPaymentLedger(
         assignmentForLedger,
         runningCollections,
         { useLegacyPaidFallback: false }
       );
+      const dueItemBeforePayment = Math.max(0, Number(collectionBase.dueItemBalance || 0) - runningDueItemPaid);
       const pendingId = editingCollectionId || `__pending_payment_${index}`;
       const installment = {
         ...collectionBase,
@@ -346,20 +378,22 @@ export default function FeesManagement({
         batchPaymentId,
         installmentNo: editingCollectionId ? (collectionBase.installmentNo || index + 1) : index + 1,
         installmentCount: editingCollectionId ? (collectionBase.installmentCount || paymentEntries.length) : paymentEntries.length,
-        dueBeforePayment: beforeLedger.dueAmount,
+        dueBeforePayment: usesDueItemBalance ? dueItemBeforePayment : beforeLedger.dueAmount,
       };
       const afterLedger = calculateAssignmentPaymentLedger(
         assignmentForLedger,
         [...runningCollections, { id: pendingId, ...installment }],
         { useLegacyPaidFallback: false }
       );
+      const dueItemAfterPayment = Math.max(0, dueItemBeforePayment - entryAmount);
       const collection = {
         ...installment,
         totalPaidAfterPayment: afterLedger.paidAmount,
-        dueAfterPayment: afterLedger.dueAmount,
+        dueAfterPayment: usesDueItemBalance ? dueItemAfterPayment : afterLedger.dueAmount,
         pendingAgentFeeBalance: afterLedger.pendingAgentFeeBalance,
       };
       runningCollections = [...runningCollections, { id: pendingId, ...collection }];
+      runningDueItemPaid += entryAmount;
       return collection;
     });
   };
@@ -450,8 +484,14 @@ export default function FeesManagement({
         ? calculatePendingAgentFeeBalance(agentFee, previousLedger.agentFeePaid)
         : 0;
       const dueBeforePayment = previousLedger.dueAmount;
-      if (amount > dueBeforePayment) {
-        toast.error('Collection amount cannot exceed outstanding due.');
+      const dueItemValidationMessage = validateDueItemPaymentBalance(amount, manualDueItems, paidDueItems, collectionForm, dueBeforePayment);
+      if (dueItemValidationMessage) {
+        toast.error(dueItemValidationMessage);
+        return;
+      }
+      const paymentBalanceLimit = getDueItemPaymentLimit(paidDueItems, collectionForm, dueBeforePayment);
+      if (amount > paymentBalanceLimit) {
+        toast.error(paidDueItems.length ? 'Collection amount cannot exceed selected due items balance.' : 'Collection amount cannot exceed outstanding due.');
         return;
       }
       const agentFeeValidationMessage = validateAgentFeePayments(paymentEntries, pendingAgentFeeBefore, admissionThroughAgent);
@@ -520,6 +560,8 @@ export default function FeesManagement({
           manualDueItems,
           paidDueItems,
           pendingDueItemsAfterPayment: remainingManualDueItems,
+          dueItemBalance: totalManualDueItems(paidDueItems, collectionForm),
+          pendingDueItemsBalanceAfterPayment: totalManualDueItems(remainingManualDueItems, collectionForm),
           academicYear,
           collectedBy: collectionForm.collectedBy,
           status: 'Posted',
@@ -547,15 +589,17 @@ export default function FeesManagement({
           savedCollections = collectionsToSave.map((collection, index) => ({ id: ids[index], ...collection }));
         }
 
+        const ledgerUpdates = getLedgerAssignmentUpdates(
+          assignmentForLedger,
+          [...ledgerBaseCollections, ...savedCollections],
+          nowText
+        );
         const nextAssignmentUpdates = {
           ...assignmentBase,
           adjustmentAmount,
           manualDueItems: remainingManualDueItems,
-          ...getLedgerAssignmentUpdates(
-            assignmentForLedger,
-            [...ledgerBaseCollections, ...savedCollections],
-            nowText
-          ),
+          ...ledgerUpdates,
+          ...getDueItemLedgerOverride(manualDueItems, remainingManualDueItems, collectionForm, ledgerUpdates.paidAmount),
         };
         await updateFeeAssignment(nextAssignmentId, nextAssignmentUpdates);
         nextAssignment = { ...nextAssignment, ...nextAssignmentUpdates };
@@ -607,6 +651,11 @@ export default function FeesManagement({
         toast.error(agentFeeValidationMessage);
         return;
       }
+      const dueItemValidationMessage = validateDueItemPaymentBalance(amount, manualDueItems, paidDueItems, collectionForm);
+      if (dueItemValidationMessage) {
+        toast.error(dueItemValidationMessage);
+        return;
+      }
       let agentFeePaidSoFar = 0;
       const collectionsToSave = paymentEntries.map((entry, index) => {
         const entryAmount = Number(entry.amount || 0);
@@ -634,6 +683,8 @@ export default function FeesManagement({
           manualDueItems,
           paidDueItems,
           pendingDueItemsAfterPayment: remainingManualDueItems,
+          dueItemBalance: totalManualDueItems(paidDueItems, collectionForm),
+          pendingDueItemsBalanceAfterPayment: totalManualDueItems(remainingManualDueItems, collectionForm),
           admissionThroughAgent,
           agentFee,
           agentFeePaidAmount: entryAgentFeePaid,
@@ -672,8 +723,14 @@ export default function FeesManagement({
         status: 'Posted',
       }];
     const pendingAgentFeeBefore = admissionThroughAgent ? calculatePendingAgentFeeBalance(agentFee, previousLedger.agentFeePaid) : 0;
-    if (amount > previousLedger.dueAmount) {
-      toast.error('Collection amount cannot exceed outstanding due.');
+    const dueItemValidationMessage = validateDueItemPaymentBalance(amount, manualDueItems, paidDueItems, collectionForm, previousLedger.dueAmount);
+    if (dueItemValidationMessage) {
+      toast.error(dueItemValidationMessage);
+      return;
+    }
+    const paymentBalanceLimit = getDueItemPaymentLimit(paidDueItems, collectionForm, previousLedger.dueAmount);
+    if (amount > paymentBalanceLimit) {
+      toast.error(paidDueItems.length ? 'Collection amount cannot exceed selected due items balance.' : 'Collection amount cannot exceed outstanding due.');
       return;
     }
     const agentFeeValidationMessage = validateAgentFeePayments(paymentEntries, pendingAgentFeeBefore, admissionThroughAgent);
@@ -694,6 +751,8 @@ export default function FeesManagement({
       manualDueItems,
       paidDueItems,
       pendingDueItemsAfterPayment: remainingManualDueItems,
+      dueItemBalance: totalManualDueItems(paidDueItems, collectionForm),
+      pendingDueItemsBalanceAfterPayment: totalManualDueItems(remainingManualDueItems, collectionForm),
       admissionThroughAgent,
       agentFee,
     };
@@ -709,9 +768,11 @@ export default function FeesManagement({
       ...ledgerBaseCollections,
       ...collectionsToSave.map((collection, index) => ({ id: `__pending_payment_${index}`, ...collection })),
     ];
+    const ledgerUpdates = getLedgerAssignmentUpdates(assignment, projectedCollections, nowText);
     const assignmentUpdates = {
       manualDueItems: remainingManualDueItems,
-      ...getLedgerAssignmentUpdates(assignment, projectedCollections, nowText),
+      ...ledgerUpdates,
+      ...getDueItemLedgerOverride(manualDueItems, remainingManualDueItems, collectionForm, ledgerUpdates.paidAmount),
     };
     try {
       const ids = await Promise.all(collectionsToSave.map((collection) => createFeeCollection(collection)));

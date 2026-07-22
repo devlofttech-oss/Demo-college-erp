@@ -25,6 +25,16 @@ export const manualDueItemOptions = [
 
 export const agentManualDueItemOption = { id: 'agent-fee', label: 'Agent Fee' };
 
+export const manualDueItemAmountKeys = {
+  'admission-fee': 'admissionFee',
+  'application-fee': 'applicationFee',
+  'pocket-article-fee': 'pocketArticleFee',
+  'year-fee': 'tuitionFee',
+  'library-fee': 'libraryFee',
+  'lab-fee': 'labFee',
+  'transport-fee': 'transportFee',
+};
+
 export function getFeeComponentValues(source = {}) {
   return feeComponentKeys.reduce((values, key) => ({
     ...values,
@@ -244,6 +254,19 @@ export function filterPaidDueItems(paidItems = [], pendingItems = [], source = {
 export function getRemainingDueItems(pendingItems = [], paidItems = [], source = {}) {
   const paidIds = new Set(filterPaidDueItems(paidItems, pendingItems, source).map((item) => item.id));
   return normalizeManualDueItems(pendingItems, source).filter((item) => !paidIds.has(item.id));
+}
+
+export function getManualDueItemAmount(item = {}, source = {}) {
+  const id = typeof item === 'string' ? item : item?.id;
+  if (id === agentManualDueItemOption.id) return Number(source.agentFee || 0);
+  if (id === 'other-due') return Number(item.amount || source.otherDueAmount || source.manualDueAmount || 0);
+  const amountKey = manualDueItemAmountKeys[id];
+  return amountKey ? Number(source[amountKey] || 0) : 0;
+}
+
+export function totalManualDueItems(items = [], source = {}) {
+  return normalizeManualDueItems(items, source)
+    .reduce((total, item) => total + getManualDueItemAmount(item, source), 0);
 }
 
 export function formatManualDueItems(items = []) {

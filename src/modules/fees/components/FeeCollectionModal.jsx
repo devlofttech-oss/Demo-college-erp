@@ -14,6 +14,7 @@ import {
   getFeeComponentValues,
   getCollectionsForFeeContext,
   getManualDueItemOptions,
+  getManualDueItemAmount,
   getRemainingDueItems,
   isAdmissionThroughAgent,
   normalizeManualDueItems,
@@ -21,6 +22,7 @@ import {
   sortPaymentRecordsByDate,
   sumPaymentEntryAgentFees,
   sumPaymentEntries,
+  totalManualDueItems,
   totalFeeComponents,
 } from '../feeUtils';
 
@@ -53,6 +55,18 @@ function getInitialFeeValues({ assignment, collection, structure }) {
 function syncAgentDueItem(items = [], admissionThroughAgent = false) {
   const normalized = normalizeManualDueItems(items, { admissionThroughAgent });
   return normalized.filter((item) => item.id !== 'agent-fee');
+}
+
+function syncSinglePaymentAmount(entries = [], nextBalance = 0, previousBalance = 0) {
+  const sourceEntries = entries.length ? entries : [createPaymentEntry()];
+  if (sourceEntries.length !== 1) return sourceEntries;
+  const currentAmount = Number(sourceEntries[0].amount || 0);
+  const canSyncAmount = !currentAmount || currentAmount === Number(previousBalance || 0);
+  if (!canSyncAmount) return sourceEntries;
+  return [{
+    ...sourceEntries[0],
+    amount: nextBalance > 0 ? String(nextBalance) : '',
+  }];
 }
 
 export default function FeeCollectionModal({
@@ -116,6 +130,9 @@ export default function FeeCollectionModal({
   const selectedManualDueItems = normalizeManualDueItems(form.manualDueItems, form);
   const selectedPaidDueItems = filterPaidDueItems(form.paidDueItems, selectedManualDueItems, form);
   const remainingDueItemsAfterThisPayment = getRemainingDueItems(selectedManualDueItems, selectedPaidDueItems, form);
+  const selectedManualDueItemsTotal = totalManualDueItems(selectedManualDueItems, form);
+  const payableDueItemsTotal = totalManualDueItems(selectedPaidDueItems, form);
+  const remainingDueItemsTotal = totalManualDueItems(remainingDueItemsAfterThisPayment, form);
   const dueItemOptions = getManualDueItemOptions(form);
   const paymentContext = {
     assignmentId: matchingAssignment?.id || form.assignmentId,
@@ -167,7 +184,11 @@ export default function FeeCollectionModal({
     : 0;
   const paidBeforeThisPayment = previousLedger.paidAmount;
   const dueBeforeThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment, matchingAssignment?.adjustmentAmount);
-  const dueAfterThisPayment = calculateDueAmount(editedTotal, paidBeforeThisPayment + paymentEntriesTotal, matchingAssignment?.adjustmentAmount);
+  const usesDueItemBalance = selectedPaidDueItems.length > 0;
+  const payableBalanceBeforePayment = usesDueItemBalance
+    ? Math.min(payableDueItemsTotal, dueBeforeThisPayment || payableDueItemsTotal)
+    : dueBeforeThisPayment;
+  const dueAfterThisPayment = calculateDueAmount(payableBalanceBeforePayment, paymentEntriesTotal);
 
   const studentOptions = useMemo(() => students.map((item) => ({
     value: item.id,
@@ -215,14 +236,19 @@ export default function FeeCollectionModal({
   const toggleManualDueItem = (item) => {
     setForm((prev) => {
       const currentItems = normalizeManualDueItems(prev.manualDueItems);
+      const currentPaidItems = filterPaidDueItems(prev.paidDueItems, prev.manualDueItems, prev);
       const exists = currentItems.some((currentItem) => currentItem.id === item.id);
       const nextManualDueItems = exists
         ? currentItems.filter((currentItem) => currentItem.id !== item.id)
         : [...currentItems, item];
+      const nextPaidDueItems = filterPaidDueItems(prev.paidDueItems, nextManualDueItems, prev);
+      const previousPaidDueTotal = totalManualDueItems(currentPaidItems, prev);
+      const nextPaidDueTotal = totalManualDueItems(nextPaidDueItems, prev);
       return {
         ...prev,
         manualDueItems: nextManualDueItems,
-        paidDueItems: filterPaidDueItems(prev.paidDueItems, nextManualDueItems, prev),
+        paidDueItems: nextPaidDueItems,
+        paymentEntries: syncSinglePaymentAmount(prev.paymentEntries, nextPaidDueTotal, previousPaidDueTotal),
       };
     });
   };
@@ -231,11 +257,15 @@ export default function FeeCollectionModal({
     setForm((prev) => {
       const currentItems = filterPaidDueItems(prev.paidDueItems, prev.manualDueItems, prev);
       const exists = currentItems.some((currentItem) => currentItem.id === item.id);
+      const nextPaidDueItems = exists
+        ? currentItems.filter((currentItem) => currentItem.id !== item.id)
+        : [...currentItems, item];
+      const previousPaidDueTotal = totalManualDueItems(currentItems, prev);
+      const nextPaidDueTotal = totalManualDueItems(nextPaidDueItems, prev);
       return {
         ...prev,
-        paidDueItems: exists
-          ? currentItems.filter((currentItem) => currentItem.id !== item.id)
-          : [...currentItems, item],
+        paidDueItems: nextPaidDueItems,
+        paymentEntries: syncSinglePaymentAmount(prev.paymentEntries, nextPaidDueTotal, previousPaidDueTotal),
       };
     });
   };
@@ -456,12 +486,27 @@ export default function FeeCollectionModal({
               <div className="font-bold text-slate-900">{formatCurrency(paidBeforeThisPayment)}</div>
             </div>
             <div className="erp-fee-summary-card rounded-lg bg-[#f5f5f6] p-3">
-              <div className="text-xs font-semibold text-slate-500">Due Before</div>
+              <div className="text-xs font-semibold text-slate-500">Payable Balance</div>
+              <div className="font-bold text-rose-700">{formatCurrency(payableBalanceBeforePayment)}</div>
+            </div>
+            <div className="erp-fee-summary-card rounded-lg bg-[#f5f5f6] p-3">
+              <div className="text-xs font-semibold text-slate-500">Balance After</div>
+              <div className="font-bold text-emerald-700">{formatCurrency(dueAfterThisPayment)}</div>
+            </div>
+          </div>
+
+          <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3 text-sm">
+            <div className="erp-fee-summary-card rounded-lg bg-[#f5f5f6] p-3">
+              <div className="text-xs font-semibold text-slate-500">Full Fee Due</div>
               <div className="font-bold text-rose-700">{formatCurrency(dueBeforeThisPayment)}</div>
             </div>
             <div className="erp-fee-summary-card rounded-lg bg-[#f5f5f6] p-3">
-              <div className="text-xs font-semibold text-slate-500">Due After</div>
-              <div className="font-bold text-emerald-700">{formatCurrency(dueAfterThisPayment)}</div>
+              <div className="text-xs font-semibold text-slate-500">Selected Due Items</div>
+              <div className="font-bold text-slate-900">{formatCurrency(payableDueItemsTotal)}</div>
+            </div>
+            <div className="erp-fee-summary-card rounded-lg bg-[#f5f5f6] p-3">
+              <div className="text-xs font-semibold text-slate-500">Still Pending Items</div>
+              <div className="font-bold text-amber-700">{formatCurrency(remainingDueItemsTotal)}</div>
             </div>
           </div>
 
@@ -469,7 +514,9 @@ export default function FeeCollectionModal({
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
               <div className="erp-due-picker-title text-xs font-bold uppercase text-amber-700">Pending Due Items</div>
               <div className="text-[11px] font-semibold text-amber-800">
-                {selectedManualDueItems.length ? `${selectedManualDueItems.length} item${selectedManualDueItems.length === 1 ? '' : 's'} currently due` : 'Select due items'}
+                {selectedManualDueItems.length
+                  ? `${selectedManualDueItems.length} item${selectedManualDueItems.length === 1 ? '' : 's'} | ${formatCurrency(selectedManualDueItemsTotal)}`
+                  : 'Select due items'}
               </div>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -483,7 +530,8 @@ export default function FeeCollectionModal({
                       onChange={() => toggleManualDueItem(item)}
                       className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
                     />
-                    <span>{item.label}</span>
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                    <span className="shrink-0 text-[11px] font-extrabold text-slate-500">{formatCurrency(getManualDueItemAmount(item, form))}</span>
                   </label>
                 );
               })}
@@ -493,13 +541,13 @@ export default function FeeCollectionModal({
           <div className="erp-paid-picker sm:col-span-2 rounded-lg border border-emerald-100 bg-emerald-50/60 p-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
               <div>
-                <div className="erp-due-picker-title text-xs font-bold uppercase text-emerald-700">Paid Due Items</div>
-                <div className="text-xs text-emerald-800">Choose the pending items this payment clears.</div>
+                <div className="erp-due-picker-title text-xs font-bold uppercase text-emerald-700">Due Items Being Paid</div>
+                <div className="text-xs text-emerald-800">Only selected items are added to this payment balance.</div>
               </div>
               <div className="text-[11px] font-semibold text-emerald-800">
-                {remainingDueItemsAfterThisPayment.length
-                  ? `${remainingDueItemsAfterThisPayment.length} still pending after save`
-                  : selectedManualDueItems.length ? 'All selected due items will clear' : 'No due items selected'}
+                {selectedPaidDueItems.length
+                  ? `${selectedPaidDueItems.length} selected | ${formatCurrency(payableDueItemsTotal)}`
+                  : 'Select items being paid'}
               </div>
             </div>
             {selectedManualDueItems.length ? (
@@ -514,7 +562,8 @@ export default function FeeCollectionModal({
                         onChange={() => togglePaidDueItem(item)}
                         className="h-4 w-4 rounded border-slate-300 accent-[#026c36]"
                       />
-                      <span>{item.label}</span>
+                      <span className="min-w-0 flex-1">{item.label}</span>
+                      <span className="shrink-0 text-[11px] font-extrabold text-slate-500">{formatCurrency(getManualDueItemAmount(item, form))}</span>
                     </label>
                   );
                 })}
@@ -522,6 +571,45 @@ export default function FeeCollectionModal({
             ) : (
               <div className="rounded-lg bg-white/80 border border-emerald-100 px-3 py-3 text-sm font-semibold text-emerald-800">
                 Select items in Pending Due Items first.
+              </div>
+            )}
+          </div>
+
+          <div className="erp-due-balance-summary sm:col-span-2 grid sm:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-emerald-100 bg-white p-3">
+              <div className="text-xs font-semibold text-emerald-700">Due Items In Balance</div>
+              <div className="mt-1 text-lg font-extrabold text-slate-900">{formatCurrency(payableDueItemsTotal)}</div>
+            </div>
+            <div className="rounded-lg border border-amber-100 bg-white p-3">
+              <div className="text-xs font-semibold text-amber-700">Pending Dues Separate</div>
+              <div className="mt-1 text-lg font-extrabold text-slate-900">{formatCurrency(remainingDueItemsTotal)}</div>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-white p-3">
+              <div className="text-xs font-semibold text-slate-500">Balance Source</div>
+              <div className="mt-1 text-sm font-extrabold text-slate-900">{usesDueItemBalance ? 'Selected due items' : 'Outstanding fee due'}</div>
+            </div>
+          </div>
+
+          <div className="erp-pending-due-list sm:col-span-2 rounded-lg border border-amber-100 bg-white p-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div>
+                <div className="text-xs font-bold uppercase text-amber-700">Still Pending Dues After Save</div>
+                <div className="text-xs text-slate-500">These items stay separate and will not be added to this payment balance.</div>
+              </div>
+              <div className="text-[11px] font-semibold text-amber-800">{formatCurrency(remainingDueItemsTotal)}</div>
+            </div>
+            {remainingDueItemsAfterThisPayment.length ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {remainingDueItemsAfterThisPayment.map((item) => (
+                  <div key={item.id} className="min-h-10 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs font-semibold text-slate-700 flex items-center justify-between gap-2">
+                    <span className="min-w-0">{item.label}</span>
+                    <span className="shrink-0 text-[11px] font-extrabold text-slate-500">{formatCurrency(getManualDueItemAmount(item, form))}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-3 text-sm font-semibold text-emerald-800">
+                {selectedManualDueItems.length ? 'All selected due items will be cleared by this payment.' : 'No pending due items selected.'}
               </div>
             )}
           </div>
@@ -576,7 +664,7 @@ export default function FeeCollectionModal({
                 <div className="text-xs font-bold uppercase text-slate-500">Payments to Post</div>
                 <div className="text-sm font-bold text-slate-900">{formatCurrency(paymentEntriesTotal)} across {paymentEntries.length} payment{paymentEntries.length === 1 ? '' : 's'}</div>
               </div>
-              <div className="text-xs font-semibold text-emerald-700">Due after: {formatCurrency(dueAfterThisPayment)}</div>
+              <div className="text-xs font-semibold text-emerald-700">Balance after: {formatCurrency(dueAfterThisPayment)}</div>
             </div>
 
             <div className="space-y-3">
@@ -646,9 +734,10 @@ export default function FeeCollectionModal({
                         <input
                           type="number"
                           min="0"
+                          max={usesDueItemBalance ? payableBalanceBeforePayment : undefined}
                           value={entry.amount}
                           onChange={(event) => updatePaymentEntry(entry.rowKey, 'amount', event.target.value)}
-                          placeholder={dueBeforeThisPayment || 0}
+                          placeholder={payableBalanceBeforePayment || 0}
                           className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm"
                         />
                       </label>

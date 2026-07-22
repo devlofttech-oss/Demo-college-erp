@@ -9,6 +9,7 @@ import {
   getCollectionsForFeeContext,
   getFeeComponentValues,
   getDueBucket,
+  getManualDueItemAmount,
   getManualDueItemOptions,
   getPaymentSortTime,
   isAdmissionThroughAgent,
@@ -18,6 +19,7 @@ import {
   summarizeFees,
   sumPaymentEntryAgentFees,
   sumPaymentEntries,
+  totalManualDueItems,
   totalFeeComponents,
   validateFeeAdjustment,
   validateFeeCollection,
@@ -55,6 +57,10 @@ assert.deepEqual(normalizeManualDueItems(['agent-fee']), []);
 assert.deepEqual(normalizeManualDueItems([{ label: 'Agent Fee' }]), []);
 assert.equal(formatManualDueItems(['application-fee', 'pocket-article-fee']), 'Application Fee, Pocket Article Fee');
 assert.equal(formatManualDueItems(['agent-fee']), '');
+assert.equal(getManualDueItemAmount({ id: 'application-fee' }, { applicationFee: 500 }), 500);
+assert.equal(getManualDueItemAmount('year-fee', { tuitionFee: 2000 }), 2000);
+assert.equal(totalManualDueItems(['application-fee', 'year-fee'], { applicationFee: 500, tuitionFee: 2000 }), 2500);
+assert.equal(totalManualDueItems(['other-due'], { otherDueAmount: 750 }), 750);
 const normalizedPaymentEntries = normalizePaymentEntries([
   { amount: '20000', paymentMode: 'Cash', creditedToAccount: 'Cash Counter', referenceNo: 'B-001', paymentDate: '2026-07-01', paymentTime: '10:00', agentFeePaidAmount: '2500' },
   { amount: '40000', paymentMode: 'UPI Manual Entry', creditedToAccount: 'SBI Current', referenceNo: 'B-002', paymentDate: '2026-07-05', paymentTime: '11:30', agentFeePaidAmount: '5000' },
