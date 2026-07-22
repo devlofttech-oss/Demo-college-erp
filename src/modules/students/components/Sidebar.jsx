@@ -151,14 +151,16 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
     return (
       <div key={id} className="erp-sidebar-item-wrap">
         <button
+          type="button"
           onClick={handleClick}
           className={`erp-sidebar-item ${active ? 'is-active' : ''}`}
           data-tooltip={collapsed ? label : undefined}
           aria-label={collapsed ? label : undefined}
           aria-expanded={submenuItems.length > 0 ? expanded : undefined}
+          title={collapsed ? label : undefined}
         >
           <span className="erp-sidebar-item-icon">{icon}</span>
-          <span className="erp-sidebar-item-label" aria-hidden={collapsed}>{label}</span>
+          {!collapsed && <span className="erp-sidebar-item-label">{label}</span>}
           {!collapsed && submenuItems.length > 0 && <ChevronRight className={`erp-sidebar-submenu-chevron ${expanded ? 'is-open' : ''}`} size={16} />}
           {!collapsed && status === 'planned' && <span className="erp-sidebar-item-badge">Soon</span>}
           {!collapsed && status === 'demo' && <span className="erp-sidebar-item-badge">Demo</span>}
