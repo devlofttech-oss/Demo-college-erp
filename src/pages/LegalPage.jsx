@@ -62,7 +62,7 @@ const privacySections = [
   {
     title: 'Contact',
     body: [
-      `For privacy questions, account help, or data requests, contact ${companyName} support at ${supportEmail}. Replace this email with your final support email before publishing on Google Play.`,
+      `For privacy questions, account help, or data requests, contact ${companyName} support at ${supportEmail}.`,
     ],
   },
 ];
@@ -116,7 +116,7 @@ const termsSections = [
   {
     title: 'Contact',
     body: [
-      `For support, questions, or account issues, contact ${companyName} support at ${supportEmail}. Replace this email with your final support email before publishing on Google Play.`,
+      `For support, questions, or account issues, contact ${companyName} support at ${supportEmail}.`,
     ],
   },
 ];
@@ -178,7 +178,6 @@ function SupportPage() {
           <p className="mt-3">
             Email: <span className="font-bold">{supportEmail}</span>
           </p>
-          <p className="mt-2">Replace this placeholder with the final support email before submitting the app.</p>
         </section>
         <section>
           <h2 className="text-xl font-extrabold text-[#102a5c]">What To Include</h2>
@@ -199,6 +198,58 @@ function SupportPage() {
   );
 }
 
+function AccountDeletionPage() {
+  return (
+    <LegalShell
+      title="Account Deletion"
+      subtitle="How Collegesoft users can request account deletion and related data handling."
+    >
+      <div className="space-y-8 text-sm leading-7 text-[#334155]">
+        <section>
+          <h2 className="text-xl font-extrabold text-[#102a5c]">Request Account Deletion</h2>
+          <p className="mt-3">
+            To request deletion of your Collegesoft account, email <span className="font-bold">{supportEmail}</span> or
+            contact your institution administrator.
+          </p>
+          <p className="mt-3">
+            Include your full name, role, institution name, and registered email address or phone number. Do not send
+            your password.
+          </p>
+        </section>
+        <section>
+          <h2 className="text-xl font-extrabold text-[#102a5c]">What Can Be Deleted</h2>
+          <p className="mt-3">
+            Eligible deletion may include your app login account, account profile, role access, parent portal link, and
+            support request metadata that is no longer needed.
+          </p>
+        </section>
+        <section>
+          <h2 className="text-xl font-extrabold text-[#102a5c]">Records That May Be Retained</h2>
+          <p className="mt-3">
+            Some academic, attendance, fee, exam, document, audit, security, and administrative records may be retained
+            by the institution when required for legal, compliance, accounting, academic history, or dispute-resolution
+            purposes.
+          </p>
+        </section>
+        <section>
+          <h2 className="text-xl font-extrabold text-[#102a5c]">Processing Time</h2>
+          <p className="mt-3">
+            We aim to acknowledge deletion requests within 7 days and complete eligible deletion within 30 days after
+            verifying the request and institution ownership requirements.
+          </p>
+        </section>
+        <section>
+          <h2 className="text-xl font-extrabold text-[#102a5c]">Partial Data Requests</h2>
+          <p className="mt-3">
+            Users may also request correction, export, or deletion of specific data without deleting their account by
+            contacting support or their institution administrator.
+          </p>
+        </section>
+      </div>
+    </LegalShell>
+  );
+}
+
 export default function LegalPage({ type }) {
   if (type === 'terms') {
     return (
@@ -212,6 +263,7 @@ export default function LegalPage({ type }) {
   }
 
   if (type === 'support') return <SupportPage />;
+  if (type === 'account-deletion') return <AccountDeletionPage />;
 
   return (
     <LegalShell

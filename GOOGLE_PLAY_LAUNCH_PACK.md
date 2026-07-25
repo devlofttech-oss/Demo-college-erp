@@ -9,8 +9,9 @@ These pages should live on the public Collegesoft website, not inside the logged
 - Privacy Policy: `https://collegesoftapp.devlofttech.com/privacy-policy`
 - Terms And Conditions: `https://collegesoftapp.devlofttech.com/terms-and-conditions`
 - Support: `https://collegesoftapp.devlofttech.com/support`
+- Account deletion: `https://collegesoftapp.devlofttech.com/account-deletion`
 
-The live website returns HTTP 200 for all three routes.
+The live website should return HTTP 200 for all public store review routes after deployment.
 
 Important before publishing:
 
@@ -109,6 +110,7 @@ Security:
 - Data is encrypted in transit through HTTPS/Firebase services.
 - Access is controlled through Firebase Authentication and role-based permissions.
 - Users can request correction or deletion through the institution administrator or support email.
+- Account deletion requests are available at `https://collegesoftapp.devlofttech.com/account-deletion`.
 
 ## Reviewer Access
 

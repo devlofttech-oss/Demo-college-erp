@@ -217,6 +217,7 @@ export default function App() {
     '/privacy-policy': 'privacy',
     '/terms-and-conditions': 'terms',
     '/support': 'support',
+    '/account-deletion': 'account-deletion',
   };
   const normalizedPath = location.pathname !== '/' ? location.pathname.replace(/\/+$/, '') : location.pathname;
   const legalRouteType = publicLegalRoutes[normalizedPath];
