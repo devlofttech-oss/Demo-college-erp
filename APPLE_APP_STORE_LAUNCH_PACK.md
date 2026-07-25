@@ -19,7 +19,7 @@ Apple can be prepared in parallel with Google Play, but the final iOS archive re
 - Primary language: `English`
 - Category: `Education`
 - Price: `Free`
-- Support email: `hello@devlofttech.com`
+- Support email: `devlofttech@gmail.com`
 
 ## App Store Listing
 

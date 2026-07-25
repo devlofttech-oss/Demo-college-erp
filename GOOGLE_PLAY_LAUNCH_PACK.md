@@ -15,7 +15,7 @@ The live website should return HTTP 200 for all public store review routes after
 
 Important before publishing:
 
-- Support email is set to `hello@devlofttech.com`.
+- Support email is set to `devlofttech@gmail.com`.
 - Have the privacy policy reviewed for your actual company name, country, institution agreements, and student data handling.
 - Keep the privacy policy URL stable after submission. Changing it later is allowed, but it should not break.
 
@@ -67,7 +67,7 @@ college ERP, school management, parent portal, attendance, fees, notices, academ
 Contact details:
 
 ```text
-Support email: hello@devlofttech.com
+Support email: devlofttech@gmail.com
 Website: https://collegesoftapp.devlofttech.com
 Privacy policy: https://collegesoftapp.devlofttech.com/privacy-policy
 ```

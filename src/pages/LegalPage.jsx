@@ -1,7 +1,7 @@
 import collegesoftLogo from '../../assets/collegesoft.png';
 
 const effectiveDate = 'July 18, 2026';
-const supportEmail = 'hello@devlofttech.com';
+const supportEmail = 'devlofttech@gmail.com';
 const companyName = 'Collegesoft';
 
 const privacySections = [
@@ -211,6 +211,12 @@ function AccountDeletionPage() {
             To request deletion of your Collegesoft account, email <span className="font-bold">{supportEmail}</span> or
             contact your institution administrator.
           </p>
+          <a
+            href={`mailto:${supportEmail}?subject=Collegesoft account deletion request`}
+            className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#1e63f2] px-5 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(30,99,242,0.22)] transition hover:bg-[#164fc7] focus:outline-none focus:ring-4 focus:ring-[#bfd4ff]"
+          >
+            Email deletion request
+          </a>
           <p className="mt-3">
             Include your full name, role, institution name, and registered email address or phone number. Do not send
             your password.
