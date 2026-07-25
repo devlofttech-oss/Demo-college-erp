@@ -3,11 +3,30 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
-const REVIEWER_EMAIL = 'app.review.parent@devlofttech.com';
 const REVIEWER_PASSWORD = process.env.STORE_REVIEWER_PASSWORD;
-const REVIEWER_PHONE_ALIAS = '9000002026';
-const REVIEWER_NAME = 'App Review Parent';
-const REVIEWER_DISPLAY_ID = 'APP-REVIEW-PARENT';
+const reviewerAccounts = [
+  {
+    name: 'App Review Parent',
+    email: 'app.review.parent@devlofttech.com',
+    phone: '9000002026',
+    roleId: 'parent',
+    displayId: 'APP-REVIEW-PARENT',
+  },
+  {
+    name: 'App Review Staff',
+    email: 'app.review.staff@devlofttech.com',
+    phone: '9000002027',
+    roleId: 'faculty',
+    displayId: 'APP-REVIEW-STAFF',
+  },
+  {
+    name: 'App Review Admin',
+    email: 'app.review.admin@devlofttech.com',
+    phone: '9000002028',
+    roleId: 'admin',
+    displayId: 'APP-REVIEW-ADMIN',
+  },
+];
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -48,11 +67,11 @@ async function findLinkedStudent() {
   return { id: doc.id, ...doc.data() };
 }
 
-async function upsertReviewerAuthUser() {
+async function upsertReviewerAuthUser(account) {
   try {
-    const existing = await auth.getUserByEmail(REVIEWER_EMAIL);
+    const existing = await auth.getUserByEmail(account.email);
     await auth.updateUser(existing.uid, {
-      displayName: REVIEWER_NAME,
+      displayName: account.name,
       emailVerified: true,
       password: REVIEWER_PASSWORD,
       disabled: false,
@@ -61,8 +80,8 @@ async function upsertReviewerAuthUser() {
   } catch (error) {
     if (error?.code !== 'auth/user-not-found') throw error;
     const created = await auth.createUser({
-      displayName: REVIEWER_NAME,
-      email: REVIEWER_EMAIL,
+      displayName: account.name,
+      email: account.email,
       emailVerified: true,
       password: REVIEWER_PASSWORD,
       disabled: false,
@@ -71,53 +90,58 @@ async function upsertReviewerAuthUser() {
   }
 }
 
-function writeMobileAliasFile() {
+function writeMobileAliasFile(accounts) {
   const path = 'college_erp_mobile/assets/login_aliases.json';
   const aliases = existsSync(path) ? readJson(path) : {};
-  aliases[normalize(REVIEWER_EMAIL)] = REVIEWER_EMAIL;
-  aliases[REVIEWER_PHONE_ALIAS] = REVIEWER_EMAIL;
+  for (const account of accounts) {
+    aliases[normalize(account.email)] = account.email;
+    aliases[account.phone] = account.email;
+  }
   const ordered = Object.fromEntries(Object.entries(aliases).sort(([left], [right]) => left.localeCompare(right)));
   writeFileSync(path, `${JSON.stringify(ordered, null, 2)}\n`);
 }
 
 const student = await findLinkedStudent();
-const { uid, action } = await upsertReviewerAuthUser();
+for (const account of reviewerAccounts) {
+  const { uid, action } = await upsertReviewerAuthUser(account);
+  const isParent = account.roleId === 'parent';
+  const profile = {
+    uid,
+    name: account.name,
+    email: account.email,
+    authEmail: account.email,
+    phone: account.phone,
+    roleId: account.roleId,
+    displayId: account.displayId,
+    collegeIds: ['main-campus'],
+    status: 'Active',
+    linkedStudentRecordIds: isParent ? [student.id] : [],
+    linkedStudentIds: isParent && student.studentId ? [student.studentId] : [],
+    sourceCollection: 'users',
+    sourceRecordId: account.displayId,
+    managedBy: 'store-reviewer-account',
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAtText: '25 Jul 2026',
+  };
 
-const profile = {
-  uid,
-  name: REVIEWER_NAME,
-  email: REVIEWER_EMAIL,
-  authEmail: REVIEWER_EMAIL,
-  phone: REVIEWER_PHONE_ALIAS,
-  roleId: 'parent',
-  displayId: REVIEWER_DISPLAY_ID,
-  collegeIds: ['main-campus'],
-  status: 'Active',
-  linkedStudentRecordIds: [student.id],
-  linkedStudentIds: student.studentId ? [student.studentId] : [],
-  sourceCollection: 'users',
-  sourceRecordId: REVIEWER_DISPLAY_ID,
-  managedBy: 'store-reviewer-account',
-  updatedAt: FieldValue.serverTimestamp(),
-  createdAtText: '20 Jul 2026',
-};
+  await db.collection('users').doc(uid).set(profile, { merge: true });
 
-await db.collection('users').doc(uid).set(profile, { merge: true });
-await db.collection('parentPortalLinks').doc('store-review-parent-link').set({
-  parentUserId: uid,
-  parentEmail: REVIEWER_EMAIL,
-  studentRecordId: student.id,
-  studentId: student.studentId || '',
-  relationship: 'Guardian',
-  status: 'Active',
-  managedBy: 'store-reviewer-account',
-  updatedAt: FieldValue.serverTimestamp(),
-}, { merge: true });
+  if (isParent) {
+    await db.collection('parentPortalLinks').doc('store-review-parent-link').set({
+      parentUserId: uid,
+      parentEmail: account.email,
+      studentRecordId: student.id,
+      studentId: student.studentId || '',
+      relationship: 'Guardian',
+      status: 'Active',
+      managedBy: 'store-reviewer-account',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
 
-writeMobileAliasFile();
+  console.log(`${action}: ${account.email} -> ${account.roleId}`);
+}
 
-console.log(`${action}: ${REVIEWER_EMAIL} -> parent`);
+writeMobileAliasFile(reviewerAccounts);
+
 console.log(`Linked student: ${student.name || student.studentId || student.id}`);
-console.log(`Username: ${REVIEWER_EMAIL}`);
-console.log(`Password: ${REVIEWER_PASSWORD}`);
-console.log(`Phone alias: ${REVIEWER_PHONE_ALIAS}`);
