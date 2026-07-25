@@ -68,6 +68,7 @@ for (const doc of snapshot.docs) {
   if (doc.id === '__schema') continue;
   const profile = doc.data();
   if (profile.status && profile.status !== 'Active') continue;
+  if (profile.managedBy === 'store-reviewer-account') continue;
 
   const authEmail = normalize(profile.authEmail || profile.email || '');
   if (!authEmail) continue;

@@ -1,32 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 const REVIEWER_PASSWORD = process.env.STORE_REVIEWER_PASSWORD;
-const reviewerAccounts = [
-  {
-    name: 'App Review Parent',
-    email: 'app.review.parent@devlofttech.com',
-    phone: '9000002026',
-    roleId: 'parent',
-    displayId: 'APP-REVIEW-PARENT',
-  },
-  {
-    name: 'App Review Staff',
-    email: 'app.review.staff@devlofttech.com',
-    phone: '9000002027',
-    roleId: 'faculty',
-    displayId: 'APP-REVIEW-STAFF',
-  },
-  {
-    name: 'App Review Admin',
-    email: 'app.review.admin@devlofttech.com',
-    phone: '9000002028',
-    roleId: 'admin',
-    displayId: 'APP-REVIEW-ADMIN',
-  },
-];
+const reviewerAccounts = JSON.parse(process.env.STORE_REVIEWER_ACCOUNTS_JSON || '[]');
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -40,16 +18,16 @@ function getCredential() {
   throw new Error('Missing service account. Add serviceAccountKey.json or set GOOGLE_APPLICATION_CREDENTIALS.');
 }
 
-function normalize(value = '') {
-  return String(value).trim().toLowerCase();
-}
-
 if (!getApps().length) {
   initializeApp({ credential: getCredential() });
 }
 
 if (!REVIEWER_PASSWORD || REVIEWER_PASSWORD.length < 12) {
   throw new Error('Set STORE_REVIEWER_PASSWORD to the live App Store reviewer password.');
+}
+
+if (!reviewerAccounts.length) {
+  throw new Error('Set STORE_REVIEWER_ACCOUNTS_JSON to reviewer account definitions.');
 }
 
 const auth = getAuth();
@@ -88,17 +66,6 @@ async function upsertReviewerAuthUser(account) {
     });
     return { uid: created.uid, action: 'created' };
   }
-}
-
-function writeMobileAliasFile(accounts) {
-  const path = 'college_erp_mobile/assets/login_aliases.json';
-  const aliases = existsSync(path) ? readJson(path) : {};
-  for (const account of accounts) {
-    aliases[normalize(account.email)] = account.email;
-    aliases[account.phone] = account.email;
-  }
-  const ordered = Object.fromEntries(Object.entries(aliases).sort(([left], [right]) => left.localeCompare(right)));
-  writeFileSync(path, `${JSON.stringify(ordered, null, 2)}\n`);
 }
 
 const student = await findLinkedStudent();
@@ -141,7 +108,5 @@ for (const account of reviewerAccounts) {
 
   console.log(`${action}: ${account.email} -> ${account.roleId}`);
 }
-
-writeMobileAliasFile(reviewerAccounts);
 
 console.log(`Linked student: ${student.name || student.studentId || student.id}`);
