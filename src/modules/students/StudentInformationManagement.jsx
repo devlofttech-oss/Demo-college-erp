@@ -58,6 +58,7 @@ import { normalizeInstituteSettings } from '../settings/settingsModel';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 import { getParentLinkedStudents } from '../parentPortal/parentPortalUtils';
 import { calculateAssignmentPaymentLedger, formatCurrency, formatManualDueItems, formatPaymentDate, sortPaymentRecordsByDate, totalFeeComponents } from '../fees/feeUtils';
+import { formatAttendanceTimeRange } from '../attendance/attendanceUtils';
 
 const AcademicsManagement = lazy(() => import('../academics/AcademicsManagement'));
 const AttendanceManagement = lazy(() => import('../attendance/AttendanceManagement'));
@@ -1266,15 +1267,18 @@ function StudentDetailPage({
   const attendanceSubjectRows = Object.values(subjectAttendanceRecords.reduce((map, record) => {
     const subject = record.subjectName || record.subject;
     if (!subject) return map;
-    const row = map[subject] || { subject, total: 0, present: 0, absent: 0, leave: 0 };
+    const row = map[subject] || { subject, total: 0, present: 0, absent: 0, leave: 0, timeRanges: new Set() };
     row.total += 1;
     if (record.status === 'Present') row.present += 1;
     if (record.status === 'Absent') row.absent += 1;
     if (['Leave', 'On Leave'].includes(record.status)) row.leave += 1;
+    const timeRange = formatAttendanceTimeRange(record);
+    if (timeRange) row.timeRanges.add(timeRange);
     map[subject] = row;
     return map;
   }, {})).map((row) => ({
     ...row,
+    timeRanges: [...row.timeRanges],
     percentage: row.total ? Math.round((row.present / row.total) * 100) : 0,
   }));
 
@@ -1567,7 +1571,10 @@ function StudentDetailPage({
                 ? attendanceSubjectRows.map((row) => renderProgressRow({
                   id: row.subject,
                   label: row.subject,
-                  helper: `Present ${row.present} | Absent ${row.absent} | Leave ${row.leave} | Total ${row.total}`,
+                  helper: [
+                    `Present ${row.present} | Absent ${row.absent} | Leave ${row.leave} | Total ${row.total}`,
+                    row.timeRanges.length ? `Sessions ${row.timeRanges.slice(0, 2).join(', ')}${row.timeRanges.length > 2 ? ` +${row.timeRanges.length - 2}` : ''}` : '',
+                  ].filter(Boolean).join(' | '),
                   value: `${row.percentage}%`,
                   percentage: row.percentage,
                   status: row.total ? `${row.present}/${row.total}` : '0/0',

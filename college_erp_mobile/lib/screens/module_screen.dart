@@ -19,6 +19,65 @@ import '../widgets/mobile_chrome.dart';
 String _attendanceDisplayDate(DateTime date) =>
     DateFormat('dd MMM yyyy').format(date);
 
+String _attendanceTimeText(TimeOfDay time) {
+  return '${time.hour.toString().padLeft(2, '0')}:'
+      '${time.minute.toString().padLeft(2, '0')}';
+}
+
+TimeOfDay? _parseAttendanceTime(String value) {
+  final parts = value.trim().split(':');
+  if (parts.length != 2) return null;
+  final hour = int.tryParse(parts[0]);
+  final minute = int.tryParse(parts[1]);
+  if (hour == null || minute == null) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return TimeOfDay(hour: hour, minute: minute);
+}
+
+int? _attendanceTimeMinutes(String value) {
+  final time = _parseAttendanceTime(value);
+  if (time == null) return null;
+  return time.hour * 60 + time.minute;
+}
+
+bool _attendanceTimeRangeValid(String openingTime, String closingTime) {
+  final openingMinutes = _attendanceTimeMinutes(openingTime);
+  final closingMinutes = _attendanceTimeMinutes(closingTime);
+  return openingMinutes != null &&
+      closingMinutes != null &&
+      closingMinutes > openingMinutes;
+}
+
+String _attendanceTimeRange(String openingTime, String closingTime) {
+  return _attendanceTimeRangeValid(openingTime, closingTime)
+      ? '$openingTime - $closingTime'
+      : '';
+}
+
+String _attendanceRecordTimeRange(Map<String, dynamic>? record) {
+  if (record == null) return '';
+  final openingTime = readText(record, const [
+    'openingTime',
+    'sessionOpeningTime',
+    'startTime',
+  ], fallback: '');
+  final closingTime = readText(record, const [
+    'closingTime',
+    'sessionClosingTime',
+    'endTime',
+  ], fallback: '');
+  return _attendanceTimeRange(openingTime, closingTime);
+}
+
+bool _attendanceRecordMatchesTimeRange(
+  Map<String, dynamic> record,
+  String openingTime,
+  String closingTime,
+) {
+  return _attendanceRecordTimeRange(record) ==
+      _attendanceTimeRange(openingTime, closingTime);
+}
+
 const _curriculumEventTypes = [
   'Academic',
   'Exam',
@@ -99,7 +158,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
   var _attendanceBranch = '';
   var _attendanceMode = 'students';
   var _attendanceScope = 'subject';
+  var _attendanceSemester = '';
   var _attendanceSubjectCode = '';
+  var _attendanceFacultyId = '';
+  var _attendanceOpeningTime = '';
+  var _attendanceClosingTime = '';
+  var _attendanceTopic = '';
   var _attendanceSelectedEntityId = '';
   DateTime _attendanceSelectedDate = DateTime.now();
   var _timetableStatusView = 'active';
@@ -1316,6 +1380,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
     final dateText = _attendanceDisplayDate(_attendanceSelectedDate);
     final subjectOptions = _attendanceSubjectOptions(data);
     final selectedSubject = _selectedAttendanceSubject(subjectOptions);
+    final semesterOptions = _attendanceSemesterOptions(data, students);
+    final facultyOptions = _attendanceFacultyOptions(data);
+    final selectedFaculty = _selectedAttendanceFaculty(facultyOptions);
     final subjectName =
         _attendanceMode == 'students' && _attendanceScope == 'subject'
         ? selectedSubject?.name ?? ''
@@ -1342,7 +1409,29 @@ class _ModuleScreenState extends State<ModuleScreen> {
     final canMark = _attendanceMode == 'students'
         ? canMarkStudents
         : canMarkStaff;
-    final roster = _attendanceMode == 'students' ? students : staff;
+    final roster = _attendanceMode == 'students'
+        ? students
+              .where(
+                (student) =>
+                    _attendanceSemester.isEmpty ||
+                    _attendanceEntityMatchesSemester(
+                      student,
+                      _attendanceSemester,
+                    ),
+              )
+              .toList()
+        : staff;
+    final subjectSessionReady =
+        _attendanceMode != 'students' ||
+        _attendanceScope != 'subject' ||
+        (selectedSubject != null &&
+            _attendanceSemester.isNotEmpty &&
+            selectedFaculty != null &&
+            _attendanceTimeRangeValid(
+              _attendanceOpeningTime,
+              _attendanceClosingTime,
+            ) &&
+            _attendanceTopic.trim().isNotEmpty);
     final activeBranchTitle = _attendanceBranch == 'mark-general-students'
         ? 'Mark General Attendance'
         : _attendanceBranch == 'mark-staff'
@@ -1509,6 +1598,30 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         _attendanceScope == 'subject') ...[
                       DropdownButtonFormField<String>(
                         isExpanded: true,
+                        initialValue: semesterOptions.contains(_attendanceSemester)
+                            ? _attendanceSemester
+                            : null,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.school_rounded, size: 18),
+                          labelText: 'Semester',
+                        ),
+                        items: semesterOptions
+                            .map(
+                              (semester) => DropdownMenuItem(
+                                value: semester,
+                                child: _DropdownItemText(semester),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setState(() {
+                          _attendanceSemester = value ?? '';
+                          _attendanceSubjectCode = '';
+                          _attendanceTopic = '';
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue:
                             subjectOptions.any(
                               (option) => option.code == _attendanceSubjectCode,
@@ -1528,8 +1641,71 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             )
                             .toList(),
                         onChanged: (value) => setState(
-                          () => _attendanceSubjectCode = value ?? '',
+                          () {
+                            _attendanceSubjectCode = value ?? '';
+                            _attendanceTopic = '';
+                          },
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue:
+                            facultyOptions.any(
+                              (option) => option.id == _attendanceFacultyId,
+                            )
+                            ? _attendanceFacultyId
+                            : null,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.person_rounded, size: 18),
+                          labelText: 'Faculty',
+                        ),
+                        items: facultyOptions
+                            .map(
+                              (option) => DropdownMenuItem(
+                                value: option.id,
+                                child: _DropdownItemText(option.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) => setState(
+                          () => _attendanceFacultyId = value ?? '',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _AttendanceTimeButton(
+                              label: 'Opening Time',
+                              value: _attendanceOpeningTime,
+                              onPressed: () => _pickAttendanceSessionTime(
+                                isOpening: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _AttendanceTimeButton(
+                              label: 'Closing Time',
+                              value: _attendanceClosingTime,
+                              onPressed: () => _pickAttendanceSessionTime(
+                                isOpening: false,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: ValueKey('attendance-topic-$_attendanceBranch'),
+                        initialValue: _attendanceTopic,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.topic_rounded, size: 18),
+                          labelText: 'Topic',
+                        ),
+                        onChanged: (value) =>
+                            setState(() => _attendanceTopic = value),
                       ),
                       const SizedBox(height: 12),
                     ],
@@ -1572,12 +1748,18 @@ class _ModuleScreenState extends State<ModuleScreen> {
                           entity,
                           dateText: dateText,
                           subjectName: subjectName,
+                          openingTime:
+                              _attendanceMode == 'students' &&
+                                  _attendanceScope == 'subject'
+                              ? _attendanceOpeningTime
+                              : '',
+                          closingTime:
+                              _attendanceMode == 'students' &&
+                                  _attendanceScope == 'subject'
+                              ? _attendanceClosingTime
+                              : '',
                         );
                         final editable = _isAttendanceRecordEditable(record);
-                        final subjectReady =
-                            _attendanceMode != 'students' ||
-                            _attendanceScope != 'subject' ||
-                            selectedSubject != null;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _AttendanceRosterCard(
@@ -1587,7 +1769,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                             selected:
                                 readText(entity, const ['id'], fallback: '') ==
                                 _attendanceSelectedEntityId,
-                            canMark: canMark && subjectReady,
+                            canMark: canMark && subjectSessionReady,
                             editable: editable,
                             onTap: () => setState(
                               () => _attendanceSelectedEntityId = readText(
@@ -1625,7 +1807,20 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                   ]),
                                 ),
                                 subtitle:
-                                    '${_attendanceRecordDateText(record)} / ${readText(record, const ['subjectName', 'attendanceScope'], fallback: _attendanceMode == 'students' ? 'General' : 'Staff')}',
+                                    [
+                                      _attendanceRecordDateText(record),
+                                      readText(
+                                        record,
+                                        const [
+                                          'subjectName',
+                                          'attendanceScope',
+                                        ],
+                                        fallback: _attendanceMode == 'students'
+                                            ? 'General'
+                                            : 'Staff',
+                                      ),
+                                      _attendanceRecordTimeRange(record),
+                                    ].where((item) => item.isNotEmpty).join(' / '),
                                 trailing: StatusPill(
                                   label: readText(record, const [
                                     'status',
@@ -1683,7 +1878,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
       ], fallback: name);
       byCode[code] = _AttendanceSubjectOption(code, name);
     }
-    return byCode.values.toList();
+    final options = byCode.values.toList()
+      ..sort((first, second) => first.name.compareTo(second.name));
+    return options;
   }
 
   _AttendanceSubjectOption? _selectedAttendanceSubject(
@@ -1691,6 +1888,136 @@ class _ModuleScreenState extends State<ModuleScreen> {
   ) {
     for (final option in options) {
       if (option.code == _attendanceSubjectCode) return option;
+    }
+    return null;
+  }
+
+  List<String> _attendanceSemesterOptions(
+    Map<String, List<Map<String, dynamic>>> data,
+    List<Map<String, dynamic>> students,
+  ) {
+    final values = <String>{};
+    void addValue(String value) {
+      final normalized = value.trim();
+      if (normalized.isNotEmpty) values.add(normalized);
+    }
+
+    for (final student in students) {
+      addValue(
+        readText(student, const [
+          'semester',
+          'semesterLabel',
+          'className',
+          'courseYear',
+          'yearLabel',
+        ], fallback: ''),
+      );
+    }
+    for (final subject in _items(data, 'academicSubjects')) {
+      addValue(
+        readText(subject, const [
+          'semester',
+          'semesterLabel',
+          'displayPeriod',
+          'classKey',
+        ], fallback: ''),
+      );
+    }
+
+    return values.toList()..sort((first, second) => first.compareTo(second));
+  }
+
+  bool _attendanceEntityMatchesSemester(
+    Map<String, dynamic> entity,
+    String semester,
+  ) {
+    final target = semester.trim().toLowerCase();
+    if (target.isEmpty) return true;
+    return [
+      'semester',
+      'semesterLabel',
+      'className',
+      'courseYear',
+      'yearLabel',
+    ].any((key) {
+      return readText(entity, [key], fallback: '').trim().toLowerCase() ==
+          target;
+    });
+  }
+
+  List<_AttendanceFacultyOption> _attendanceFacultyOptions(
+    Map<String, List<Map<String, dynamic>>> data,
+  ) {
+    final byId = <String, _AttendanceFacultyOption>{};
+    void addOption({String id = '', String employeeId = '', String name = ''}) {
+      final normalizedName = name.trim();
+      if (normalizedName.isEmpty) return;
+      final normalizedId = id.trim().isEmpty ? normalizedName : id.trim();
+      byId.putIfAbsent(
+        normalizedId,
+        () => _AttendanceFacultyOption(
+          id: normalizedId,
+          employeeId: employeeId.trim(),
+          name: normalizedName,
+        ),
+      );
+    }
+
+    for (final member in _attendanceStaff(data)) {
+      addOption(
+        id: readText(member, const ['id', 'employeeId'], fallback: ''),
+        employeeId: readText(member, const ['employeeId'], fallback: ''),
+        name: readText(member, const ['name'], fallback: ''),
+      );
+    }
+    for (final subject in _items(data, 'academicSubjects')) {
+      addOption(
+        id: readText(subject, const [
+          'facultyRecordId',
+          'facultyId',
+        ], fallback: ''),
+        employeeId: readText(subject, const ['facultyId'], fallback: ''),
+        name: readText(subject, const ['facultyName'], fallback: ''),
+      );
+    }
+    for (final entry in _items(data, 'timetableEntries')) {
+      addOption(
+        id: readText(entry, const [
+          'facultyRecordId',
+          'facultyId',
+        ], fallback: ''),
+        employeeId: readText(entry, const ['facultyId'], fallback: ''),
+        name: readText(entry, const ['facultyName'], fallback: ''),
+      );
+    }
+    for (final record in _items(data, 'studentAttendance')) {
+      addOption(
+        id: readText(record, const [
+          'facultyRecordId',
+          'facultyId',
+        ], fallback: ''),
+        employeeId: readText(record, const ['facultyId'], fallback: ''),
+        name: readText(record, const ['facultyName'], fallback: ''),
+      );
+    }
+    if (widget.user.roleId == 'faculty') {
+      addOption(
+        id: widget.user.uid,
+        employeeId: widget.user.displayId,
+        name: widget.user.name.isEmpty ? widget.user.email : widget.user.name,
+      );
+    }
+
+    final options = byId.values.toList()
+      ..sort((first, second) => first.name.compareTo(second.name));
+    return options;
+  }
+
+  _AttendanceFacultyOption? _selectedAttendanceFaculty(
+    List<_AttendanceFacultyOption> options,
+  ) {
+    for (final option in options) {
+      if (option.id == _attendanceFacultyId) return option;
     }
     return null;
   }
@@ -1706,8 +2033,17 @@ class _ModuleScreenState extends State<ModuleScreen> {
         'subject',
       ], fallback: '');
       if (_attendanceScope == 'general') return recordSubject.isEmpty;
-      if (subjectName.isEmpty) return recordSubject.isNotEmpty;
-      return recordSubject == subjectName;
+      if (subjectName.isEmpty) return false;
+      return recordSubject == subjectName &&
+          _attendanceTimeRangeValid(
+            _attendanceOpeningTime,
+            _attendanceClosingTime,
+          ) &&
+          _attendanceRecordMatchesTimeRange(
+            record,
+            _attendanceOpeningTime,
+            _attendanceClosingTime,
+          );
     }).toList();
   }
 
@@ -1736,6 +2072,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
     Map<String, dynamic> entity, {
     required String dateText,
     required String subjectName,
+    String openingTime = '',
+    String closingTime = '',
   }) {
     final entityRecordId = readText(entity, const ['id'], fallback: '');
     final entityId = readText(entity, const [
@@ -1763,8 +2101,17 @@ class _ModuleScreenState extends State<ModuleScreen> {
           _attendanceMode == 'staff' || _attendanceScope == 'general'
           ? recordSubject.isEmpty
           : recordSubject == subjectName;
+      final sameTime =
+          _attendanceMode != 'students' || _attendanceScope != 'subject'
+          ? true
+          : _attendanceRecordMatchesTimeRange(
+              record,
+              openingTime,
+              closingTime,
+            );
       if (sameEntity &&
           sameSubject &&
+          sameTime &&
           _attendanceRecordDateText(record) == dateText) {
         return record;
       }
@@ -1801,6 +2148,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       _attendanceBranch = '';
       _attendanceMode = mode;
       _attendanceScope = mode == 'students' ? 'subject' : 'staff';
+      if (mode == 'students') _resetAttendanceSessionFields();
       _attendanceSelectedEntityId = '';
     });
   }
@@ -1815,6 +2163,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
       _attendanceBranch = branch;
       _attendanceMode = mode;
       _attendanceScope = scope;
+      if (mode == 'students' && scope == 'subject') {
+        _resetAttendanceSessionFields();
+      }
       _attendanceSelectedEntityId = '';
     });
   }
@@ -1823,14 +2174,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
     setState(() {
       if (_attendanceBranch.isNotEmpty) {
         _attendanceBranch = '';
+        if (_attendanceMode == 'students' && _attendanceScope == 'subject') {
+          _resetAttendanceSessionFields();
+        }
         _attendanceSelectedEntityId = '';
       } else {
         _attendanceTask = '';
         _attendanceMode = 'students';
         _attendanceScope = 'subject';
+        _resetAttendanceSessionFields();
         _attendanceSelectedEntityId = '';
       }
     });
+  }
+
+  void _resetAttendanceSessionFields() {
+    _attendanceSemester = '';
+    _attendanceSubjectCode = '';
+    _attendanceFacultyId = '';
+    _attendanceOpeningTime = '';
+    _attendanceClosingTime = '';
+    _attendanceTopic = '';
   }
 
   Future<void> _pickAttendanceDate() async {
@@ -1842,6 +2206,24 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
     if (picked == null || !mounted) return;
     setState(() => _attendanceSelectedDate = picked);
+  }
+
+  Future<void> _pickAttendanceSessionTime({required bool isOpening}) async {
+    final currentValue = isOpening
+        ? _attendanceOpeningTime
+        : _attendanceClosingTime;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _parseAttendanceTime(currentValue) ?? TimeOfDay.now(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isOpening) {
+        _attendanceOpeningTime = _attendanceTimeText(picked);
+      } else {
+        _attendanceClosingTime = _attendanceTimeText(picked);
+      }
+    });
   }
 
   Future<void> _markAttendanceEntity(
@@ -1864,6 +2246,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
     }
     final subjectOptions = _attendanceSubjectOptions(data);
     final selectedSubject = _selectedAttendanceSubject(subjectOptions);
+    final facultyOptions = _attendanceFacultyOptions(data);
+    final selectedFaculty = _selectedAttendanceFaculty(facultyOptions);
     if (isStudentMode &&
         _attendanceScope == 'subject' &&
         selectedSubject == null) {
@@ -1875,10 +2259,60 @@ class _ModuleScreenState extends State<ModuleScreen> {
       );
       return;
     }
+    if (isStudentMode &&
+        _attendanceScope == 'subject' &&
+        _attendanceSemester.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select a semester before marking attendance.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (isStudentMode &&
+        _attendanceScope == 'subject' &&
+        selectedFaculty == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select the faculty before marking attendance.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (isStudentMode &&
+        _attendanceScope == 'subject' &&
+        !_attendanceTimeRangeValid(
+          _attendanceOpeningTime,
+          _attendanceClosingTime,
+        )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select opening and closing times in order.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (isStudentMode &&
+        _attendanceScope == 'subject' &&
+        _attendanceTopic.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter the topic before marking attendance.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     final dateText = _attendanceDisplayDate(_attendanceSelectedDate);
     final subjectName = isStudentMode && _attendanceScope == 'subject'
         ? selectedSubject?.name ?? ''
+        : '';
+    final timeRange = isStudentMode && _attendanceScope == 'subject'
+        ? _attendanceTimeRange(_attendanceOpeningTime, _attendanceClosingTime)
         : '';
     final sourceRecords = isStudentMode
         ? _items(data, 'studentAttendance')
@@ -1888,6 +2322,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
       entity,
       dateText: dateText,
       subjectName: subjectName,
+      openingTime: isStudentMode && _attendanceScope == 'subject'
+          ? _attendanceOpeningTime
+          : '',
+      closingTime: isStudentMode && _attendanceScope == 'subject'
+          ? _attendanceClosingTime
+          : '',
     );
     final entityRecordId = readText(entity, const ['id'], fallback: '');
     final entityId = readText(entity, const [
@@ -1955,6 +2395,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
             'academicYear': _academicYear.trim(),
           'className': readText(entity, const ['className'], fallback: ''),
           'section': readText(entity, const ['section'], fallback: ''),
+          if (isStudentMode) 'semester': _attendanceSemester.trim(),
           'department': readText(entity, const ['department'], fallback: ''),
           'courseCode': readText(entity, const ['courseCode'], fallback: ''),
           'courseName': readText(entity, const [
@@ -1966,6 +2407,20 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ? selectedSubject?.code ?? ''
               : '',
           'subjectName': subjectName,
+          if (isStudentMode && _attendanceScope == 'subject')
+            'facultyRecordId': selectedFaculty?.id ?? '',
+          if (isStudentMode && _attendanceScope == 'subject')
+            'facultyId': selectedFaculty?.employeeId ?? '',
+          if (isStudentMode && _attendanceScope == 'subject')
+            'facultyName': selectedFaculty?.name ?? '',
+          if (isStudentMode && _attendanceScope == 'subject')
+            'openingTime': _attendanceOpeningTime,
+          if (isStudentMode && _attendanceScope == 'subject')
+            'closingTime': _attendanceClosingTime,
+          if (isStudentMode && _attendanceScope == 'subject')
+            'timeRange': timeRange,
+          if (isStudentMode && _attendanceScope == 'subject')
+            'topic': _attendanceTopic.trim(),
           'dateText': dateText,
           'status': status,
           'markedAtText': _attendanceDisplayDate(DateTime.now()),
@@ -15099,6 +15554,18 @@ class _AttendanceSubjectOption {
   final String name;
 }
 
+class _AttendanceFacultyOption {
+  const _AttendanceFacultyOption({
+    required this.id,
+    required this.employeeId,
+    required this.name,
+  });
+
+  final String id;
+  final String employeeId;
+  final String name;
+}
+
 class _AttendanceSummary {
   const _AttendanceSummary({
     required this.total,
@@ -15253,6 +15720,37 @@ class _BackActionButton extends StatelessWidget {
   }
 }
 
+class _AttendanceTimeButton extends StatelessWidget {
+  const _AttendanceTimeButton({
+    required this.label,
+    required this.value,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.access_time_rounded, size: 17),
+      label: Text(
+        value.isEmpty ? label : value,
+        overflow: TextOverflow.ellipsis,
+      ),
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        minimumSize: const Size.fromHeight(52),
+        foregroundColor: AppColors.ink,
+        side: const BorderSide(color: AppColors.line),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+}
+
 class _AttendanceTaskCard extends StatelessWidget {
   const _AttendanceTaskCard({
     required this.title,
@@ -15365,6 +15863,7 @@ class _AttendanceRosterCard extends StatelessWidget {
     final subtitle = mode == 'students'
         ? '${readText(entity, const ['className', 'courseName'], fallback: 'Class')} / ${readText(entity, const ['section', 'courseCode'], fallback: entityId)}'
         : '${readText(entity, const ['department'], fallback: 'Department')} / ${readText(entity, const ['designation'], fallback: 'Designation')}';
+    final timeRange = _attendanceRecordTimeRange(record);
 
     Widget statusButton(String label, IconData icon, Color color) {
       final active = status == label;
@@ -15420,7 +15919,10 @@ class _AttendanceRosterCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$entityId / $subtitle',
+                        [
+                          '$entityId / $subtitle',
+                          timeRange,
+                        ].where((item) => item.isNotEmpty).join(' / '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

@@ -18,6 +18,7 @@ import LeaveModal from './components/LeaveModal';
 import StaffModal from './components/StaffModal';
 import StaffProfilePanel from './components/StaffProfilePanel';
 import StaffTable from './components/StaffTable';
+import { formatAttendanceTimeRange } from '../attendance/attendanceUtils';
 import { filterByCourse } from '../shared/courseFilters';
 
 function StaffDetailPage({
@@ -104,6 +105,7 @@ function StaffDetailPage({
                 <thead className="bg-[#f5f5f6] text-slate-500">
                   <tr>
                     <th className="px-4 py-3 text-left font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left font-semibold">Time</th>
                     <th className="px-4 py-3 text-left font-semibold">Semester / Class</th>
                     <th className="px-4 py-3 text-left font-semibold">Subject</th>
                     <th className="px-4 py-3 text-left font-semibold">Topic</th>
@@ -113,6 +115,7 @@ function StaffDetailPage({
                   {topicRows.map((record) => (
                     <tr key={record.id}>
                       <td className="px-4 py-3 font-semibold text-slate-800">{record.dateText || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatAttendanceTimeRange(record) || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{record.semester || record.className || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{record.subjectName || '-'}</td>
                       <td className="px-4 py-3 text-slate-700">{record.topic || '-'}</td>

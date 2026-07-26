@@ -12,8 +12,12 @@ import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import {
   buildAttendanceKey,
+  formatAttendanceTimeRange,
   formatDisplayDate,
+  isAttendanceTimeRangeValid,
   isAttendanceRecordEditable,
+  normalizeAttendanceTime,
+  recordMatchesAttendanceTimeRange,
   summarizeAttendance,
 } from './attendanceUtils';
 import AttendanceTable from './components/AttendanceTable';
@@ -122,6 +126,8 @@ export default function AttendanceManagement({
   const [selectedEntityId, setSelectedEntityId] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('');
   const [selectedFacultyId, setSelectedFacultyId] = useState('');
+  const [openingTime, setOpeningTime] = useState('');
+  const [closingTime, setClosingTime] = useState('');
   const [topic, setTopic] = useState('');
   const [draftAttendance, setDraftAttendance] = useState({ contextKey: '', statuses: {} });
   const [savingDraft, setSavingDraft] = useState(false);
@@ -251,6 +257,9 @@ export default function AttendanceManagement({
   const topicDatalistId = selectedSubject?.code
     ? `attendance-topic-${selectedSubject.code.replace(/[^a-z0-9_-]/gi, '-')}`
     : 'attendance-topic-suggestions';
+  const selectedOpeningTime = normalizeAttendanceTime(openingTime);
+  const selectedClosingTime = normalizeAttendanceTime(closingTime);
+  const selectedTimeRange = formatAttendanceTimeRange(selectedOpeningTime, selectedClosingTime);
   const courseStudentAttendance = filterStudentScopedRecords(studentAttendance, semesterStudents, selectedCourseCode, selectedCourse);
   const allModeRecords = mode === 'students' ? courseStudentAttendance : staffAttendance;
   const isSubjectStudentAttendance = mode === 'students' && Boolean(activeAttendanceBranch) && studentAttendanceScope === 'subject';
@@ -260,7 +269,11 @@ export default function AttendanceManagement({
       const recordSubject = record.subjectName || record.subject || '';
       if (selectedSemester && !recordMatchesSemester(record, selectedSemester)) return false;
       if (isGeneralStudentAttendance) return !recordSubject;
-      if (isSubjectStudentAttendance) return !selectedSubject?.name || recordSubject === selectedSubject.name;
+      if (isSubjectStudentAttendance) {
+        return Boolean(selectedSubject?.name && selectedTimeRange)
+          && recordSubject === selectedSubject.name
+          && recordMatchesAttendanceTimeRange(record, selectedOpeningTime, selectedClosingTime);
+      }
       return true;
     })
     : allModeRecords;
@@ -283,6 +296,8 @@ export default function AttendanceManagement({
     selectedFacultyId,
     selectedSemester,
     selectedSubjectCode,
+    selectedOpeningTime,
+    selectedClosingTime,
     studentAttendanceScope,
   ].join('|');
   const draftStatuses = draftAttendance.contextKey === attendanceDraftContextKey ? draftAttendance.statuses : {};
@@ -322,6 +337,14 @@ export default function AttendanceManagement({
     setSearch('');
     setMode(nextMode);
     setStudentAttendanceScope(nextScope);
+    if (nextMode === 'students' && nextScope === 'subject') {
+      setSelectedSemester('');
+      setSelectedSubjectCode('');
+      setSelectedFacultyId('');
+      setOpeningTime('');
+      setClosingTime('');
+      setTopic('');
+    }
     window.history.pushState({ ...(window.history.state || {}), attendanceFlow: { task: activeAttendanceTask, branch: branchId, mode: nextMode, scope: nextScope } }, '');
   };
 
@@ -385,6 +408,18 @@ export default function AttendanceManagement({
       toast.error('Select the faculty member before saving subject attendance.');
       return false;
     }
+    if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedOpeningTime) {
+      toast.error('Select the opening time before saving subject attendance.');
+      return false;
+    }
+    if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedClosingTime) {
+      toast.error('Select the closing time before saving subject attendance.');
+      return false;
+    }
+    if (mode === 'students' && studentAttendanceScope === 'subject' && !isAttendanceTimeRangeValid(selectedOpeningTime, selectedClosingTime)) {
+      toast.error('Closing time must be after opening time.');
+      return false;
+    }
     if (mode === 'students' && studentAttendanceScope === 'subject' && !topic.trim()) {
       toast.error('Enter the class topic before saving subject attendance.');
       return false;
@@ -399,8 +434,20 @@ export default function AttendanceManagement({
   const findExistingAttendanceRecord = (entity) => {
     const entityId = entity.studentId || entity.employeeId;
     const subjectName = getAttendanceSubjectName();
-    const key = buildAttendanceKey(entityId, selectedDate, subjectName);
-    return allModeRecords.find((record) => buildAttendanceKey(record.entityId || record.studentId || record.employeeId, record.dateText, record.subjectName || record.subject || '') === key);
+    const key = buildAttendanceKey(
+      entityId,
+      selectedDate,
+      subjectName,
+      mode === 'students' && studentAttendanceScope === 'subject' ? selectedOpeningTime : '',
+      mode === 'students' && studentAttendanceScope === 'subject' ? selectedClosingTime : ''
+    );
+    return allModeRecords.find((record) => buildAttendanceKey(
+      record.entityId || record.studentId || record.employeeId,
+      record.dateText,
+      record.subjectName || record.subject || '',
+      mode === 'students' && studentAttendanceScope === 'subject' ? record.openingTime || record.sessionOpeningTime || record.startTime : '',
+      mode === 'students' && studentAttendanceScope === 'subject' ? record.closingTime || record.sessionClosingTime || record.endTime : ''
+    ) === key);
   };
 
   const markAttendance = (entity, status) => {
@@ -459,6 +506,12 @@ export default function AttendanceManagement({
     setActiveAttendanceBranch('');
     setSelectedEntityId('');
     setSearch('');
+    setSelectedSemester('');
+    setSelectedSubjectCode('');
+    setSelectedFacultyId('');
+    setOpeningTime('');
+    setClosingTime('');
+    setTopic('');
     clearScopedDraftStatuses();
     window.history.replaceState({
       ...(window.history.state || {}),
@@ -504,6 +557,9 @@ export default function AttendanceManagement({
       facultyRecordId: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.id || '' : '',
       facultyId: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.employeeId || '' : '',
       facultyName: mode === 'students' && studentAttendanceScope === 'subject' ? selectedFaculty?.name || '' : '',
+      openingTime: mode === 'students' && studentAttendanceScope === 'subject' ? selectedOpeningTime : '',
+      closingTime: mode === 'students' && studentAttendanceScope === 'subject' ? selectedClosingTime : '',
+      timeRange: mode === 'students' && studentAttendanceScope === 'subject' ? selectedTimeRange : '',
       topic: mode === 'students' && studentAttendanceScope === 'subject' ? normalizedTopic : '',
       syllabusTopic: mode === 'students' && studentAttendanceScope === 'subject' ? matchedTopic : '',
       syllabusTopicMatched: mode === 'students' && studentAttendanceScope === 'subject' ? Boolean(matchedTopic) : false,
@@ -553,6 +609,8 @@ export default function AttendanceManagement({
         selectedDateInput,
         selectedSemester,
         selectedSubjectCode,
+        selectedOpeningTime,
+        selectedClosingTime,
         draftRows.length,
         now.getTime(),
       ].filter(Boolean).join('-').replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
@@ -734,7 +792,7 @@ export default function AttendanceManagement({
           )}
 
           {mode === 'students' && (
-            <div className="erp-attendance-context-panel mb-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
+            <div className="erp-attendance-context-panel mb-4 grid md:grid-cols-2 xl:grid-cols-6 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
               <label className="erp-attendance-field">
                 <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Semester</span>
                 <select
@@ -746,7 +804,7 @@ export default function AttendanceManagement({
                   }}
                   className="erp-attendance-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                 >
-                  <option value="">All semesters</option>
+                  <option value="">{studentAttendanceScope === 'subject' ? 'Select Semester' : 'All semesters'}</option>
                   {semesterOptions.map((semester) => (
                     <option key={semester.value} value={semester.value}>{semester.label}</option>
                   ))}
@@ -782,6 +840,24 @@ export default function AttendanceManagement({
                         <option key={member.id} value={member.id}>{member.name}</option>
                       ))}
                     </select>
+                  </label>
+                  <label className="erp-attendance-field">
+                    <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Opening Time</span>
+                    <input
+                      type="time"
+                      value={openingTime}
+                      onChange={(event) => setOpeningTime(event.target.value)}
+                      className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    />
+                  </label>
+                  <label className="erp-attendance-field">
+                    <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Closing Time</span>
+                    <input
+                      type="time"
+                      value={closingTime}
+                      onChange={(event) => setClosingTime(event.target.value)}
+                      className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                    />
                   </label>
                   <label className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>

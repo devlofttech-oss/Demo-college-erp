@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
+import { formatAttendanceTimeRange } from '../attendanceUtils';
 
 function AttendanceStatusControl({ canMark, record, entity, onMark, recordEditable = true }) {
   const currentStatus = record?.status || '';
@@ -78,6 +79,7 @@ function AttendanceTable({
             const draftStatus = draftStatuses[entityId];
             const effectiveRecord = draftStatus ? { ...(record || {}), status: draftStatus, isDraft: true } : record;
             const recordEditable = isRecordEditable ? isRecordEditable(record) : true;
+            const timeRange = formatAttendanceTimeRange(effectiveRecord || {});
             return (
               <tr
                 key={entity.id}
@@ -87,6 +89,7 @@ function AttendanceTable({
                 <td className="px-5 py-4 rounded-l-lg">
                   <div className="font-bold text-slate-900">{entity.name}</div>
                   <div className="text-xs text-slate-500">{entityId}</div>
+                  {timeRange && <div className="text-xs font-semibold text-slate-500">{timeRange}</div>}
                 </td>
                 <td className="px-5 py-4">
                   <AttendanceStatusControl

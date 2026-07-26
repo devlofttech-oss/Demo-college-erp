@@ -16,8 +16,51 @@ export function getYearKey(dateText = '') {
   return parts.length === 3 ? parts[2] : dateText;
 }
 
-export function buildAttendanceKey(entityId, dateText, subjectName = '') {
-  return [entityId, dateText, subjectName].filter(Boolean).join('-');
+export function normalizeAttendanceTime(value = '') {
+  const trimmed = String(value || '').trim();
+  const match = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (!match) return '';
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return '';
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+export function getAttendanceTimeMinutes(value = '') {
+  const normalized = normalizeAttendanceTime(value);
+  if (!normalized) return null;
+  const [hours, minutes] = normalized.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+export function isAttendanceTimeRangeValid(openingTime = '', closingTime = '') {
+  const openingMinutes = getAttendanceTimeMinutes(openingTime);
+  const closingMinutes = getAttendanceTimeMinutes(closingTime);
+  return openingMinutes !== null && closingMinutes !== null && closingMinutes > openingMinutes;
+}
+
+export function formatAttendanceTimeRange(recordOrOpeningTime = '', closingTime = '') {
+  const opening = typeof recordOrOpeningTime === 'object'
+    ? normalizeAttendanceTime(recordOrOpeningTime.openingTime || recordOrOpeningTime.sessionOpeningTime || recordOrOpeningTime.startTime)
+    : normalizeAttendanceTime(recordOrOpeningTime);
+  const closing = typeof recordOrOpeningTime === 'object'
+    ? normalizeAttendanceTime(recordOrOpeningTime.closingTime || recordOrOpeningTime.sessionClosingTime || recordOrOpeningTime.endTime)
+    : normalizeAttendanceTime(closingTime);
+  return opening && closing ? `${opening} - ${closing}` : '';
+}
+
+export function recordMatchesAttendanceTimeRange(record = {}, openingTime = '', closingTime = '') {
+  return formatAttendanceTimeRange(record) === formatAttendanceTimeRange(openingTime, closingTime);
+}
+
+export function buildAttendanceKey(entityId, dateText, subjectName = '', openingTime = '', closingTime = '') {
+  return [
+    entityId,
+    dateText,
+    subjectName,
+    normalizeAttendanceTime(openingTime),
+    normalizeAttendanceTime(closingTime),
+  ].filter(Boolean).join('-');
 }
 
 export function getAttendanceMarkedAt(record = {}) {

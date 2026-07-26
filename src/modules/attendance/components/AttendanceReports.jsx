@@ -1,11 +1,15 @@
 import StatusBadge from '../../students/components/StatusBadge';
-import { buildReport, buildSemesterReport, buildSubjectReport, summarizeAttendance } from '../attendanceUtils';
+import { buildReport, buildSemesterReport, buildSubjectReport, formatAttendanceTimeRange, summarizeAttendance } from '../attendanceUtils';
+
+function getTimeRanges(records = []) {
+  return [...new Set(records.map(formatAttendanceTimeRange).filter(Boolean))];
+}
 
 export default function AttendanceReports({ records, scope }) {
   const grouped = buildReport(records, scope);
-  const rows = Object.entries(grouped).map(([label, items]) => ({ label, ...summarizeAttendance(items) }));
-  const subjectRows = Object.entries(buildSubjectReport(records)).map(([label, items]) => ({ label, ...summarizeAttendance(items) }));
-  const semesterRows = Object.entries(buildSemesterReport(records)).map(([label, items]) => ({ label, ...summarizeAttendance(items) }));
+  const rows = Object.entries(grouped).map(([label, items]) => ({ label, timeRanges: getTimeRanges(items), ...summarizeAttendance(items) }));
+  const subjectRows = Object.entries(buildSubjectReport(records)).map(([label, items]) => ({ label, timeRanges: getTimeRanges(items), ...summarizeAttendance(items) }));
+  const semesterRows = Object.entries(buildSemesterReport(records)).map(([label, items]) => ({ label, timeRanges: getTimeRanges(items), ...summarizeAttendance(items) }));
 
   return (
     <div className="grid xl:grid-cols-[1fr_1fr_.75fr] gap-5">
@@ -26,6 +30,11 @@ export default function AttendanceReports({ records, scope }) {
                 <span>Absent: {row.absent}</span>
                 <span>Total: {row.total}</span>
               </div>
+              {row.timeRanges.length > 0 && (
+                <div className="mt-2 text-xs font-semibold text-slate-500">
+                  {row.timeRanges.slice(0, 2).join(', ')}{row.timeRanges.length > 2 ? ` +${row.timeRanges.length - 2}` : ''}
+                </div>
+              )}
             </div>
           ))}
           {!subjectRows.length && <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">No subject attendance reports yet.</div>}
@@ -49,6 +58,11 @@ export default function AttendanceReports({ records, scope }) {
                 <span>Absent: {row.absent}</span>
                 <span>Total: {row.total}</span>
               </div>
+              {row.timeRanges.length > 0 && (
+                <div className="mt-2 text-xs font-semibold text-slate-500">
+                  {row.timeRanges.slice(0, 2).join(', ')}{row.timeRanges.length > 2 ? ` +${row.timeRanges.length - 2}` : ''}
+                </div>
+              )}
             </div>
           ))}
           {!semesterRows.length && <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">No semester attendance reports yet.</div>}
@@ -69,6 +83,11 @@ export default function AttendanceReports({ records, scope }) {
                 <span>Absent: {row.absent}</span>
                 <span>Total: {row.total}</span>
               </div>
+              {row.timeRanges.length > 0 && (
+                <div className="mt-2 text-xs font-semibold text-slate-500">
+                  {row.timeRanges.slice(0, 2).join(', ')}{row.timeRanges.length > 2 ? ` +${row.timeRanges.length - 2}` : ''}
+                </div>
+              )}
             </div>
           ))}
           {!rows.length && <div className="rounded-lg bg-[#f5f5f6] p-3 text-sm text-slate-500">No attendance reports yet.</div>}

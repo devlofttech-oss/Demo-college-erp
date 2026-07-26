@@ -2,9 +2,14 @@ import assert from 'node:assert/strict';
 import {
   buildAttendanceKey,
   buildReport,
+  formatAttendanceTimeRange,
+  getAttendanceTimeMinutes,
   getMonthKey,
   getYearKey,
+  isAttendanceTimeRangeValid,
   isAttendanceRecordEditable,
+  normalizeAttendanceTime,
+  recordMatchesAttendanceTimeRange,
   relationMatchesEntity,
   summarizeAttendance,
 } from '../src/modules/attendance/attendanceUtils.js';
@@ -25,6 +30,15 @@ const records = [
 
 assert.equal(buildAttendanceKey('STU-1001', '18 Jun 2026'), 'STU-1001-18 Jun 2026');
 assert.equal(buildAttendanceKey('STU-1001', '18 Jun 2026', 'Physics'), 'STU-1001-18 Jun 2026-Physics');
+assert.equal(buildAttendanceKey('STU-1001', '18 Jun 2026', 'Physics', '09:00', '10:00'), 'STU-1001-18 Jun 2026-Physics-09:00-10:00');
+assert.equal(normalizeAttendanceTime('9:05'), '09:05');
+assert.equal(normalizeAttendanceTime('24:00'), '');
+assert.equal(getAttendanceTimeMinutes('09:30'), 570);
+assert.equal(isAttendanceTimeRangeValid('09:00', '10:00'), true);
+assert.equal(isAttendanceTimeRangeValid('10:00', '09:00'), false);
+assert.equal(formatAttendanceTimeRange({ openingTime: '09:00', closingTime: '10:00' }), '09:00 - 10:00');
+assert.equal(recordMatchesAttendanceTimeRange({ openingTime: '09:00', closingTime: '10:00' }, '9:00', '10:00'), true);
+assert.equal(recordMatchesAttendanceTimeRange({ openingTime: '09:00', closingTime: '10:00' }, '10:00', '11:00'), false);
 assert.equal(getMonthKey('18 Jun 2026'), 'Jun 2026');
 assert.equal(getYearKey('18 Jun 2026'), '2026');
 assert.equal(relationMatchesEntity(records[0], student), true);
