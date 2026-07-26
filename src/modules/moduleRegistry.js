@@ -16,20 +16,23 @@ import {
 } from 'lucide-react';
 
 export const moduleDisplayOrder = [
-  'dashboard',
-  'students',
-  'faculty-staff',
+  'academics',
   'attendance',
-  'timetable',
-  'subject-notes',
-  'examination-results',
   'communication',
   'calendar',
-  'hostel-management',
+  'dashboard',
   'document-management',
+  'examination-results',
+  'faculty-staff',
+  'hostel-management',
+  'parent-portal',
   'fees',
   'reports',
   'settings',
+  'students',
+  'subject-notes',
+  'timetable',
+  'user-roles',
 ];
 
 const moduleIdAliases = {
@@ -216,7 +219,8 @@ export function sortModulesByDisplayOrder(modules = []) {
   return [...modules].sort((first, second) => {
     const firstOrder = displayOrder[first.id] ?? 999;
     const secondOrder = displayOrder[second.id] ?? 999;
-    return firstOrder - secondOrder;
+    if (firstOrder !== secondOrder) return firstOrder - secondOrder;
+    return String(first.label || first.id).localeCompare(String(second.label || second.id));
   });
 }
 

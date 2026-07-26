@@ -2,9 +2,13 @@ import { useState } from 'react';
 
 export default function UserModal({ initialUser = null, mode = 'create', roles, students = [], onClose, onSave }) {
   const isEdit = mode === 'edit';
+  const sortedRoles = [...roles].sort((first, second) => first.name.localeCompare(second.name));
+  const sortedStudents = [...students].sort((first, second) => (
+    String(first.name || first.studentId || first.id).localeCompare(String(second.name || second.studentId || second.id), undefined, { numeric: true })
+  ));
   const initialLinkedRecordIds = new Set(initialUser?.linkedStudentRecordIds || []);
   const initialLinkedStudentIds = new Set(initialUser?.linkedStudentIds || []);
-  students.forEach((student) => {
+  sortedStudents.forEach((student) => {
     if (initialLinkedStudentIds.has(student.studentId)) {
       initialLinkedRecordIds.add(student.id);
     }
@@ -13,7 +17,7 @@ export default function UserModal({ initialUser = null, mode = 'create', roles, 
     name: initialUser?.name || '',
     email: initialUser?.email || '',
     password: '',
-    roleId: initialUser?.roleId || roles[0]?.id || '',
+    roleId: initialUser?.roleId || sortedRoles[0]?.id || '',
     status: initialUser?.status || 'Active',
     linkedStudentRecordIds: [...initialLinkedRecordIds],
   });
@@ -87,7 +91,7 @@ export default function UserModal({ initialUser = null, mode = 'create', roles, 
               onChange={(event) => setForm((prev) => ({ ...prev, roleId: event.target.value }))}
               className="w-full h-11 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-[#fb9a5b] focus:ring-2 focus:ring-orange-100"
             >
-              {roles.map((role) => (
+              {sortedRoles.map((role) => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
             </select>
@@ -97,7 +101,7 @@ export default function UserModal({ initialUser = null, mode = 'create', roles, 
               <legend className="px-1 text-xs font-semibold text-slate-500">Linked students</legend>
               {students.length ? (
                 <div className="max-h-40 overflow-y-auto divide-y divide-slate-100">
-                  {students.map((student) => (
+                  {sortedStudents.map((student) => (
                     <label key={student.id} className="flex items-center gap-3 py-2 text-sm text-slate-700">
                       <input
                         type="checkbox"

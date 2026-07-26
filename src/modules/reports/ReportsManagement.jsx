@@ -277,14 +277,6 @@ export default function ReportsManagement({
   const currentRoleId = currentUser?.roleId || 'admin';
   const categories = useMemo(() => [
     {
-      id: 'students',
-      label: 'Student',
-      description: 'Admissions and approval queue',
-      icon: <GraduationCap size={18} />,
-      enabled: canAccess(defaultRoles, currentRoleId, 'students.view'),
-      content: <StudentReportsPanel academicYear={academicYear} admissions={admissions} documents={documents} promotions={promotions} students={scopedStudents} />,
-    },
-    {
       id: 'attendance',
       label: 'Attendance',
       description: 'Daily, monthly, yearly',
@@ -323,6 +315,14 @@ export default function ReportsManagement({
           selectedCourseCode={selectedCourseCode}
         />
       ),
+    },
+    {
+      id: 'students',
+      label: 'Student',
+      description: 'Admissions and approval queue',
+      icon: <GraduationCap size={18} />,
+      enabled: canAccess(defaultRoles, currentRoleId, 'students.view'),
+      content: <StudentReportsPanel academicYear={academicYear} admissions={admissions} documents={documents} promotions={promotions} students={scopedStudents} />,
     },
   ], [academicYear, admissions, attendanceRecords, currentRoleId, currentUser, documents, marksEntries, promotions, scopedStudents, selectedCourse, selectedCourseCode, studentResults]);
   const visibleCategories = categories.filter((category) => category.enabled);

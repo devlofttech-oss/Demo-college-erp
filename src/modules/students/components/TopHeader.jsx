@@ -5,15 +5,15 @@ import { setStoredSuperAdminAccessMode } from '../../../firebase/accessMode';
 import mauryaLogo from '../../../../assets/maurya.png';
 
 const departmentOrder = [
+  'Maurya College of Allied Health Sciences',
   'Maurya College of Nursing',
   'Maurya College of Physiotherapy',
-  'Maurya College of Allied Health Sciences',
 ];
 
 const accessModeOptions = [
+  { id: 'admin', label: 'Admin' },
   { id: 'parent', label: 'Parent' },
   { id: 'faculty', label: 'Staff' },
-  { id: 'admin', label: 'Admin' },
   { id: 'super-admin', label: 'Super Admin' },
 ];
 
@@ -66,7 +66,10 @@ function buildDepartmentCourseGroups(courses = []) {
     groups.get(departmentName).courses.push(course);
   });
 
-  return [...groups.values()].sort((a, b) => {
+  return [...groups.values()].map((group) => ({
+    ...group,
+    courses: [...group.courses].sort((first, second) => getCourseLabel(first).localeCompare(getCourseLabel(second))),
+  })).sort((a, b) => {
     const firstIndex = departmentOrder.indexOf(a.name);
     const secondIndex = departmentOrder.indexOf(b.name);
     if (firstIndex !== -1 || secondIndex !== -1) {

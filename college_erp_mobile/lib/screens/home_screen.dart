@@ -12,6 +12,17 @@ import '../theme/app_theme.dart';
 import '../utils/field_reader.dart';
 import '../widgets/mobile_chrome.dart';
 
+int _compareModuleLabels(ErpModule first, ErpModule second) {
+  return first.label.toLowerCase().compareTo(second.label.toLowerCase());
+}
+
+int _compareModuleGroups(
+  MapEntry<String, List<ErpModule>> first,
+  MapEntry<String, List<ErpModule>> second,
+) {
+  return first.key.toLowerCase().compareTo(second.key.toLowerCase());
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -105,7 +116,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accessibleModules = mobileModules.where(_canOpenModule).toList();
+    final accessibleModules = mobileModules.where(_canOpenModule).toList()
+      ..sort(_compareModuleLabels);
     final hasSearch = _query.trim().isNotEmpty;
     final modules = accessibleModules
         .where(
@@ -113,11 +125,14 @@ class _HomeScreenState extends State<HomeScreen> {
               module.label.toLowerCase().contains(_query.toLowerCase()) ||
               module.group.toLowerCase().contains(_query.toLowerCase()),
         )
-        .toList();
+        .toList()
+      ..sort(_compareModuleLabels);
     final grouped = <String, List<ErpModule>>{};
     for (final module in modules) {
       grouped.putIfAbsent(module.group, () => []).add(module);
     }
+    final groupedEntries = grouped.entries.toList()
+      ..sort(_compareModuleGroups);
 
     return MobileScaffold(
       title: '',
@@ -261,7 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onAction: hasSearch ? _clearSearch : null,
             )
           else
-            ...grouped.entries.expand((entry) {
+            ...groupedEntries.expand((entry) {
               return [
                 SectionTitle(entry.key),
                 GridView.builder(

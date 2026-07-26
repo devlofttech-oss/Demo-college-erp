@@ -33,7 +33,6 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
     };
     return sortModulesByDisplayOrder(getEnabledModules()
       .filter((module) => !module.permission || canAccess(defaultRoles, currentRoleId, module.permission))
-      .filter((module) => !module.footer)
       .filter((module) => !module.hideFromSidebar || canShowHiddenModule(module)))
       .map((module) => {
         const Icon = module.icon;
@@ -46,17 +45,6 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         };
       });
   }, [currentRoleId, isAdmin, isSuperAdmin]);
-  const footerItems = useMemo(() => getEnabledModules()
-    .filter((module) => !module.permission || canAccess(defaultRoles, currentRoleId, module.permission))
-    .filter((module) => !module.hideFromSidebar && module.footer)
-    .map((module) => {
-      const Icon = module.icon;
-      return {
-        id: module.id,
-        label: module.label,
-        icon: <Icon className="erp-sidebar-icon" size={18} />,
-      };
-    }), [currentRoleId]);
 
   const selectTheme = (nextTheme) => {
     if (nextTheme !== themeMode) onThemeToggle?.();
@@ -73,14 +61,6 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         enabled: canAccess(defaultRoles, currentRoleId, 'attendance.view'),
       },
       {
-        id: 'student-attendance',
-        label: 'Student Attendance',
-        icon: <Users size={16} />,
-        moduleId: 'attendance',
-        state: { attendanceSubmenu: 'student-attendance', attendanceTask: 'students', attendanceBranch: 'mark-students', attendanceMode: 'students' },
-        enabled: canAccess(defaultRoles, currentRoleId, 'attendance.view'),
-      },
-      {
         id: 'staff-attendance',
         label: 'Staff Attendance',
         icon: <UserCheck size={16} />,
@@ -88,16 +68,16 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         state: { attendanceSubmenu: 'staff-attendance', attendanceTask: 'staff', attendanceBranch: 'mark-staff', attendanceMode: 'staff' },
         enabled: canAccess(defaultRoles, currentRoleId, 'attendance.markStaff') || canAccess(defaultRoles, currentRoleId, 'staff.attendance'),
       },
+      {
+        id: 'student-attendance',
+        label: 'Student Attendance',
+        icon: <Users size={16} />,
+        moduleId: 'attendance',
+        state: { attendanceSubmenu: 'student-attendance', attendanceTask: 'students', attendanceBranch: 'mark-students', attendanceMode: 'students' },
+        enabled: canAccess(defaultRoles, currentRoleId, 'attendance.view'),
+      },
     ],
     reports: [
-      {
-        id: 'students',
-        label: 'Student',
-        icon: <GraduationCap size={16} />,
-        moduleId: 'reports',
-        state: { reportCategory: 'students' },
-        enabled: canAccess(defaultRoles, currentRoleId, 'students.view'),
-      },
       {
         id: 'attendance',
         label: 'Attendance',
@@ -130,9 +110,17 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         state: { reportCategory: 'financial' },
         enabled: canAccessFinancialReports(defaultRoles, currentRoleId),
       },
+      {
+        id: 'students',
+        label: 'Student',
+        icon: <GraduationCap size={16} />,
+        moduleId: 'reports',
+        state: { reportCategory: 'students' },
+        enabled: canAccess(defaultRoles, currentRoleId, 'students.view'),
+      },
     ],
   }), [currentRoleId]);
-  const visibleMobileItems = useMemo(() => [...navItems, ...footerItems], [footerItems, navItems]);
+  const visibleMobileItems = useMemo(() => navItems, [navItems]);
   const activeDefaultExpandedModuleId = submenuItemsByModule[activePage]?.some((item) => item.enabled) ? activePage : '';
   const expandedModuleId = expandedState.page === activePage ? expandedState.moduleId : activeDefaultExpandedModuleId;
 
@@ -281,7 +269,6 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
         <div className="erp-sidebar-menu-card">
           <nav className="erp-sidebar-nav">
             {navItems.map(renderNavButton)}
-            {footerItems.map(renderNavButton)}
           </nav>
         </div>
 

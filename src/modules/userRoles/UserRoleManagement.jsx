@@ -64,15 +64,23 @@ export default function UserRoleManagement({ currentUser }) {
   const canCreateUsers = canAccess(roles, currentUser?.roleId || 'admin', 'users.create');
   const canEditUsers = canAccess(roles, currentUser?.roleId || 'admin', 'users.edit');
   const canEditRoles = canAccess(roles, currentUser?.roleId || 'admin', 'roles.edit');
+  const sortedRoles = useMemo(() => [...roles].sort((first, second) => first.name.localeCompare(second.name)), [roles]);
+  const sortedStudentOptions = useMemo(() => [...studentOptions].sort((first, second) => (
+    String(first.name || first.studentId || first.id).localeCompare(String(second.name || second.studentId || second.id), undefined, { numeric: true })
+  )), [studentOptions]);
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter((user) =>
-      [user.name, user.email, rolesById[user.roleId]?.name, user.status]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(term))
-    );
+    const matches = term
+      ? users.filter((user) =>
+        [user.name, user.email, rolesById[user.roleId]?.name, user.status]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(term))
+      )
+      : users;
+    return [...matches].sort((first, second) => (
+      String(first.name || first.email || first.uid).localeCompare(String(second.name || second.email || second.uid), undefined, { numeric: true })
+    ));
   }, [rolesById, search, users]);
 
   const getLinkedStudentPayload = (form) => {
@@ -264,7 +272,7 @@ export default function UserRoleManagement({ currentUser }) {
       <div className="flex flex-col xl:flex-row gap-5">
         <div className="xl:w-[64%] min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-5">
-            {roles.map((role) => (
+            {sortedRoles.map((role) => (
               <button
                 key={role.id}
                 onClick={() => setSelectedRoleId(role.id)}
@@ -297,8 +305,8 @@ export default function UserRoleManagement({ currentUser }) {
 
       {showUserModal && (
         <UserModal
-          roles={roles}
-          students={studentOptions}
+          roles={sortedRoles}
+          students={sortedStudentOptions}
           onClose={() => setShowUserModal(false)}
           onSave={createUser}
         />
@@ -307,8 +315,8 @@ export default function UserRoleManagement({ currentUser }) {
         <UserModal
           mode="edit"
           initialUser={editingUser}
-          roles={roles}
-          students={studentOptions}
+          roles={sortedRoles}
+          students={sortedStudentOptions}
           onClose={() => setEditingUser(null)}
           onSave={updateUser}
         />

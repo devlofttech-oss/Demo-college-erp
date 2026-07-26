@@ -1,8 +1,12 @@
 import { ShieldCheck } from 'lucide-react';
 import { permissionGroups, togglePermission } from '../rolePermissions';
 
+const sortByLabel = (first, second) => first.label.localeCompare(second.label);
+const sortPermissionByLabel = (first, second) => first[1].localeCompare(second[1]);
+
 export default function RolePermissionEditor({ role, canEdit, saving, onChange }) {
   if (!role) return null;
+  const sortedPermissionGroups = [...permissionGroups].sort(sortByLabel);
 
   return (
     <aside className="xl:w-[36%] erp-sticky-inspector">
@@ -20,11 +24,11 @@ export default function RolePermissionEditor({ role, canEdit, saving, onChange }
         </div>
 
         <div className="space-y-5">
-          {permissionGroups.map((group) => (
+          {sortedPermissionGroups.map((group) => (
             <div key={group.id}>
               <div className="text-xs font-bold uppercase text-slate-500 mb-2">{group.label}</div>
               <div className="space-y-2">
-                {group.permissions.map(([permission, label]) => (
+                {[...group.permissions].sort(sortPermissionByLabel).map(([permission, label]) => (
                   <label key={permission} className="flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f6] px-3 py-2 text-sm">
                     <span>{label}</span>
                     <input

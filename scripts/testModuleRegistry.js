@@ -25,43 +25,44 @@ assert.deepEqual(modulesWithoutPermission, []);
 
 const visibleSidebarIds = (roleId) => sortModulesByDisplayOrder(enabled
   .filter((module) => canAccess(defaultRoles, roleId, module.permission))
-  .filter((module) => !module.footer)
   .filter((module) => !module.hideFromSidebar || (module.id === 'dashboard' && ['admin', 'super-admin'].includes(roleId)) || (module.id === 'parent-portal' && roleId === 'parent') || (module.id !== 'dashboard' && roleId === 'super-admin')))
   .map((module) => module.id);
 
 const adminSidebarVisible = visibleSidebarIds('admin');
 assert.deepEqual(adminSidebarVisible, [
-  'dashboard',
-  'students',
-  'faculty-staff',
   'attendance',
-  'timetable',
-  'subject-notes',
-  'examination-results',
   'communication',
   'calendar',
-  'hostel-management',
+  'dashboard',
   'document-management',
+  'examination-results',
+  'faculty-staff',
+  'hostel-management',
   'fees',
   'reports',
+  'settings',
+  'students',
+  'subject-notes',
+  'timetable',
 ]);
 assert.deepEqual(visibleSidebarIds('super-admin'), [
-  'dashboard',
-  'students',
-  'faculty-staff',
+  'academics',
   'attendance',
-  'timetable',
-  'subject-notes',
-  'examination-results',
   'communication',
   'calendar',
-  'hostel-management',
+  'dashboard',
   'document-management',
+  'examination-results',
+  'faculty-staff',
+  'hostel-management',
+  'parent-portal',
   'fees',
   'reports',
-  'academics',
+  'settings',
+  'students',
+  'subject-notes',
+  'timetable',
   'user-roles',
-  'parent-portal',
 ]);
 
 const footerVisible = enabled.filter((module) => module.footer).map((module) => module.id);
@@ -92,7 +93,7 @@ assert.deepEqual(superAdminVisible, [
 
 const parentVisible = enabled.filter((module) => canAccess(defaultRoles, 'parent', module.permission)).map((module) => module.id);
 assert.deepEqual(parentVisible, ['timetable', 'communication', 'calendar', 'document-management', 'parent-portal']);
-assert.deepEqual(visibleSidebarIds('parent'), ['timetable', 'communication', 'calendar', 'document-management', 'parent-portal']);
+assert.deepEqual(visibleSidebarIds('parent'), ['communication', 'calendar', 'document-management', 'parent-portal', 'timetable']);
 
 const facultyVisible = enabled.filter((module) => canAccess(defaultRoles, 'faculty', module.permission)).map((module) => module.id);
 assert.equal(facultyVisible.includes('students'), true);
