@@ -60,6 +60,8 @@ function getSubjectTopics(subject = {}) {
   return [...new Set(rawTopics.map((item) => String(item).trim()).filter(Boolean))];
 }
 
+const EMPTY_TOPIC_SUGGESTIONS = [];
+
 function normalizeTeacherKey(value = '') {
   return String(value || '').trim().toLowerCase();
 }
@@ -253,10 +255,12 @@ export default function AttendanceManagement({
       .filter((subject) => subject.name);
   }, [academicSubjects, selectedCourse, selectedCourseCode, selectedSemester]);
   const selectedSubject = subjectOptions.find((subject) => subject.code === selectedSubjectCode) || null;
-  const topicSuggestions = selectedSubject?.topics || [];
-  const topicDatalistId = selectedSubject?.code
-    ? `attendance-topic-${selectedSubject.code.replace(/[^a-z0-9_-]/gi, '-')}`
-    : 'attendance-topic-suggestions';
+  const topicSuggestions = selectedSubject?.topics || EMPTY_TOPIC_SUGGESTIONS;
+  const visibleTopicSuggestions = useMemo(() => {
+    const topicSearch = topic.trim().toLowerCase();
+    if (!topicSearch) return topicSuggestions;
+    return topicSuggestions.filter((item) => item.toLowerCase().includes(topicSearch));
+  }, [topic, topicSuggestions]);
   const selectedOpeningTime = normalizeAttendanceTime(openingTime);
   const selectedClosingTime = normalizeAttendanceTime(closingTime);
   const selectedTimeRange = formatAttendanceTimeRange(selectedOpeningTime, selectedClosingTime);
@@ -859,28 +863,43 @@ export default function AttendanceManagement({
                       className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     />
                   </label>
-                  <label className="erp-attendance-field">
+                  <div className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>
                     <input
-                      list={topicSuggestions.length ? topicDatalistId : undefined}
                       value={topic}
                       onChange={(event) => setTopic(event.target.value)}
-                      placeholder={topicSuggestions.length ? 'Select or type topic taught' : 'Topic taught'}
+                      placeholder={topicSuggestions.length ? 'Type or choose topic taught' : 'Topic taught'}
                       className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     />
                     {topicSuggestions.length > 0 && (
-                      <>
-                        <datalist id={topicDatalistId}>
-                          {topicSuggestions.map((item) => (
-                            <option key={item} value={item} />
-                          ))}
-                        </datalist>
-                        <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                      <div className="erp-topic-picker mt-2 rounded-lg border border-slate-200 bg-white p-2">
+                        <div className="erp-topic-picker-scroll space-y-1 pr-1">
+                          {visibleTopicSuggestions.length ? (
+                            visibleTopicSuggestions.map((item) => {
+                              const isSelectedTopic = item.toLowerCase() === topic.trim().toLowerCase();
+                              return (
+                                <button
+                                  key={item}
+                                  type="button"
+                                  onClick={() => setTopic(item)}
+                                  className={`erp-topic-picker-option ${isSelectedTopic ? 'is-selected' : ''}`}
+                                >
+                                  {item}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="erp-topic-picker-empty rounded-md px-3 py-2 text-xs font-semibold">
+                              No matching syllabus topics
+                            </div>
+                          )}
+                        </div>
+                        <p className="erp-attendance-field-note mt-2 text-[11px] font-semibold">
                           {topicSuggestions.length} syllabus topic{topicSuggestions.length === 1 ? '' : 's'} available
                         </p>
-                      </>
+                      </div>
                     )}
-                  </label>
+                  </div>
                 </>
               )}
             </div>
