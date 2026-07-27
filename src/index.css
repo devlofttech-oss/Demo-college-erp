@@ -370,11 +370,11 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   border-color:#e4e8f2!important;
 }
 
-.erp-shell.light-mode button:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button) {
+.erp-shell.light-mode button:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button) {
   border-color:#d8deeb!important;
 }
 
-.erp-shell.light-mode button:not(.erp-theme-mode-button):not([class*="bg-[#fb"]):not([class*="bg-orange"]):not([class*="bg-[#333"]):not([class*="bg-[#343"]):not(:disabled) {
+.erp-shell.light-mode button:not(.erp-record-payment-button):not(.erp-theme-mode-button):not([class*="bg-[#fb"]):not([class*="bg-orange"]):not([class*="bg-[#333"]):not([class*="bg-[#343"]):not(:disabled) {
   background:#ffffff!important;
   color:#657084!important;
 }
@@ -398,14 +398,14 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   color:#6576d8!important;
 }
 
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
 .erp-shell.light-mode .erp-header button:first-child {
   background:#6576d8!important;
   color:#ffffff!important;
   box-shadow:0 10px 28px rgba(101,118,216,.18)!important;
 }
 
-.erp-shell.light-mode button:not(.erp-theme-mode-button):hover:not(:disabled) {
+.erp-shell.light-mode button:not(.erp-record-payment-button):not(.erp-theme-mode-button):hover:not(:disabled) {
   border-color:#cfd6ef!important;
 }
 
@@ -2459,7 +2459,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode button[class*="border-[#343"],
 .erp-shell.light-mode button[class*="border-[#fb"],
 .erp-shell.light-mode button[class*="border-orange"],
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
 .erp-shell.light-mode .erp-header button:first-child {
   background:linear-gradient(to bottom left,#7c5cff 0%,#ffffff 52%,#ddd6ff 100%)!important;
   border-color:rgba(124,92,255,.32)!important;
@@ -2471,19 +2471,19 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode button[class*="bg-[#343"]:hover:not(:disabled),
 .erp-shell.light-mode button[class*="bg-[#fb"]:hover:not(:disabled),
 .erp-shell.light-mode button[class*="bg-orange"]:hover:not(:disabled),
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button):hover:not(:disabled),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button):hover:not(:disabled),
 .erp-shell.light-mode .erp-header button:first-child:hover:not(:disabled) {
   background:linear-gradient(to bottom left,#6847ea 0%,#ffffff 52%,#cfc3ff 100%)!important;
   border-color:rgba(104,71,234,.42)!important;
   transform:translateY(-1px);
 }
 
-.erp-shell.light-mode button:not(.erp-theme-mode-button):not([class*="bg-[#fb"]):not([class*="bg-orange"]):not([class*="bg-[#333"]):not([class*="bg-[#343"]):not(:disabled) {
+.erp-shell.light-mode button:not(.erp-record-payment-button):not(.erp-theme-mode-button):not([class*="bg-[#fb"]):not([class*="bg-orange"]):not([class*="bg-[#333"]):not([class*="bg-[#343"]):not(:disabled) {
   background:rgba(255,255,255,.72)!important;
   color:#5f5876!important;
 }
 
-.erp-shell.light-mode button:not(.erp-theme-mode-button):hover:not(:disabled) {
+.erp-shell.light-mode button:not(.erp-record-payment-button):not(.erp-theme-mode-button):hover:not(:disabled) {
   border-color:rgba(124,92,255,.34)!important;
 }
 
@@ -2664,7 +2664,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode button[class*="border-[#343"],
 .erp-shell.light-mode button[class*="border-[#fb"],
 .erp-shell.light-mode button[class*="border-orange"],
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
 .erp-shell.light-mode .erp-header button:first-child {
   background:var(--erp-accent)!important;
   border-color:var(--erp-accent)!important;
@@ -2676,7 +2676,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode button[class*="bg-[#343"]:hover:not(:disabled),
 .erp-shell.light-mode button[class*="bg-[#fb"]:hover:not(:disabled),
 .erp-shell.light-mode button[class*="bg-orange"]:hover:not(:disabled),
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button):hover:not(:disabled),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button):hover:not(:disabled),
 .erp-shell.light-mode .erp-header button:first-child:hover:not(:disabled) {
   background:var(--erp-accent-hover)!important;
   border-color:var(--erp-accent-hover)!important;
@@ -2965,7 +2965,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode button[class*="border-[#343"],
 .erp-shell.light-mode button[class*="border-[#fb"],
 .erp-shell.light-mode button[class*="border-orange"],
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button),
 .erp-shell.light-mode .erp-header button:first-child {
   background:#033500!important;
   border-color:#033500!important;
@@ -2977,7 +2977,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 .erp-shell.light-mode button[class*="bg-[#343"]:hover:not(:disabled),
 .erp-shell.light-mode button[class*="bg-[#fb"]:hover:not(:disabled),
 .erp-shell.light-mode button[class*="bg-orange"]:hover:not(:disabled),
-.erp-shell.light-mode button.rounded-full:not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button):hover:not(:disabled),
+.erp-shell.light-mode button.rounded-full:not(.erp-record-payment-button):not(.erp-theme-toggle):not(.erp-notification-button):not(.erp-theme-mode-button):hover:not(:disabled),
 .erp-shell.light-mode .erp-header button:first-child:hover:not(:disabled) {
   background:#022800!important;
   border-color:#022800!important;
