@@ -68,12 +68,43 @@ function getAttendanceDayLabel(selectedDate = '') {
   return formatAttendanceDateInput(selectedDate) || 'No date selected';
 }
 
+function getAttendanceRangeLabel(fromDate = '', toDate = '') {
+  const fromText = formatAttendanceDateInput(fromDate);
+  const toText = formatAttendanceDateInput(toDate);
+  if (fromDate && toDate && fromDate === toDate) return fromText;
+  if (fromDate && toDate) return `${fromText} to ${toText}`;
+  if (fromDate) return `From ${fromText}`;
+  if (toDate) return `Until ${toText}`;
+  return 'No export range selected';
+}
+
 function getAvailableAttendanceDates(records = []) {
   return [...new Set(records.map(getAttendanceDateInput).filter(Boolean))].sort();
 }
 
 function getAttendanceStatus(record = {}) {
   return String(record.status || '').trim() || 'Unmarked';
+}
+
+function recordMatchesAttendanceFilters(record = {}, statusFilter = 'all', searchTerm = '') {
+  const normalizedStatus = String(statusFilter || 'all').toLowerCase();
+  if (normalizedStatus !== 'all' && getAttendanceStatus(record).toLowerCase() !== normalizedStatus) return false;
+
+  const term = String(searchTerm || '').trim().toLowerCase();
+  if (!term) return true;
+  return [
+    record.entityName,
+    record.studentName,
+    record.entityId,
+    record.studentId,
+    record.admissionNo,
+    record.semester,
+    record.className,
+    record.subjectName,
+    record.subject,
+    record.topic,
+    record.facultyName,
+  ].filter(Boolean).some((value) => String(value).toLowerCase().includes(term));
 }
 
 function buildAttendanceDetailRow(record = {}, index = 0) {
@@ -94,6 +125,14 @@ function buildAttendanceDetailRow(record = {}, index = 0) {
     time: formatAttendanceTimeRange(record) || '-',
     topic: record.topic || record.syllabusTopic || '-',
   };
+}
+
+function sortAttendanceDetailRows(first, second) {
+  return (
+    (second.dateInput || '').localeCompare(first.dateInput || '')
+    || first.studentName.localeCompare(second.studentName)
+    || first.subject.localeCompare(second.subject)
+  );
 }
 
 function sanitizeFilenamePart(value = '') {
@@ -308,6 +347,7 @@ function StudentReportsPanel({ academicYear, admissions = [], documents = [], pr
 function AttendanceReportsPanel({ academicYear = '', records = [], selectedCourse = null, selectedCourseCode = 'all' }) {
   const [scope, setScope] = useState('daily');
   const [selectedDateState, setSelectedDateState] = useState({ contextKey: '', value: '' });
+  const [exportRangeState, setExportRangeState] = useState({ contextKey: '', from: '', to: '' });
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const selectedCourseLabel = selectedCourseCode === 'all'
@@ -319,40 +359,47 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
   const latestDate = availableDates[availableDates.length - 1] || '';
   const effectiveSelectedDate = selectedDate || latestDate;
   const selectedDayLabel = getAttendanceDayLabel(effectiveSelectedDate);
+  const exportRange = exportRangeState.contextKey === dateContextKey
+    ? exportRangeState
+    : { contextKey: dateContextKey, from: '', to: '' };
+  const exportFromDate = exportRange.from || effectiveSelectedDate;
+  const exportToDate = exportRange.to || exportRange.from || effectiveSelectedDate;
+  const exportRangeLabel = getAttendanceRangeLabel(exportFromDate, exportToDate);
 
   const filteredRecords = useMemo(() => {
-    const term = search.trim().toLowerCase();
     return records.filter((record) => {
       const recordDateInput = getAttendanceDateInput(record);
       if (!effectiveSelectedDate || recordDateInput !== effectiveSelectedDate) return false;
-      if (statusFilter !== 'all' && getAttendanceStatus(record).toLowerCase() !== statusFilter) return false;
-      if (!term) return true;
-      return [
-        record.entityName,
-        record.studentName,
-        record.entityId,
-        record.studentId,
-        record.admissionNo,
-        record.semester,
-        record.className,
-        record.subjectName,
-        record.subject,
-        record.topic,
-        record.facultyName,
-      ].filter(Boolean).some((value) => String(value).toLowerCase().includes(term));
+      return recordMatchesAttendanceFilters(record, statusFilter, search);
     });
   }, [effectiveSelectedDate, records, search, statusFilter]);
   const attendanceRows = useMemo(() => filteredRecords
     .map(buildAttendanceDetailRow)
-    .sort((first, second) => (
-      (second.dateInput || '').localeCompare(first.dateInput || '')
-      || first.studentName.localeCompare(second.studentName)
-      || first.subject.localeCompare(second.subject)
-    )), [filteredRecords]);
+    .sort(sortAttendanceDetailRows), [filteredRecords]);
+  const exportRecords = useMemo(() => {
+    return records.filter((record) => {
+      const recordDateInput = getAttendanceDateInput(record);
+      if (!exportFromDate || !exportToDate || !recordDateInput) return false;
+      if (recordDateInput < exportFromDate || recordDateInput > exportToDate) return false;
+      return recordMatchesAttendanceFilters(record, statusFilter, search);
+    });
+  }, [exportFromDate, exportToDate, records, search, statusFilter]);
+  const exportRows = useMemo(() => exportRecords
+    .map(buildAttendanceDetailRow)
+    .sort(sortAttendanceDetailRows), [exportRecords]);
   const detailSummary = summarizeAttendance(filteredRecords);
+  const exportSummary = summarizeAttendance(exportRecords);
   const exportSubtitle = `${selectedCourseLabel} - ${academicYear || 'All academic years'} - ${selectedDayLabel}`;
+  const exportRangeSubtitle = `${selectedCourseLabel} - ${academicYear || 'All academic years'} - ${exportRangeLabel}`;
+  const updateExportRange = (updates) => {
+    setExportRangeState((current) => ({
+      ...(current.contextKey === dateContextKey ? current : { contextKey: dateContextKey, from: '', to: '' }),
+      ...updates,
+      contextKey: dateContextKey,
+    }));
+  };
 
-  const downloadAttendanceCsv = () => {
+  const downloadDayAttendanceCsv = () => {
     if (!attendanceRows.length) {
       toast.error('No attendance rows to export.');
       return;
@@ -383,7 +430,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
     toast.success('Attendance CSV downloaded');
   };
 
-  const downloadAttendancePdf = () => {
+  const downloadDayAttendancePdf = () => {
     if (!attendanceRows.length) {
       toast.error('No attendance rows to export.');
       return;
@@ -394,6 +441,52 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       subtitle: exportSubtitle,
     });
     if (opened) toast.success('PDF report opened');
+    else toast.error('Allow popups to export PDF.');
+  };
+
+  const downloadRangeAttendanceCsv = () => {
+    if (!exportRows.length) {
+      toast.error('No attendance rows in the export range.');
+      return;
+    }
+    downloadCsv(
+      `attendance-range-${sanitizeFilenamePart(selectedCourseLabel)}-${sanitizeFilenamePart(exportFromDate || 'no-from')}-${sanitizeFilenamePart(exportToDate || 'no-to')}.csv`,
+      [
+        ['Attendance Report'],
+        ['Course', selectedCourseLabel],
+        ['Academic Year', academicYear || 'All academic years'],
+        ['Export Range', exportRangeLabel],
+        ['Total', exportSummary.total, 'Present', exportSummary.present, 'Absent', exportSummary.absent, 'Attendance %', exportSummary.percentage],
+        [],
+        ['Date', 'Student', 'Student ID', 'Semester / Class', 'Subject', 'Time', 'Topic', 'Faculty', 'Status'],
+        ...exportRows.map((row) => [
+          row.date,
+          row.studentName,
+          row.studentId,
+          row.classLabel,
+          row.subject,
+          row.time,
+          row.topic,
+          row.faculty,
+          row.status,
+        ]),
+      ]
+    );
+    toast.success('Attendance range CSV downloaded');
+  };
+
+  const downloadRangeAttendancePdf = () => {
+    if (!exportRows.length) {
+      toast.error('No attendance rows in the export range.');
+      return;
+    }
+    const opened = openAttendancePdf({
+      rows: exportRows,
+      summary: exportSummary,
+      subtitle: exportRangeSubtitle,
+      title: 'Attendance Range Report',
+    });
+    if (opened) toast.success('PDF range report opened');
     else toast.error('Allow popups to export PDF.');
   };
 
@@ -462,19 +555,87 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
           <div className="flex flex-col gap-2 md:flex-row xl:flex-col xl:justify-end">
             <button
               type="button"
-              onClick={downloadAttendanceCsv}
+              onClick={downloadDayAttendanceCsv}
               disabled={!attendanceRows.length}
               className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Download size={16} /> CSV
+              <Download size={16} /> Day CSV
             </button>
             <button
               type="button"
-              onClick={downloadAttendancePdf}
+              onClick={downloadDayAttendancePdf}
               disabled={!attendanceRows.length}
               className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <FileText size={16} /> PDF
+              <FileText size={16} /> Day PDF
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-5 rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="grid md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] gap-3">
+          <div className="rounded-lg bg-[#f5f5f6] px-4 py-3">
+            <div className="text-xs font-semibold text-slate-500">Export Range</div>
+            <div className="mt-1 text-sm font-extrabold text-slate-900">{exportRangeLabel}</div>
+            <div className="mt-1 text-xs font-semibold text-slate-500">{exportRows.length} row{exportRows.length === 1 ? '' : 's'}</div>
+          </div>
+          <label className="text-xs font-semibold text-slate-500">
+            Export From
+            <span className="relative mt-1 block">
+              <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="date"
+                value={exportFromDate}
+                min={availableDates[0] || undefined}
+                max={latestDate || undefined}
+                onChange={(event) => {
+                  const nextFromDate = event.target.value;
+                  updateExportRange({
+                    from: nextFromDate,
+                    to: exportToDate && nextFromDate && exportToDate < nextFromDate ? nextFromDate : exportToDate,
+                  });
+                }}
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-900"
+              />
+            </span>
+          </label>
+          <label className="text-xs font-semibold text-slate-500">
+            Export To
+            <span className="relative mt-1 block">
+              <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="date"
+                value={exportToDate}
+                min={availableDates[0] || undefined}
+                max={latestDate || undefined}
+                onChange={(event) => {
+                  const nextToDate = event.target.value;
+                  updateExportRange({
+                    from: exportFromDate && nextToDate && exportFromDate > nextToDate ? nextToDate : exportFromDate,
+                    to: nextToDate,
+                  });
+                }}
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-900"
+              />
+            </span>
+          </label>
+          <div className="flex flex-col gap-2 md:flex-row xl:flex-col xl:justify-end">
+            <button
+              type="button"
+              onClick={downloadRangeAttendanceCsv}
+              disabled={!exportRows.length}
+              className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Download size={16} /> Range CSV
+            </button>
+            <button
+              type="button"
+              onClick={downloadRangeAttendancePdf}
+              disabled={!exportRows.length}
+              className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <FileText size={16} /> Range PDF
             </button>
           </div>
         </div>
