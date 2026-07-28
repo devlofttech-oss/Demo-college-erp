@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, BookOpen, ClipboardList, Download, FileText, GraduationCap } from 'lucide-react';
+import { BarChart3, BookOpen, CalendarDays, ClipboardList, Download, FileText, GraduationCap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AttendanceReports from '../attendance/components/AttendanceReports';
 import { formatAttendanceDateInput, formatAttendanceTimeRange, getAttendanceReportDateText, summarizeAttendance } from '../attendance/attendanceUtils';
@@ -64,13 +64,12 @@ function getAttendanceDateInput(record = {}) {
   return timestamp ? getLocalDateInput(new Date(timestamp)) : '';
 }
 
-function getDateRangeLabel(fromDate = '', toDate = '') {
-  if (!fromDate && !toDate) return 'All dates';
-  const fromText = formatAttendanceDateInput(fromDate);
-  const toText = formatAttendanceDateInput(toDate);
-  if (fromDate && toDate && fromDate === toDate) return fromText;
-  if (fromDate && toDate) return `${fromText} to ${toText}`;
-  return fromDate ? `From ${fromText}` : `Until ${toText}`;
+function getAttendanceDayLabel(selectedDate = '') {
+  return formatAttendanceDateInput(selectedDate) || 'No date selected';
+}
+
+function getAvailableAttendanceDates(records = []) {
+  return [...new Set(records.map(getAttendanceDateInput).filter(Boolean))].sort();
 }
 
 function getAttendanceStatus(record = {}) {
@@ -308,21 +307,24 @@ function StudentReportsPanel({ academicYear, admissions = [], documents = [], pr
 
 function AttendanceReportsPanel({ academicYear = '', records = [], selectedCourse = null, selectedCourseCode = 'all' }) {
   const [scope, setScope] = useState('daily');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [selectedDateState, setSelectedDateState] = useState({ contextKey: '', value: '' });
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const selectedCourseLabel = selectedCourseCode === 'all'
     ? 'All Courses'
     : selectedCourse?.courseName || selectedCourse?.name || selectedCourseCode || 'Selected Course';
-  const dateRangeLabel = getDateRangeLabel(fromDate, toDate);
+  const dateContextKey = `${academicYear || 'all-years'}|${selectedCourseCode || 'all-courses'}`;
+  const selectedDate = selectedDateState.contextKey === dateContextKey ? selectedDateState.value : '';
+  const availableDates = useMemo(() => getAvailableAttendanceDates(records), [records]);
+  const latestDate = availableDates[availableDates.length - 1] || '';
+  const effectiveSelectedDate = selectedDate || latestDate;
+  const selectedDayLabel = getAttendanceDayLabel(effectiveSelectedDate);
+
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
     return records.filter((record) => {
       const recordDateInput = getAttendanceDateInput(record);
-      if ((fromDate || toDate) && !recordDateInput) return false;
-      if (fromDate && recordDateInput < fromDate) return false;
-      if (toDate && recordDateInput > toDate) return false;
+      if (!effectiveSelectedDate || recordDateInput !== effectiveSelectedDate) return false;
       if (statusFilter !== 'all' && getAttendanceStatus(record).toLowerCase() !== statusFilter) return false;
       if (!term) return true;
       return [
@@ -339,7 +341,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
         record.facultyName,
       ].filter(Boolean).some((value) => String(value).toLowerCase().includes(term));
     });
-  }, [fromDate, records, search, statusFilter, toDate]);
+  }, [effectiveSelectedDate, records, search, statusFilter]);
   const attendanceRows = useMemo(() => filteredRecords
     .map(buildAttendanceDetailRow)
     .sort((first, second) => (
@@ -348,7 +350,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       || first.subject.localeCompare(second.subject)
     )), [filteredRecords]);
   const detailSummary = summarizeAttendance(filteredRecords);
-  const exportSubtitle = `${selectedCourseLabel} - ${academicYear || 'All academic years'} - ${dateRangeLabel}`;
+  const exportSubtitle = `${selectedCourseLabel} - ${academicYear || 'All academic years'} - ${selectedDayLabel}`;
 
   const downloadAttendanceCsv = () => {
     if (!attendanceRows.length) {
@@ -356,12 +358,12 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       return;
     }
     downloadCsv(
-      `attendance-report-${sanitizeFilenamePart(selectedCourseLabel)}-${sanitizeFilenamePart(fromDate || 'all')}-${sanitizeFilenamePart(toDate || fromDate || 'all')}.csv`,
+      `attendance-report-${sanitizeFilenamePart(selectedCourseLabel)}-${sanitizeFilenamePart(effectiveSelectedDate || 'no-date')}.csv`,
       [
         ['Attendance Report'],
         ['Course', selectedCourseLabel],
         ['Academic Year', academicYear || 'All academic years'],
-        ['Date Range', dateRangeLabel],
+        ['Attendance Date', selectedDayLabel],
         ['Total', detailSummary.total, 'Present', detailSummary.present, 'Absent', detailSummary.absent, 'Attendance %', detailSummary.percentage],
         [],
         ['Date', 'Student', 'Student ID', 'Semester / Class', 'Subject', 'Time', 'Topic', 'Faculty', 'Status'],
@@ -400,7 +402,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Attendance Reports</h2>
-          <p className="text-sm text-slate-500 mt-1">{selectedCourseLabel} attendance details for {academicYear || 'all academic years'}.</p>
+          <p className="text-sm text-slate-500 mt-1">{selectedCourseLabel} attendance for {selectedDayLabel}.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {[
@@ -420,25 +422,20 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       </div>
 
       <section className="mb-5 rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
-        <div className="grid md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] gap-3">
+        <div className="grid md:grid-cols-2 xl:grid-cols-[1.1fr_1fr_2fr_auto] gap-3">
           <label className="text-xs font-semibold text-slate-500">
-            From Date
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(event) => setFromDate(event.target.value)}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-500">
-            To Date
-            <input
-              type="date"
-              value={toDate}
-              min={fromDate || undefined}
-              onChange={(event) => setToDate(event.target.value)}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
-            />
+            Attendance Date
+            <span className="relative mt-1 block">
+              <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="date"
+                value={effectiveSelectedDate}
+                min={availableDates[0] || undefined}
+                max={latestDate || undefined}
+                onChange={(event) => setSelectedDateState({ contextKey: dateContextKey, value: event.target.value })}
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-900"
+              />
+            </span>
           </label>
           <label className="text-xs font-semibold text-slate-500">
             Status
@@ -483,7 +480,8 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
         </div>
       </section>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
+        <SummaryCard label="Date" value={selectedDayLabel} />
         <SummaryCard label="Rows" value={detailSummary.total} />
         <SummaryCard label="Present" value={detailSummary.present} />
         <SummaryCard label="Absent" value={detailSummary.absent} />
@@ -523,7 +521,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
             {!attendanceRows.length && (
               <tr>
                 <td colSpan="8" className="px-4 py-10 text-center text-slate-500">
-                  No attendance rows match the selected course and date range.
+                  No attendance rows match the selected course and attendance date.
                 </td>
               </tr>
             )}
