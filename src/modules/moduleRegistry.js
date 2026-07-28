@@ -16,23 +16,23 @@ import {
 } from 'lucide-react';
 
 export const moduleDisplayOrder = [
-  'academics',
+  'dashboard',
+  'students',
+  'faculty-staff',
   'attendance',
+  'timetable',
+  'examination-results',
   'communication',
   'calendar',
-  'dashboard',
-  'document-management',
-  'examination-results',
-  'faculty-staff',
   'hostel-management',
-  'parent-portal',
+  'document-management',
   'fees',
   'reports',
-  'settings',
-  'students',
-  'subject-notes',
-  'timetable',
+  'academics',
   'user-roles',
+  'settings',
+  'parent-portal',
+  'subject-notes',
 ];
 
 const moduleIdAliases = {
@@ -105,6 +105,7 @@ export const moduleRegistry = [
     icon: BookOpenCheck,
     status: 'active',
     permission: 'subjectNotes.view',
+    hideFromSidebar: true,
   },
   {
     id: 'examination-results',

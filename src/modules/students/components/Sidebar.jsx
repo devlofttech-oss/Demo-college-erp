@@ -29,7 +29,7 @@ export default function Sidebar({ activePage, activeSubmenuId = '', collapsed = 
     const canShowHiddenModule = (module) => {
       if (module.id === 'dashboard') return isAdmin || isSuperAdmin;
       if (module.id === 'parent-portal') return currentRoleId === 'parent';
-      return isSuperAdmin;
+      return isSuperAdmin && ['academics', 'user-roles'].includes(module.id);
     };
     return sortModulesByDisplayOrder(getEnabledModules()
       .filter((module) => !module.permission || canAccess(defaultRoles, currentRoleId, module.permission))
