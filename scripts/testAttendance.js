@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import {
   buildAttendanceKey,
   buildReport,
+  formatAttendanceDateInput,
   formatAttendanceTimeRange,
+  getAttendanceReportDateText,
   getAttendanceTimeMinutes,
   getMonthKey,
   getYearKey,
   isAttendanceTimeRangeValid,
   isAttendanceRecordEditable,
+  mergeAttendanceRecords,
   normalizeAttendanceTime,
   recordMatchesAttendanceTimeRange,
   relationMatchesEntity,
@@ -31,6 +34,10 @@ const records = [
 assert.equal(buildAttendanceKey('STU-1001', '18 Jun 2026'), 'STU-1001-18 Jun 2026');
 assert.equal(buildAttendanceKey('STU-1001', '18 Jun 2026', 'Physics'), 'STU-1001-18 Jun 2026-Physics');
 assert.equal(buildAttendanceKey('STU-1001', '18 Jun 2026', 'Physics', '09:00', '10:00'), 'STU-1001-18 Jun 2026-Physics-09:00-10:00');
+assert.equal(formatAttendanceDateInput('2026-06-18'), '18 Jun 2026');
+assert.equal(formatAttendanceDateInput('bad'), '');
+assert.equal(getAttendanceReportDateText({ dateInput: '2026-06-20' }), '20 Jun 2026');
+assert.equal(getAttendanceReportDateText({ markedAtIso: '2026-06-21T10:00:00.000Z' }), '21 Jun 2026');
 assert.equal(normalizeAttendanceTime('9:05'), '09:05');
 assert.equal(normalizeAttendanceTime('24:00'), '');
 assert.equal(getAttendanceTimeMinutes('09:30'), 570);
@@ -55,8 +62,30 @@ assert.deepEqual(summarizeAttendance(records), {
 });
 
 assert.equal(Object.keys(buildReport(records, 'daily')).length, 2);
+assert.equal(buildReport(records, 'daily')['18 Jun 2026'].length, 2);
+assert.equal(buildReport(records, 'monthly')['Jun 2026'].length, 3);
+assert.equal(buildReport(records, 'yearly')['2026'].length, 3);
+assert.equal(buildReport([{ dateInput: '2026-06-20', status: 'Present' }], 'daily')['20 Jun 2026'].length, 1);
+assert.equal(buildReport([{ status: 'Present' }], 'daily')['Unspecified date'].length, 1);
 assert.equal(Object.keys(buildReport(records, 'monthly')).length, 1);
 assert.equal(Object.keys(buildReport(records, 'yearly')).length, 1);
+assert.deepEqual(
+  mergeAttendanceRecords(
+    [
+      { id: 'att-1', status: 'Absent', dateText: '18 Jun 2026' },
+      { id: 'att-2', status: 'Present', dateText: '19 Jun 2026' },
+    ],
+    [
+      { id: 'att-3', status: 'Present', dateText: '20 Jun 2026' },
+      { id: 'att-1', status: 'Present', dateText: '18 Jun 2026' },
+    ]
+  ).map((record) => [record.id, record.status, record.dateText]),
+  [
+    ['att-3', 'Present', '20 Jun 2026'],
+    ['att-1', 'Present', '18 Jun 2026'],
+    ['att-2', 'Present', '19 Jun 2026'],
+  ]
+);
 assert.deepEqual(getSemesterNumbersForStudent({ courseYear: '2nd Year' }), [3, 4]);
 assert.deepEqual(getSemesterNumbersForAcademicRecord({ semesterNumbers: [4, 3, 3] }), [3, 4]);
 assert.equal(getSemesterDisplayForRecord({ className: '1 St Year' }), 'Semester 1 / Semester 2');

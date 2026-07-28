@@ -130,7 +130,7 @@ const collections = {
   },
   studentAttendanceRecords: {
     purpose: 'Student daily attendance tracking',
-    fields: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'openingTime', 'closingTime', 'timeRange', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
+    fields: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'openingTime', 'closingTime', 'timeRange', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateInput', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
   },
   attendanceNotifications: {
     purpose: 'Parent notification queue metadata for attendance events',

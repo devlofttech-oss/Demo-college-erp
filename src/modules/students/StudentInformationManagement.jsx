@@ -58,7 +58,7 @@ import { normalizeInstituteSettings } from '../settings/settingsModel';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
 import { getParentLinkedStudents } from '../parentPortal/parentPortalUtils';
 import { calculateAssignmentPaymentLedger, formatCurrency, formatManualDueItems, formatPaymentDate, sortPaymentRecordsByDate, totalFeeComponents } from '../fees/feeUtils';
-import { formatAttendanceTimeRange } from '../attendance/attendanceUtils';
+import { formatAttendanceTimeRange, mergeAttendanceRecords } from '../attendance/attendanceUtils';
 
 const AcademicsManagement = lazy(() => import('../academics/AcademicsManagement'));
 const AttendanceManagement = lazy(() => import('../attendance/AttendanceManagement'));
@@ -438,6 +438,9 @@ export default function StudentInformationManagement({ user, onLogout }) {
   const academicYearOptions = useMemo(() => [DEFAULT_ACADEMIC_YEAR, NEXT_ACADEMIC_YEAR], []);
 
   const recordBelongsToYear = (record) => !academicYear || record.academicYear === academicYear;
+  const updateSavedAttendanceRecords = useCallback((savedRecords = []) => {
+    setAttendanceRecords((currentRecords) => mergeAttendanceRecords(currentRecords, savedRecords));
+  }, []);
   const yearStudents = useMemo(() => (
     academicYear ? students.filter((student) => student.academicYear === academicYear) : students
   ), [academicYear, students]);
@@ -1059,6 +1062,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
                     initialBranch={location.state?.attendanceBranch}
                     initialMode={location.state?.attendanceMode}
                     initialTask={location.state?.attendanceTask}
+                    onAttendanceSaved={updateSavedAttendanceRecords}
                     selectedCourse={selectedCourse}
                     selectedCourseCode={effectiveSelectedCourseCode}
                     scopedStudents={moduleScopedStudents}

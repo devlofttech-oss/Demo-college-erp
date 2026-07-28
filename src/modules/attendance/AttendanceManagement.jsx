@@ -12,10 +12,13 @@ import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import {
   buildAttendanceKey,
+  formatAttendanceDateInput,
   formatAttendanceTimeRange,
   formatDisplayDate,
+  getAttendanceReportDateText,
   isAttendanceTimeRangeValid,
   isAttendanceRecordEditable,
+  mergeAttendanceRecords,
   normalizeAttendanceTime,
   recordMatchesAttendanceTimeRange,
   summarizeAttendance,
@@ -39,10 +42,6 @@ function getTodayInputValue() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function formatInputDate(inputDate) {
-  return formatDisplayDate(new Date(`${inputDate}T00:00:00`));
 }
 
 function getStudentSemester(student = {}) {
@@ -106,6 +105,7 @@ export default function AttendanceManagement({
   initialBranch = '',
   initialMode = 'students',
   initialTask = '',
+  onAttendanceSaved,
   scopedStudents = [],
   selectedCourse = null,
   selectedCourseCode = 'all',
@@ -281,8 +281,8 @@ export default function AttendanceManagement({
       return true;
     })
     : allModeRecords;
-  const selectedDate = formatInputDate(selectedDateInput);
-  const selectedDateRecords = activeRecords.filter((record) => record.dateText === selectedDate);
+  const selectedDate = formatAttendanceDateInput(selectedDateInput);
+  const selectedDateRecords = activeRecords.filter((record) => getAttendanceReportDateText(record) === selectedDate);
   const activeEntities = useMemo(() => {
     const term = search.trim().toLowerCase();
     const source = mode === 'students' ? semesterStudents : staff;
@@ -447,7 +447,7 @@ export default function AttendanceManagement({
     );
     return allModeRecords.find((record) => buildAttendanceKey(
       record.entityId || record.studentId || record.employeeId,
-      record.dateText,
+      getAttendanceReportDateText(record),
       record.subjectName || record.subject || '',
       mode === 'students' && studentAttendanceScope === 'subject' ? record.openingTime || record.sessionOpeningTime || record.startTime : '',
       mode === 'students' && studentAttendanceScope === 'subject' ? record.closingTime || record.sessionClosingTime || record.endTime : ''
@@ -567,6 +567,7 @@ export default function AttendanceManagement({
       topic: mode === 'students' && studentAttendanceScope === 'subject' ? normalizedTopic : '',
       syllabusTopic: mode === 'students' && studentAttendanceScope === 'subject' ? matchedTopic : '',
       syllabusTopicMatched: mode === 'students' && studentAttendanceScope === 'subject' ? Boolean(matchedTopic) : false,
+      dateInput: selectedDateInput,
       dateText: selectedDate,
       status,
       sessionId,
@@ -643,23 +644,12 @@ export default function AttendanceManagement({
       }));
 
       const savedRecords = results.filter((result) => result.record).map((result) => result.record);
-      const savedIds = new Set(savedRecords.map((record) => record.id));
-      const createdRecords = results.filter((result) => result.action === 'created').map((result) => result.record);
 
       if (mode === 'students') {
-        setStudentAttendance((prev) => [
-          ...createdRecords,
-          ...prev.map((record) => savedIds.has(record.id)
-            ? savedRecords.find((savedRecord) => savedRecord.id === record.id) || record
-            : record),
-        ]);
+        setStudentAttendance((prev) => mergeAttendanceRecords(prev, savedRecords));
+        onAttendanceSaved?.(savedRecords);
       } else {
-        setStaffAttendance((prev) => [
-          ...createdRecords,
-          ...prev.map((record) => savedIds.has(record.id)
-            ? savedRecords.find((savedRecord) => savedRecord.id === record.id) || record
-            : record),
-        ]);
+        setStaffAttendance((prev) => mergeAttendanceRecords(prev, savedRecords));
       }
 
       const skipped = results.filter((result) => result.skipped).length;

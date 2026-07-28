@@ -6,6 +6,32 @@ export function formatDisplayDate(date = new Date()) {
   });
 }
 
+export function formatAttendanceDateInput(inputDate = '') {
+  const normalized = String(inputDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return '';
+  const parsed = new Date(`${normalized}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? '' : formatDisplayDate(parsed);
+}
+
+export function getAttendanceReportDateText(record = {}) {
+  const dateText = String(record.dateText || '').trim();
+  if (dateText) return dateText;
+
+  const inputDateText = formatAttendanceDateInput(record.dateInput || record.attendanceDate || record.date);
+  if (inputDateText) return inputDateText;
+
+  const markedAtText = String(record.markedAtText || '').trim();
+  if (markedAtText) return markedAtText;
+
+  const timestamp = record.markedAtIso || record.createdAtIso || '';
+  if (timestamp) {
+    const parsed = new Date(timestamp);
+    if (!Number.isNaN(parsed.getTime())) return formatDisplayDate(parsed);
+  }
+
+  return 'Unspecified date';
+}
+
 export function getMonthKey(dateText = '') {
   const parts = dateText.split(' ');
   return parts.length === 3 ? `${parts[1]} ${parts[2]}` : dateText;
@@ -63,6 +89,18 @@ export function buildAttendanceKey(entityId, dateText, subjectName = '', opening
   ].filter(Boolean).join('-');
 }
 
+export function mergeAttendanceRecords(existingRecords = [], savedRecords = []) {
+  const normalizedSavedRecords = savedRecords.filter((record) => record?.id);
+  if (!normalizedSavedRecords.length) return existingRecords;
+  const savedById = new Map(normalizedSavedRecords.map((record) => [record.id, record]));
+  const existingIds = new Set(existingRecords.map((record) => record.id).filter(Boolean));
+  const createdRecords = normalizedSavedRecords.filter((record) => !existingIds.has(record.id));
+  return [
+    ...createdRecords,
+    ...existingRecords.map((record) => savedById.get(record.id) || record),
+  ];
+}
+
 export function getAttendanceMarkedAt(record = {}) {
   const timestamp = record.markedAtIso || record.createdAtIso || '';
   if (timestamp) {
@@ -99,7 +137,8 @@ export function summarizeAttendance(records) {
 
 export function buildReport(records, scope) {
   return records.reduce((acc, record) => {
-    const key = scope === 'yearly' ? getYearKey(record.dateText) : scope === 'monthly' ? getMonthKey(record.dateText) : record.dateText;
+    const dateText = getAttendanceReportDateText(record);
+    const key = scope === 'yearly' ? getYearKey(dateText) : scope === 'monthly' ? getMonthKey(dateText) : dateText;
     if (!acc[key]) acc[key] = [];
     acc[key].push(record);
     return acc;

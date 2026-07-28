@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
-import { formatAttendanceTimeRange } from '../attendanceUtils';
+import { formatAttendanceTimeRange, getAttendanceReportDateText } from '../attendanceUtils';
 
 function AttendanceStatusControl({ canMark, record, entity, onMark, recordEditable = true }) {
   const currentStatus = record?.status || '';
@@ -56,7 +56,7 @@ function AttendanceTable({
 }) {
   const recordsByEntityId = useMemo(() => records.reduce((map, record) => {
     const recordEntityId = record.entityId || record.studentId || record.employeeId;
-    if (recordEntityId && record.dateText === selectedDate) {
+    if (recordEntityId && getAttendanceReportDateText(record) === selectedDate) {
       map.set(recordEntityId, record);
     }
     return map;

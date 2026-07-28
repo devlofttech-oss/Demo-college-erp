@@ -44,7 +44,7 @@ const schemas = {
   departments: ['name', 'headName', 'status'],
   staffLeaveRecords: ['staffRecordId', 'employeeId', 'leaveType', 'fromDate', 'toDate', 'reason', 'status'],
   staffAttendanceRecords: ['staffRecordId', 'employeeId', 'academicYear', 'dateText', 'status', 'markedAtText'],
-  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
+  studentAttendanceRecords: ['entityType', 'entityRecordId', 'entityId', 'studentRecordId', 'studentId', 'entityName', 'className', 'section', 'semester', 'semesterNumber', 'semesterNumbers', 'semesterLabels', 'department', 'courseCode', 'courseName', 'attendanceScope', 'subjectCode', 'subjectName', 'facultyRecordId', 'facultyId', 'facultyName', 'topic', 'syllabusTopic', 'syllabusTopicMatched', 'academicYear', 'dateInput', 'dateText', 'status', 'sessionId', 'markedAtText', 'markedAtIso', 'editedAtText', 'editedAtIso', 'parentNotified'],
   attendanceNotifications: ['studentRecordId', 'studentId', 'studentName', 'channel', 'academicYear', 'reason', 'status'],
   classrooms: ['roomNo', 'building', 'capacity', 'status'],
   timetableEntries: ['classKey', 'subject', 'academicYear', 'facultyId', 'facultyName', 'classroomId', 'classroomName', 'day', 'timeSlot', 'status'],
@@ -260,8 +260,8 @@ const seed = {
     'seed-staff-att-kavita': { staffRecordId: 'seed-staff-kavita', employeeId: 'EMP-1001', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026' },
   },
   studentAttendanceRecords: {
-    'seed-student-att-vivek': { entityType: 'Student', entityRecordId: 'seed-student-vivek', entityId: 'STU-4449', entityName: 'Vivek Sharma', className: 'Class XII', section: 'A', courseCode: 'SCI-XII', courseName: 'CBSE Science', subjectCode: 'PHY-12', subjectName: 'Physics', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026', parentNotified: false },
-    'seed-student-att-vaibhavi': { entityType: 'Student', entityRecordId: 'seed-student-vaibhavi', entityId: 'STU-4450', entityName: 'Vaibhavi Aggarwal', className: 'Class XI', section: 'B', courseCode: 'COM-XI', courseName: 'PU Commerce', subjectCode: 'ACC-11', subjectName: 'Accountancy', academicYear: '2026-2027', dateText: '18 Jun 2026', status: 'Absent', markedAtText: '18 Jun 2026', parentNotified: true },
+    'seed-student-att-vivek': { entityType: 'Student', entityRecordId: 'seed-student-vivek', entityId: 'STU-4449', entityName: 'Vivek Sharma', className: 'Class XII', section: 'A', courseCode: 'SCI-XII', courseName: 'CBSE Science', subjectCode: 'PHY-12', subjectName: 'Physics', academicYear: '2026-2027', dateInput: '2026-06-18', dateText: '18 Jun 2026', status: 'Present', markedAtText: '18 Jun 2026', parentNotified: false },
+    'seed-student-att-vaibhavi': { entityType: 'Student', entityRecordId: 'seed-student-vaibhavi', entityId: 'STU-4450', entityName: 'Vaibhavi Aggarwal', className: 'Class XI', section: 'B', courseCode: 'COM-XI', courseName: 'PU Commerce', subjectCode: 'ACC-11', subjectName: 'Accountancy', academicYear: '2026-2027', dateInput: '2026-06-18', dateText: '18 Jun 2026', status: 'Absent', markedAtText: '18 Jun 2026', parentNotified: true },
   },
   attendanceNotifications: {
     'seed-att-note-vaibhavi': { studentRecordId: 'seed-student-vaibhavi', studentId: 'STU-4450', studentName: 'Vaibhavi Aggarwal', channel: 'Parent Portal', academicYear: '2026-2027', reason: 'Absent on 18 Jun 2026', status: 'Queued', createdAtText: '18 Jun 2026' },
