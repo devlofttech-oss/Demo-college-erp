@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, BookOpen, ClipboardList, Download, FileText, GraduationCap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AttendanceReports from '../attendance/components/AttendanceReports';
+import { formatAttendanceDateInput, formatAttendanceTimeRange, getAttendanceReportDateText, summarizeAttendance } from '../attendance/attendanceUtils';
 import FinancialReports from '../financialReports/FinancialReports';
 import StatusBadge from '../students/components/StatusBadge';
 import { canAccess, canAccessFinancialReports, defaultRoles } from '../userRoles/rolePermissions';
@@ -20,6 +21,173 @@ function downloadCsv(filename, rows = []) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+const DISPLAY_MONTH_INPUTS = {
+  Jan: '01',
+  Feb: '02',
+  Mar: '03',
+  Apr: '04',
+  May: '05',
+  Jun: '06',
+  Jul: '07',
+  Aug: '08',
+  Sep: '09',
+  Sept: '09',
+  Oct: '10',
+  Nov: '11',
+  Dec: '12',
+};
+
+function getLocalDateInput(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function getAttendanceDateInput(record = {}) {
+  const directDate = String(record.dateInput || record.attendanceDate || record.date || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(directDate)) return directDate;
+
+  const dateText = getAttendanceReportDateText(record);
+  const displayMatch = /^(\d{1,2})\s+([A-Za-z]{3,4})\s+(\d{4})$/.exec(dateText);
+  if (displayMatch) {
+    const [, day, month, year] = displayMatch;
+    const monthInput = DISPLAY_MONTH_INPUTS[month];
+    if (monthInput) return `${year}-${monthInput}-${String(day).padStart(2, '0')}`;
+  }
+
+  const timestamp = record.markedAtIso || record.createdAtIso || '';
+  return timestamp ? getLocalDateInput(new Date(timestamp)) : '';
+}
+
+function getDateRangeLabel(fromDate = '', toDate = '') {
+  if (!fromDate && !toDate) return 'All dates';
+  const fromText = formatAttendanceDateInput(fromDate);
+  const toText = formatAttendanceDateInput(toDate);
+  if (fromDate && toDate && fromDate === toDate) return fromText;
+  if (fromDate && toDate) return `${fromText} to ${toText}`;
+  return fromDate ? `From ${fromText}` : `Until ${toText}`;
+}
+
+function getAttendanceStatus(record = {}) {
+  return String(record.status || '').trim() || 'Unmarked';
+}
+
+function buildAttendanceDetailRow(record = {}, index = 0) {
+  const studentName = record.entityName || record.studentName || record.name || record.student || 'Unknown student';
+  const studentId = record.entityId || record.studentId || record.admissionNo || '-';
+  const subject = record.subjectName || record.subject || (record.attendanceScope === 'general' ? 'General Attendance' : '-');
+  const dateInput = getAttendanceDateInput(record);
+  return {
+    classLabel: record.semester || record.className || record.classKey || 'Unassigned',
+    date: getAttendanceReportDateText(record),
+    dateInput,
+    faculty: record.facultyName || '-',
+    id: record.id || `${studentId}-${dateInput || index}-${index}`,
+    status: getAttendanceStatus(record),
+    studentId,
+    studentName,
+    subject,
+    time: formatAttendanceTimeRange(record) || '-',
+    topic: record.topic || record.syllabusTopic || '-',
+  };
+}
+
+function sanitizeFilenamePart(value = '') {
+  return String(value || 'all')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'all';
+}
+
+function escapeHtml(value = '') {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[character]));
+}
+
+function openAttendancePdf({ rows = [], summary = {}, subtitle = '', title = 'Attendance Report' }) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return false;
+  const generatedAt = new Date().toLocaleString('en-GB', { hour12: true });
+  const tableRows = rows.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.date)}</td>
+      <td><strong>${escapeHtml(row.studentName)}</strong><br><span>${escapeHtml(row.studentId)}</span></td>
+      <td>${escapeHtml(row.classLabel)}</td>
+      <td>${escapeHtml(row.subject)}</td>
+      <td>${escapeHtml(row.time)}</td>
+      <td>${escapeHtml(row.topic)}</td>
+      <td>${escapeHtml(row.faculty)}</td>
+      <td><strong>${escapeHtml(row.status)}</strong></td>
+    </tr>
+  `).join('');
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #172033; margin: 28px; }
+          h1 { font-size: 24px; margin: 0 0 6px; }
+          p { color: #5f6b7a; margin: 0; }
+          .meta { display: flex; justify-content: space-between; gap: 18px; margin: 18px 0; font-size: 12px; }
+          .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+          .metric { border: 1px solid #dbe3ea; border-radius: 8px; padding: 10px; }
+          .metric span { color: #64748b; display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+          .metric strong { color: #172033; display: block; font-size: 20px; margin-top: 4px; }
+          table { border-collapse: collapse; width: 100%; font-size: 11px; }
+          th, td { border: 1px solid #dbe3ea; padding: 8px; text-align: left; vertical-align: top; }
+          th { background: #f2f5f8; color: #334155; font-size: 10px; text-transform: uppercase; }
+          td span { color: #64748b; font-size: 10px; }
+          @media print { body { margin: 16px; } .meta { break-after: avoid; } }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(subtitle)}</p>
+        <div class="meta">
+          <span>Generated: ${escapeHtml(generatedAt)}</span>
+          <span>Total rows: ${rows.length}</span>
+        </div>
+        <div class="summary">
+          <div class="metric"><span>Total</span><strong>${summary.total || 0}</strong></div>
+          <div class="metric"><span>Present</span><strong>${summary.present || 0}</strong></div>
+          <div class="metric"><span>Absent</span><strong>${summary.absent || 0}</strong></div>
+          <div class="metric"><span>Attendance</span><strong>${summary.percentage || 0}%</strong></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Student</th>
+              <th>Semester / Class</th>
+              <th>Subject</th>
+              <th>Time</th>
+              <th>Topic</th>
+              <th>Faculty</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 250);
+  return true;
 }
 
 function SummaryCard({ label, value }) {
@@ -138,15 +306,101 @@ function StudentReportsPanel({ academicYear, admissions = [], documents = [], pr
   );
 }
 
-function AttendanceReportsPanel({ records = [] }) {
+function AttendanceReportsPanel({ academicYear = '', records = [], selectedCourse = null, selectedCourseCode = 'all' }) {
   const [scope, setScope] = useState('daily');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const selectedCourseLabel = selectedCourseCode === 'all'
+    ? 'All Courses'
+    : selectedCourse?.courseName || selectedCourse?.name || selectedCourseCode || 'Selected Course';
+  const dateRangeLabel = getDateRangeLabel(fromDate, toDate);
+  const filteredRecords = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return records.filter((record) => {
+      const recordDateInput = getAttendanceDateInput(record);
+      if ((fromDate || toDate) && !recordDateInput) return false;
+      if (fromDate && recordDateInput < fromDate) return false;
+      if (toDate && recordDateInput > toDate) return false;
+      if (statusFilter !== 'all' && getAttendanceStatus(record).toLowerCase() !== statusFilter) return false;
+      if (!term) return true;
+      return [
+        record.entityName,
+        record.studentName,
+        record.entityId,
+        record.studentId,
+        record.admissionNo,
+        record.semester,
+        record.className,
+        record.subjectName,
+        record.subject,
+        record.topic,
+        record.facultyName,
+      ].filter(Boolean).some((value) => String(value).toLowerCase().includes(term));
+    });
+  }, [fromDate, records, search, statusFilter, toDate]);
+  const attendanceRows = useMemo(() => filteredRecords
+    .map(buildAttendanceDetailRow)
+    .sort((first, second) => (
+      (second.dateInput || '').localeCompare(first.dateInput || '')
+      || first.studentName.localeCompare(second.studentName)
+      || first.subject.localeCompare(second.subject)
+    )), [filteredRecords]);
+  const detailSummary = summarizeAttendance(filteredRecords);
+  const exportSubtitle = `${selectedCourseLabel} - ${academicYear || 'All academic years'} - ${dateRangeLabel}`;
+
+  const downloadAttendanceCsv = () => {
+    if (!attendanceRows.length) {
+      toast.error('No attendance rows to export.');
+      return;
+    }
+    downloadCsv(
+      `attendance-report-${sanitizeFilenamePart(selectedCourseLabel)}-${sanitizeFilenamePart(fromDate || 'all')}-${sanitizeFilenamePart(toDate || fromDate || 'all')}.csv`,
+      [
+        ['Attendance Report'],
+        ['Course', selectedCourseLabel],
+        ['Academic Year', academicYear || 'All academic years'],
+        ['Date Range', dateRangeLabel],
+        ['Total', detailSummary.total, 'Present', detailSummary.present, 'Absent', detailSummary.absent, 'Attendance %', detailSummary.percentage],
+        [],
+        ['Date', 'Student', 'Student ID', 'Semester / Class', 'Subject', 'Time', 'Topic', 'Faculty', 'Status'],
+        ...attendanceRows.map((row) => [
+          row.date,
+          row.studentName,
+          row.studentId,
+          row.classLabel,
+          row.subject,
+          row.time,
+          row.topic,
+          row.faculty,
+          row.status,
+        ]),
+      ]
+    );
+    toast.success('Attendance CSV downloaded');
+  };
+
+  const downloadAttendancePdf = () => {
+    if (!attendanceRows.length) {
+      toast.error('No attendance rows to export.');
+      return;
+    }
+    const opened = openAttendancePdf({
+      rows: attendanceRows,
+      summary: detailSummary,
+      subtitle: exportSubtitle,
+    });
+    if (opened) toast.success('PDF report opened');
+    else toast.error('Allow popups to export PDF.');
+  };
 
   return (
     <div>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Attendance Reports</h2>
-          <p className="text-sm text-slate-500 mt-1">Daily, monthly, yearly, and subject-wise attendance summaries.</p>
+          <p className="text-sm text-slate-500 mt-1">{selectedCourseLabel} attendance details for {academicYear || 'all academic years'}.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {[
@@ -164,7 +418,120 @@ function AttendanceReportsPanel({ records = [] }) {
           ))}
         </div>
       </div>
-      {records.length ? <AttendanceReports records={records} scope={scope} /> : <EmptyReport message="No attendance report records are available for this selection." />}
+
+      <section className="mb-5 rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="grid md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] gap-3">
+          <label className="text-xs font-semibold text-slate-500">
+            From Date
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-500">
+            To Date
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(event) => setToDate(event.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-500">
+            Status
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
+            >
+              <option value="all">All Statuses</option>
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+              <option value="leave">Leave</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-500">
+            Search
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Student, subject, topic..."
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
+            />
+          </label>
+          <div className="flex flex-col gap-2 md:flex-row xl:flex-col xl:justify-end">
+            <button
+              type="button"
+              onClick={downloadAttendanceCsv}
+              disabled={!attendanceRows.length}
+              className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Download size={16} /> CSV
+            </button>
+            <button
+              type="button"
+              onClick={downloadAttendancePdf}
+              disabled={!attendanceRows.length}
+              className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <FileText size={16} /> PDF
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+        <SummaryCard label="Rows" value={detailSummary.total} />
+        <SummaryCard label="Present" value={detailSummary.present} />
+        <SummaryCard label="Absent" value={detailSummary.absent} />
+        <SummaryCard label="Attendance %" value={`${detailSummary.percentage}%`} />
+      </div>
+
+      <section className="mb-5 overflow-x-auto rounded-lg border border-slate-100 bg-white shadow-sm">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead className="bg-[#e7e7e9] text-left text-slate-900">
+            <tr>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3">Student</th>
+              <th className="px-4 py-3">Semester / Class</th>
+              <th className="px-4 py-3">Subject</th>
+              <th className="px-4 py-3">Time</th>
+              <th className="px-4 py-3">Topic</th>
+              <th className="px-4 py-3">Faculty</th>
+              <th className="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {attendanceRows.map((row) => (
+              <tr key={row.id} className="border-t border-slate-100">
+                <td className="px-4 py-3 font-semibold">{row.date}</td>
+                <td className="px-4 py-3 font-semibold">
+                  {row.studentName}
+                  <div className="text-xs font-normal text-slate-500">{row.studentId}</div>
+                </td>
+                <td className="px-4 py-3">{row.classLabel}</td>
+                <td className="px-4 py-3">{row.subject}</td>
+                <td className="px-4 py-3">{row.time}</td>
+                <td className="px-4 py-3">{row.topic}</td>
+                <td className="px-4 py-3">{row.faculty}</td>
+                <td className="px-4 py-3"><StatusBadge value={row.status} /></td>
+              </tr>
+            ))}
+            {!attendanceRows.length && (
+              <tr>
+                <td colSpan="8" className="px-4 py-10 text-center text-slate-500">
+                  No attendance rows match the selected course and date range.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+
+      {filteredRecords.length ? <AttendanceReports records={filteredRecords} scope={scope} /> : <EmptyReport message="No attendance report records are available for this selection." />}
     </div>
   );
 }
@@ -282,7 +649,14 @@ export default function ReportsManagement({
       description: 'Daily, monthly, yearly',
       icon: <ClipboardList size={18} />,
       enabled: canAccess(defaultRoles, currentRoleId, 'attendance.reports'),
-      content: <AttendanceReportsPanel records={attendanceRecords} />,
+      content: (
+        <AttendanceReportsPanel
+          academicYear={academicYear}
+          records={attendanceRecords}
+          selectedCourse={selectedCourse}
+          selectedCourseCode={selectedCourseCode}
+        />
+      ),
     },
     {
       id: 'documents',
