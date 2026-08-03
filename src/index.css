@@ -6206,3 +6206,147 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
     margin:0 auto!important;
   }
 }
+
+/* Icon contrast authority: keep Lucide strokes readable after theme overrides. */
+.erp-shell svg,
+.auth-shell svg {
+  color:currentColor!important;
+  stroke:currentColor!important;
+  opacity:1!important;
+}
+
+.erp-shell :is(button, [role="button"], label, .erp-sidebar-item, .erp-sidebar-subitem, .erp-mobile-drawer-item, .erp-mobile-drawer-subitem) svg,
+.auth-shell :is(button, label, .auth-role-option) svg {
+  flex:0 0 auto;
+}
+
+.erp-shell:not(.light-mode) :is(
+  [class*="text-[#33373e]"],
+  [class*="text-[#34363d]"],
+  [class*="text-[#30343c]"],
+  [class*="text-[#2e333b]"],
+  .erp-branch-icon,
+  .erp-report-category-icon
+) {
+  color:#00ff88!important;
+  -webkit-text-fill-color:#00ff88!important;
+}
+
+.erp-shell:not(.light-mode) :is(
+  [class*="text-[#33373e]"],
+  [class*="text-[#34363d]"],
+  [class*="text-[#30343c]"],
+  [class*="text-[#2e333b]"],
+  .erp-branch-icon,
+  .erp-report-category-icon
+) svg {
+  color:#00ff88!important;
+  stroke:#00ff88!important;
+}
+
+.erp-shell:not(.light-mode) :is(
+  .erp-sidebar-item-icon,
+  .erp-sidebar-subitem-icon,
+  .erp-mobile-drawer-item-icon,
+  .erp-mobile-drawer-subitem svg
+) {
+  color:#bfdbfe!important;
+  stroke:#bfdbfe!important;
+}
+
+.erp-shell:not(.light-mode) :is(
+  .erp-sidebar-item.is-active,
+  .erp-sidebar-subitem.is-active,
+  .erp-mobile-drawer-item.is-active,
+  .erp-mobile-drawer-subitem.is-active
+) :is(.erp-sidebar-item-icon, .erp-sidebar-subitem-icon, .erp-mobile-drawer-item-icon, svg) {
+  color:#ffffff!important;
+  stroke:#ffffff!important;
+}
+
+.erp-shell:not(.light-mode) :is(
+  button[class*="bg-[#333"],
+  button[class*="bg-[#343"],
+  button[class*="bg-[#fb"],
+  button[class*="bg-orange"],
+  button[class*="bg-emerald"],
+  button[class*="border-[#333"],
+  button[class*="border-[#343"],
+  button[class*="border-[#fb"],
+  button[class*="border-orange"]
+) svg {
+  color:currentColor!important;
+  stroke:currentColor!important;
+}
+
+.erp-shell.light-mode :is(
+  .erp-theme-toggle,
+  .erp-notification-button,
+  .erp-sidebar-collapse-button,
+  .erp-mobile-drawer-close,
+  .erp-profile-menu-wrap > button,
+  .erp-report-category-icon,
+  .erp-branch-icon,
+  [class*="text-[#33373e]"],
+  [class*="text-[#34363d]"],
+  [class*="text-[#30343c]"],
+  [class*="text-[#2e333b]"]
+) {
+  color:#243042!important;
+  -webkit-text-fill-color:#243042!important;
+}
+
+.erp-shell.light-mode :is(
+  .erp-theme-toggle,
+  .erp-notification-button,
+  .erp-sidebar-collapse-button,
+  .erp-mobile-drawer-close,
+  .erp-profile-menu-wrap > button,
+  .erp-report-category-icon,
+  .erp-branch-icon,
+  [class*="text-[#33373e]"],
+  [class*="text-[#34363d]"],
+  [class*="text-[#30343c]"],
+  [class*="text-[#2e333b]"]
+) svg {
+  color:#243042!important;
+  stroke:#243042!important;
+}
+
+.erp-shell.light-mode :is(
+  button[class*="bg-[#333"],
+  button[class*="bg-[#343"],
+  button[class*="bg-[#fb"],
+  button[class*="bg-orange"],
+  button[class*="bg-emerald"],
+  button[class*="border-[#333"],
+  button[class*="border-[#343"],
+  button[class*="border-[#fb"],
+  button[class*="border-orange"],
+  .erp-record-payment-button
+) svg {
+  color:#ffffff!important;
+  stroke:#ffffff!important;
+}
+
+.auth-panel label button:not(.auth-primary-button):not(.auth-reset-button):not(:disabled) {
+  background:rgba(255,255,255,.035)!important;
+  background-image:none!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  color:#9aa9a5!important;
+  -webkit-text-fill-color:#9aa9a5!important;
+  box-shadow:none!important;
+}
+
+.auth-panel label button:not(.auth-primary-button):not(.auth-reset-button):hover:not(:disabled) {
+  background:rgba(0,255,136,.08)!important;
+  border-color:rgba(0,255,136,.28)!important;
+  color:#00ff88!important;
+  -webkit-text-fill-color:#00ff88!important;
+  transform:none!important;
+}
+
+.auth-panel label button:not(.auth-primary-button):not(.auth-reset-button) svg {
+  color:currentColor!important;
+  stroke:currentColor!important;
+}
