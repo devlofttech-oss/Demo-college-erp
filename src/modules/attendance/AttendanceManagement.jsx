@@ -905,14 +905,14 @@ export default function AttendanceManagement({
             />
           </div>
 
-          <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="erp-attendance-draft-panel mb-4 flex flex-col gap-3 rounded-lg border border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-bold uppercase text-slate-500">Draft Attendance</div>
               <div className="text-sm font-bold text-slate-900">
                 {draftCount} unsaved change{draftCount === 1 ? '' : 's'}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="erp-attendance-draft-actions flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={markRemainingPresent}
