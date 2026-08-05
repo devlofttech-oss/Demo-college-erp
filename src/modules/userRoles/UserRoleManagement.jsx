@@ -12,6 +12,7 @@ import {
 import { createManagedAuthUser } from '../../firebase/auth';
 import { isFirebaseConfigured } from '../../firebase/config';
 import { canAccess, defaultRoles, validateUserForm, validateUserUpdate } from './rolePermissions';
+import { applyStudentActivityOverrides, isActiveStudentRecord } from '../shared/studentActivityPolicy';
 import RolePermissionEditor from './components/RolePermissionEditor';
 import UserModal from './components/UserModal';
 import UserTable from './components/UserTable';
@@ -46,7 +47,7 @@ export default function UserRoleManagement({ currentUser }) {
         setRoles(mergeRoles(data.roles));
         setUsers(data.users || []);
         const studentData = await getStudentInformationData().catch(() => ({ students: [] }));
-        setStudentOptions(studentData.students.filter((student) => student.status !== 'Archived'));
+        setStudentOptions(applyStudentActivityOverrides(studentData.students || []).filter(isActiveStudentRecord));
         setLoadError('');
       } catch (error) {
         console.error('Unable to load live users/roles.', error);

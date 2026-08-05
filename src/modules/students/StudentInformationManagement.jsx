@@ -56,6 +56,7 @@ import { isHealthRecordManager } from './studentHealthRecordModel';
 import { canAccess, defaultRoles } from '../userRoles/rolePermissions';
 import { normalizeInstituteSettings } from '../settings/settingsModel';
 import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
+import { applyStudentActivityOverrides, isActiveStudentRecord, isInactiveStudentOverride } from '../shared/studentActivityPolicy';
 import { getParentLinkedStudents } from '../parentPortal/parentPortalUtils';
 import { calculateAssignmentPaymentLedger, formatCurrency, formatManualDueItems, formatPaymentDate, sortPaymentRecordsByDate, totalFeeComponents } from '../fees/feeUtils';
 import { formatAttendanceTimeRange, mergeAttendanceRecords } from '../attendance/attendanceUtils';
@@ -382,7 +383,7 @@ export default function StudentInformationManagement({ user, onLogout }) {
       }
       try {
         const data = await getStudentInformationData(academicYear);
-        const nextStudents = data.students || [];
+        const nextStudents = applyStudentActivityOverrides(data.students || []);
         const nextAdmissions = data.admissions || [];
         const nextDocuments = data.documents || [];
         const nextPromotions = data.promotions || [];
@@ -466,10 +467,14 @@ export default function StudentInformationManagement({ user, onLogout }) {
     () => filterStudentsByCourse(roleScopedYearStudents, effectiveSelectedCourseCode, selectedCourse),
     [roleScopedYearStudents, effectiveSelectedCourseCode, selectedCourse]
   );
+  const activeCourseStudents = useMemo(
+    () => courseStudents.filter(isActiveStudentRecord),
+    [courseStudents]
+  );
   const focusedStudent = focusedStudentContext
     ? courseStudents.find((student) => relationMatches(focusedStudentContext, student)) || null
     : null;
-  const moduleScopedStudents = focusedStudent ? [focusedStudent] : courseStudents;
+  const moduleScopedStudents = focusedStudent && isActiveStudentRecord(focusedStudent) ? [focusedStudent] : activeCourseStudents;
   const courseScopedAdmissions = useMemo(
     () => filterStudentScopedRecords(admissions.filter((item) => !academicYear || item.academicYear === academicYear), courseStudents, effectiveSelectedCourseCode, selectedCourse),
     [academicYear, admissions, courseStudents, effectiveSelectedCourseCode, selectedCourse]
@@ -593,6 +598,10 @@ export default function StudentInformationManagement({ user, onLogout }) {
     const validationMessage = validateStudentProfile(form);
     if (validationMessage) {
       toast.error(validationMessage);
+      return;
+    }
+    if (isInactiveStudentOverride(editingStudent) && form.status !== 'Archived') {
+      toast.error('This student has been removed from the active roster.');
       return;
     }
     if (!isFirebaseConfigured) {
@@ -780,6 +789,10 @@ export default function StudentInformationManagement({ user, onLogout }) {
   const restoreArchivedStudent = async (student) => {
     if (!canArchiveStudents) {
       toast.error('You do not have permission to restore student records.');
+      return;
+    }
+    if (isInactiveStudentOverride(student)) {
+      toast.error('This student has been removed from the active roster.');
       return;
     }
     if (!isFirebaseConfigured) {

@@ -7,6 +7,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { admissionStudents } from '../src/modules/students/admissionSeedData.js';
 import { demoStaffMembers } from '../src/modules/facultyStaff/demoFacultyStaff.js';
+import { applyStudentActivityOverrides, isActiveStudentRecord } from '../src/modules/shared/studentActivityPolicy.js';
 
 const OUTPUT_JSON = new URL('../tmp/pdfs/maurya-login-credentials-data.json', import.meta.url);
 const CREDENTIAL_SEED = 'maurya-login-credentials-2026-06-30';
@@ -150,14 +151,17 @@ function sortStaff(staff) {
 }
 
 function buildFallbackStudents() {
-  return admissionStudents.map((student) => ({ ...student }));
+  return applyStudentActivityOverrides(admissionStudents.map((student) => ({ ...student }))).filter(isActiveStudentRecord);
 }
 
 function buildFallbackStaff() {
-  return demoStaffMembers.map((staff) => ({
-    id: staff.id.replace('demo-staff-', 'seed-staff-'),
-    ...staff,
-  }));
+  return demoStaffMembers.map((staff) => {
+    const { id, ...data } = staff;
+    return {
+      ...data,
+      id: id.replace('demo-staff-', 'seed-staff-'),
+    };
+  });
 }
 
 async function buildCredentialRows() {
@@ -184,7 +188,9 @@ async function buildCredentialRows() {
   });
 
   const staffRecords = sortStaff(await readCollectionRecords('staffMembers', buildFallbackStaff(), 8)).slice(0, 8);
-  const studentRecords = sortStudents(await readCollectionRecords('students', buildFallbackStudents(), 135)).slice(0, 135);
+  const studentRecords = sortStudents(
+    applyStudentActivityOverrides(await readCollectionRecords('students', buildFallbackStudents(), 135)).filter(isActiveStudentRecord)
+  ).slice(0, 135);
 
   for (const staff of staffRecords) {
     const login = buildUniqueLogin(staff, 'faculty', usedIdentifiers, usedAuthEmails);
@@ -356,6 +362,7 @@ async function writeProfiles(rows) {
       loginIdentifierType: row.loginIdentifierType,
       roleId: row.roleId,
       displayId: row.displayId,
+      department: row.department || '',
       collegeIds: ['main-campus'],
       status: 'Active',
       linkedStudentRecordIds: row.linkedStudentRecordIds,

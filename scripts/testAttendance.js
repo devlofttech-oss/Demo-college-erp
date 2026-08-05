@@ -23,6 +23,13 @@ import {
   getSemesterNumbersForStudent,
   recordMatchesSemester,
 } from '../src/modules/shared/semesterUtils.js';
+import { getDepartmentForAcademicRecord } from '../src/modules/shared/academicDepartments.js';
+import { applyStudentActivityOverrides, isActiveStudentRecord, isInactiveStudentOverride } from '../src/modules/shared/studentActivityPolicy.js';
+import {
+  canMarkStudentAttendanceForEntity,
+  filterStudentsByFacultyAttendanceAccess,
+  getFacultyAttendanceAccess,
+} from '../src/modules/attendance/attendanceAccess.js';
 
 const student = { id: 'student-doc-id', studentId: 'STU-1001' };
 const records = [
@@ -97,5 +104,31 @@ assert.deepEqual(buildSemesterOptions([{ courseYear: '1 St Year' }, { courseYear
   'Semester 3',
   'Semester 4',
 ]);
+assert.equal(getDepartmentForAcademicRecord({ courseCode: 'BSCN', courseName: 'BSC Nursing' }), 'Nursing');
+assert.equal(getDepartmentForAcademicRecord({ courseCode: 'BPT', courseName: 'BPT' }), 'Physiotherapy');
+assert.equal(getDepartmentForAcademicRecord({ courseCode: 'MITREG', courseName: 'I B Sc Imaging Technology' }), 'Allied Health Sciences');
+assert.equal(isInactiveStudentOverride({ studentId: 'BSCN-033' }), true);
+assert.equal(applyStudentActivityOverrides([{ studentId: 'BSCN-034', status: 'Active' }])[0].status, 'Archived');
+assert.equal(isActiveStudentRecord({ studentId: 'BSCN-035', status: 'Active' }), false);
+
+const facultyStaff = [
+  { id: 'seed-staff-anusha-shine', employeeId: 'FAC-1006', name: 'Anusha Shine', department: 'Nursing' },
+  { id: 'seed-staff-tejas-m', employeeId: 'FAC-1005', name: 'Tejas M', department: 'Allied Health Sciences' },
+  { id: 'seed-staff-priyanka-ns', employeeId: 'FAC-1003', name: 'Priyanka N S', department: 'Physiotherapy' },
+];
+const nursingAccess = getFacultyAttendanceAccess(
+  { roleId: 'faculty', sourceRecordId: 'seed-staff-anusha-shine', displayId: 'FAC-1006' },
+  facultyStaff
+);
+assert.equal(nursingAccess.canMarkStudents, true);
+assert.equal(nursingAccess.department, 'Nursing');
+assert.equal(canMarkStudentAttendanceForEntity({ courseCode: 'BSCN' }, nursingAccess), true);
+assert.equal(canMarkStudentAttendanceForEntity({ courseCode: 'BPT' }, nursingAccess), false);
+assert.deepEqual(
+  filterStudentsByFacultyAttendanceAccess([{ studentId: 'BSCN-001', courseCode: 'BSCN' }, { studentId: 'BPT-001', courseCode: 'BPT' }], nursingAccess).map((item) => item.studentId),
+  ['BSCN-001']
+);
+assert.equal(getFacultyAttendanceAccess({ roleId: 'faculty', name: 'Faculty User', department: 'Nursing' }, facultyStaff).canMarkStudents, false);
+assert.equal(canMarkStudentAttendanceForEntity({ courseCode: 'BPT' }, getFacultyAttendanceAccess({ roleId: 'admin' }, facultyStaff)), true);
 
 console.log('Attendance tests passed.');

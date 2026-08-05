@@ -24,8 +24,17 @@ import {
   summarizeAttendance,
 } from './attendanceUtils';
 import AttendanceTable from './components/AttendanceTable';
+import {
+  canMarkStudentAttendanceForEntity,
+  filterAttendanceFacultyOptions,
+  filterStudentsByFacultyAttendanceAccess,
+  getFacultyAttendanceAccess,
+  optionMatchesAttendanceFaculty,
+} from './attendanceAccess';
 import { demoStaffMembers } from '../facultyStaff/demoFacultyStaff';
-import { filterStudentScopedRecords, filterStudentsByCourse } from '../shared/courseFilters';
+import { getDepartmentForAcademicRecord } from '../shared/academicDepartments';
+import { filterStudentScopedRecords, filterStudentsByCourse, getStudentScope, recordMatchesStudentScope } from '../shared/courseFilters';
+import { applyStudentActivityOverrides, isActiveStudentRecord } from '../shared/studentActivityPolicy';
 import {
   buildSemesterOptions,
   getSemesterDisplayForRecord,
@@ -85,6 +94,8 @@ function addTeacherOption(map, option = {}) {
     id: option.id || option.facultyRecordId || option.facultyId || name,
     employeeId: option.employeeId || option.facultyId || '',
     name,
+    department: option.department || option.departmentName || '',
+    email: option.email || option.authEmail || '',
   };
   map.set(identity, normalized);
   map.set(nameKey, normalized);
@@ -96,6 +107,8 @@ function addCurrentUserTeacherOption(map, currentUser = {}) {
     id: currentUser.staffRecordId || currentUser.uid || currentUser.employeeId || currentUser.email || 'current-faculty',
     employeeId: currentUser.employeeId || currentUser.displayId || '',
     name: currentUser.name || currentUser.displayName || currentUser.email,
+    department: currentUser.department || '',
+    email: currentUser.email || '',
   });
 }
 
@@ -143,7 +156,7 @@ export default function AttendanceManagement({
       }
       try {
         const data = await getAttendanceManagementData(academicYear);
-        setStudents(data.students.filter((student) => student.status !== 'Archived'));
+        setStudents(applyStudentActivityOverrides(data.students || []).filter(isActiveStudentRecord));
         setStaff(data.staff.filter((member) => member.status !== 'Archived'));
         setStudentAttendance(data.studentAttendance);
         setStaffAttendance(data.staffAttendance);
@@ -193,10 +206,29 @@ export default function AttendanceManagement({
   }, [initialBranch, initialMode, initialTask]);
 
   const currentRoleId = currentUser?.roleId || 'admin';
-  const canMarkStudents = canAccess(defaultRoles, currentRoleId, 'attendance.markStudents');
+  const canMarkStudentsByRole = canAccess(defaultRoles, currentRoleId, 'attendance.markStudents');
   const canMarkStaff = canAccess(defaultRoles, currentRoleId, 'attendance.markStaff');
+  const facultyAttendanceAccess = useMemo(() => getFacultyAttendanceAccess(currentUser, staff), [currentUser, staff]);
+  const canMarkStudents = canMarkStudentsByRole && (!facultyAttendanceAccess.isFacultyRestricted || facultyAttendanceAccess.canMarkStudents);
+  const effectiveActiveAttendanceBranch = facultyAttendanceAccess.isFacultyRestricted && activeAttendanceBranch === 'mark-general-students'
+    ? ''
+    : activeAttendanceBranch;
 
-  const courseStudents = scopedStudents.length ? scopedStudents : filterStudentsByCourse(students, selectedCourseCode, selectedCourse);
+  const scopedActiveStudents = useMemo(
+    () => applyStudentActivityOverrides(scopedStudents).filter(isActiveStudentRecord),
+    [scopedStudents]
+  );
+  const loadedCourseStudents = useMemo(
+    () => filterStudentsByCourse(students, selectedCourseCode, selectedCourse),
+    [students, selectedCourse, selectedCourseCode]
+  );
+  const unfilteredCourseStudents = scopedStudents.length || selectedCourseCode !== 'all'
+    ? scopedActiveStudents
+    : loadedCourseStudents;
+  const courseStudents = useMemo(
+    () => filterStudentsByFacultyAttendanceAccess(unfilteredCourseStudents, facultyAttendanceAccess),
+    [facultyAttendanceAccess, unfilteredCourseStudents]
+  );
   const semesterOptions = useMemo(() => {
     const courseSubjects = academicSubjects.filter((subject) =>
       selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName
@@ -223,6 +255,7 @@ export default function AttendanceManagement({
         id: entry.facultyRecordId || entry.facultyId || buildTeacherOptionId('timetable', index, entry.facultyName),
         employeeId: entry.facultyId || '',
         name: entry.facultyName,
+        department: entry.department || '',
       }));
     academicSubjects
       .filter((subject) => subject.status !== 'Archived')
@@ -230,6 +263,7 @@ export default function AttendanceManagement({
         id: subject.facultyRecordId || subject.facultyId || buildTeacherOptionId('subject', index, subject.facultyName),
         employeeId: subject.facultyId || '',
         name: subject.facultyName,
+        department: subject.department || getDepartmentForAcademicRecord(subject),
       }));
     studentAttendance
       .filter((record) => record.attendanceScope === 'subject' || record.subjectName || record.subject)
@@ -237,13 +271,17 @@ export default function AttendanceManagement({
         id: record.facultyRecordId || record.facultyId || buildTeacherOptionId('attendance', index, record.facultyName),
         employeeId: record.facultyId || '',
         name: record.facultyName,
+        department: record.department || getDepartmentForAcademicRecord(record),
       }));
-    return [...new Set(teacherMap.values())].sort((first, second) => first.name.localeCompare(second.name));
-  }, [academicSubjects, currentRoleId, currentUser, staff, studentAttendance, timetableEntries]);
-  const selectedFaculty = facultyOptions.find((member) => member.id === selectedFacultyId) || null;
+    const options = [...new Set(teacherMap.values())].sort((first, second) => first.name.localeCompare(second.name));
+    return filterAttendanceFacultyOptions(options, facultyAttendanceAccess);
+  }, [academicSubjects, currentRoleId, currentUser, facultyAttendanceAccess, staff, studentAttendance, timetableEntries]);
+  const effectiveSelectedFacultyId = facultyAttendanceAccess.isFacultyRestricted ? facultyOptions[0]?.id || '' : selectedFacultyId;
+  const selectedFaculty = facultyOptions.find((member) => member.id === effectiveSelectedFacultyId) || null;
   const subjectOptions = useMemo(() => {
     return academicSubjects
       .filter((subject) => selectedCourseCode === 'all' || subject.courseCode === selectedCourseCode || subject.programName === selectedCourse?.courseName)
+      .filter((subject) => !facultyAttendanceAccess.department || getDepartmentForAcademicRecord(subject) === facultyAttendanceAccess.department)
       .filter((subject) => !selectedSemester || recordMatchesSemester(subject, selectedSemester))
       .map((subject) => ({
         code: subject.subjectCode || subject.id || subject.subjectName,
@@ -253,7 +291,7 @@ export default function AttendanceManagement({
         semesterLabels: getSemesterLabels(getSemesterNumbersForAcademicRecord(subject)),
       }))
       .filter((subject) => subject.name);
-  }, [academicSubjects, selectedCourse, selectedCourseCode, selectedSemester]);
+  }, [academicSubjects, facultyAttendanceAccess.department, selectedCourse, selectedCourseCode, selectedSemester]);
   const selectedSubject = subjectOptions.find((subject) => subject.code === selectedSubjectCode) || null;
   const topicSuggestions = selectedSubject?.topics || EMPTY_TOPIC_SUGGESTIONS;
   const visibleTopicSuggestions = useMemo(() => {
@@ -264,10 +302,17 @@ export default function AttendanceManagement({
   const selectedOpeningTime = normalizeAttendanceTime(openingTime);
   const selectedClosingTime = normalizeAttendanceTime(closingTime);
   const selectedTimeRange = formatAttendanceTimeRange(selectedOpeningTime, selectedClosingTime);
-  const courseStudentAttendance = filterStudentScopedRecords(studentAttendance, semesterStudents, selectedCourseCode, selectedCourse);
+  const semesterStudentScope = useMemo(() => getStudentScope(semesterStudents), [semesterStudents]);
+  const scopedStudentAttendanceRecords = filterStudentScopedRecords(studentAttendance, semesterStudents, selectedCourseCode, selectedCourse);
+  const courseStudentAttendance = facultyAttendanceAccess.department
+    ? scopedStudentAttendanceRecords.filter((record) =>
+      getDepartmentForAcademicRecord(record) === facultyAttendanceAccess.department ||
+      recordMatchesStudentScope(record, semesterStudentScope)
+    )
+    : scopedStudentAttendanceRecords;
   const allModeRecords = mode === 'students' ? courseStudentAttendance : staffAttendance;
-  const isSubjectStudentAttendance = mode === 'students' && Boolean(activeAttendanceBranch) && studentAttendanceScope === 'subject';
-  const isGeneralStudentAttendance = mode === 'students' && Boolean(activeAttendanceBranch) && studentAttendanceScope === 'general';
+  const isSubjectStudentAttendance = mode === 'students' && Boolean(effectiveActiveAttendanceBranch) && studentAttendanceScope === 'subject';
+  const isGeneralStudentAttendance = mode === 'students' && Boolean(effectiveActiveAttendanceBranch) && studentAttendanceScope === 'general';
   const activeRecords = mode === 'students'
     ? allModeRecords.filter((record) => {
       const recordSubject = record.subjectName || record.subject || '';
@@ -294,10 +339,10 @@ export default function AttendanceManagement({
     );
   }, [mode, search, semesterStudents, staff]);
   const attendanceDraftContextKey = [
-    activeAttendanceBranch,
+    effectiveActiveAttendanceBranch,
     mode,
     selectedDateInput,
-    selectedFacultyId,
+    effectiveSelectedFacultyId,
     selectedSemester,
     selectedSubjectCode,
     selectedOpeningTime,
@@ -387,7 +432,14 @@ export default function AttendanceManagement({
 
   const attendanceBranchOptions = {
     students: [
-      { id: 'mark-general-students', title: 'Mark General Attendance', description: 'Mark daily student attendance without selecting a subject.', icon: <CalendarDays size={20} />, nextMode: 'students', scope: 'general' },
+      ...(!facultyAttendanceAccess.isFacultyRestricted ? [{
+        id: 'mark-general-students',
+        title: 'Mark General Attendance',
+        description: 'Mark daily student attendance without selecting a subject.',
+        icon: <CalendarDays size={20} />,
+        nextMode: 'students',
+        scope: 'general',
+      }] : []),
       { id: 'mark-students', title: 'Mark Subject Attendance', description: 'Select a subject, then mark student attendance.', icon: <CheckCircle size={20} />, nextMode: 'students', scope: 'subject' },
     ],
     staff: [
@@ -397,9 +449,17 @@ export default function AttendanceManagement({
 
   const activeTask = attendanceTaskOptions.find((task) => task.id === activeAttendanceTask);
   const activeBranches = attendanceBranchOptions[activeAttendanceTask] || [];
-  const activeBranch = activeBranches.find((branch) => branch.id === activeAttendanceBranch);
+  const activeBranch = activeBranches.find((branch) => branch.id === effectiveActiveAttendanceBranch);
 
   const validateAttendanceContext = () => {
+    if (mode === 'students' && facultyAttendanceAccess.isFacultyRestricted && !facultyAttendanceAccess.canMarkStudents) {
+      toast.error('Only assigned department faculty can mark student attendance.');
+      return false;
+    }
+    if (mode === 'students' && facultyAttendanceAccess.isFacultyRestricted && studentAttendanceScope !== 'subject') {
+      toast.error('Faculty can mark subject attendance only.');
+      return false;
+    }
     if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedSemester) {
       toast.error('Select a semester before marking subject attendance.');
       return false;
@@ -410,6 +470,15 @@ export default function AttendanceManagement({
     }
     if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedFaculty) {
       toast.error('Select the faculty member before saving subject attendance.');
+      return false;
+    }
+    if (
+      mode === 'students' &&
+      studentAttendanceScope === 'subject' &&
+      facultyAttendanceAccess.isFacultyRestricted &&
+      !optionMatchesAttendanceFaculty(selectedFaculty, facultyAttendanceAccess.faculty)
+    ) {
+      toast.error('Faculty can mark only their own department attendance.');
       return false;
     }
     if (mode === 'students' && studentAttendanceScope === 'subject' && !selectedOpeningTime) {
@@ -463,6 +532,10 @@ export default function AttendanceManagement({
       toast.error('You do not have permission to mark staff attendance.');
       return;
     }
+    if (mode === 'students' && !canMarkStudentAttendanceForEntity(entity, facultyAttendanceAccess)) {
+      toast.error('Faculty can mark only their own department students.');
+      return;
+    }
     if (!validateAttendanceContext()) return;
     const entityId = entity.studentId || entity.employeeId;
     const exists = findExistingAttendanceRecord(entity);
@@ -485,6 +558,10 @@ export default function AttendanceManagement({
   };
 
   const markRemainingPresent = () => {
+    if (mode === 'students' && !canMarkStudents) {
+      toast.error('You do not have permission to mark student attendance.');
+      return;
+    }
     if (!validateAttendanceContext()) return;
     let changed = 0;
     const nextDraftStatuses = { ...draftStatuses };
@@ -536,6 +613,9 @@ export default function AttendanceManagement({
     const selectedSemesterNumber = parseSemesterNumber(selectedSemester);
     const entitySemesterNumbers = selectedSemesterNumber ? [selectedSemesterNumber] : getSemesterNumbersForStudent(entity);
     const entitySemesterLabels = getSemesterLabels(entitySemesterNumbers);
+    const attendanceDepartment = mode === 'students'
+      ? getDepartmentForAcademicRecord(entity) || getDepartmentForAcademicRecord(selectedCourse)
+      : entity.department || '';
     const payload = {
       entityType: mode === 'students' ? 'Student' : 'Staff',
       entityRecordId: entity.id,
@@ -552,7 +632,7 @@ export default function AttendanceManagement({
       semesterNumber: mode === 'students' ? selectedSemesterNumber || entitySemesterNumbers[0] || '' : '',
       semesterNumbers: mode === 'students' ? entitySemesterNumbers : [],
       semesterLabels: mode === 'students' ? entitySemesterLabels : [],
-      department: entity.department || '',
+      department: attendanceDepartment,
       courseCode: entity.courseCode || selectedCourseCode,
       courseName: entity.courseName || entity.program || selectedCourse?.courseName || '',
       attendanceScope: mode === 'students' ? studentAttendanceScope : 'staff',
@@ -603,6 +683,10 @@ export default function AttendanceManagement({
 
     if (!draftRows.length) {
       toast.error('No attendance changes to save.');
+      return;
+    }
+    if (mode === 'students' && draftRows.some(({ entity }) => !canMarkStudentAttendanceForEntity(entity, facultyAttendanceAccess))) {
+      toast.error('Faculty can save attendance only for their own department students.');
       return;
     }
 
@@ -674,7 +758,7 @@ export default function AttendanceManagement({
           {loadError && <p className="text-xs text-rose-600 mt-2">{loadError}</p>}
         </div>
         <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
-          {mode === 'students' && activeAttendanceBranch && (
+          {mode === 'students' && effectiveActiveAttendanceBranch && (
             <span className="hidden rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 sm:inline-flex">
               {studentAttendanceScope === 'general' ? 'General Attendance' : 'Subject Attendance'}
             </span>
@@ -726,7 +810,7 @@ export default function AttendanceManagement({
         ))}
       </div>
       </>
-      ) : !activeAttendanceBranch ? (
+      ) : !effectiveActiveAttendanceBranch ? (
       <>
       <div className="erp-back-row my-5">
         <button onClick={goBackOneAttendanceStep} className="erp-back-button h-10 px-4 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold text-sm flex items-center gap-2">
@@ -784,6 +868,16 @@ export default function AttendanceManagement({
               You can view staff attendance but cannot mark it.
             </div>
           )}
+          {mode === 'students' && facultyAttendanceAccess.isFacultyRestricted && (
+            <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+              facultyAttendanceAccess.canMarkStudents
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-amber-50 border-amber-200 text-amber-700'
+            }`}
+            >
+              {facultyAttendanceAccess.message}
+            </div>
+          )}
 
           {mode === 'students' && (
             <div className="erp-attendance-context-panel mb-4 grid md:grid-cols-2 xl:grid-cols-6 gap-3 rounded-lg border border-slate-100 bg-[#f5f5f6] p-4">
@@ -825,8 +919,9 @@ export default function AttendanceManagement({
                   <label className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Faculty</span>
                     <select
-                      value={selectedFacultyId}
+                      value={effectiveSelectedFacultyId}
                       onChange={(event) => setSelectedFacultyId(event.target.value)}
+                      disabled={facultyAttendanceAccess.isFacultyRestricted}
                       className="erp-attendance-select w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
                     >
                       <option value="">{facultyOptions.length ? 'Select Faculty' : 'No Faculty Records'}</option>

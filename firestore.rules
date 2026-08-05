@@ -225,6 +225,84 @@ service cloud.firestore {
         );
     }
 
+    function staffPath(staffRecordId) {
+      return /databases/$(database)/documents/staffMembers/$(staffRecordId);
+    }
+
+    function myStaffRecordId() {
+      return userProfile().get('staffRecordId', userProfile().get('sourceRecordId', ''));
+    }
+
+    function hasMyStaffRecordId() {
+      return myStaffRecordId() is string && myStaffRecordId() != '';
+    }
+
+    function myStaffRecordExists() {
+      return hasMyStaffRecordId() && exists(staffPath(myStaffRecordId()));
+    }
+
+    function myAttendanceDepartment() {
+      return myStaffRecordExists()
+        ? get(staffPath(myStaffRecordId())).data.get('department', '')
+        : userProfile().get('department', '');
+    }
+
+    function myAttendanceName() {
+      return myStaffRecordExists()
+        ? get(staffPath(myStaffRecordId())).data.get('name', '')
+        : userProfile().get('name', '');
+    }
+
+    function isAllowedAttendanceFacultyName(department, name) {
+      return (department == 'Nursing' && name in ['Anusha Shine', 'Chandana H S', 'Chaitra B'])
+        || (department == 'Allied Health Sciences' && name in ['Deepa', 'Dr. Deepashree C L', 'Tejas M', 'Shreya K P'])
+        || (department == 'Physiotherapy' && name in ['Priyanka', 'Priyanka N S']);
+    }
+
+    function isInactiveStudentData(data) {
+      return data.get('studentId', '') in ['BSCN-033', 'BSCN-034', 'BSCN-035', 'BSCN-D001', 'BSCN-D002']
+        || data.get('entityId', '') in ['BSCN-033', 'BSCN-034', 'BSCN-035', 'BSCN-D001', 'BSCN-D002']
+        || data.get('studentRecordId', '') in [
+          'seed-student-bscn-033',
+          'seed-student-bscn-034',
+          'seed-student-bscn-035',
+          'seed-student-bscn-d001',
+          'seed-student-bscn-d002'
+        ]
+        || data.get('entityRecordId', '') in [
+          'seed-student-bscn-033',
+          'seed-student-bscn-034',
+          'seed-student-bscn-035',
+          'seed-student-bscn-d001',
+          'seed-student-bscn-d002'
+        ];
+    }
+
+    function keepsInactiveStudentArchived(data) {
+      return !isInactiveStudentData(data) || data.get('status', '') == 'Archived';
+    }
+
+    function attendanceFacultyMatchesCurrentUser(data) {
+      return data.get('facultyRecordId', '') == myStaffRecordId()
+        || data.get('facultyId', '') == userProfile().get('displayId', '')
+        || data.get('facultyName', '') == myAttendanceName();
+    }
+
+    function canWriteStudentAttendance(data) {
+      return staffCan('attendance.markStudents')
+        && !isInactiveStudentData(data)
+        && (
+          isAdminTier()
+          || (
+            myRoleId() == 'faculty'
+            && data.get('entityType', 'Student') == 'Student'
+            && data.get('department', '') == myAttendanceDepartment()
+            && isAllowedAttendanceFacultyName(myAttendanceDepartment(), myAttendanceName())
+            && attendanceFacultyMatchesCurrentUser(data)
+          )
+        );
+    }
+
     match /colleges/{documentId} {
       allow read: if isActive();
       allow create, update: if isSuperAdmin();
@@ -248,8 +326,8 @@ service cloud.firestore {
     match /students/{studentRecordId} {
       allow get: if staffCan('students.view') || isLinkedStudent(studentRecordId, resource.data.get('studentId', ''));
       allow list: if staffCan('students.view') || isLinkedStudent(studentRecordId, resource.data.get('studentId', ''));
-      allow create: if staffCan('students.create') && (isSuperAdmin() || createDoesNotApproveAdmission());
-      allow update: if (staffCan('students.edit') || staffCan('students.archive')) && (isSuperAdmin() || updateDoesNotApproveAdmission());
+      allow create: if staffCan('students.create') && keepsInactiveStudentArchived(request.resource.data) && (isSuperAdmin() || createDoesNotApproveAdmission());
+      allow update: if (staffCan('students.edit') || staffCan('students.archive')) && keepsInactiveStudentArchived(request.resource.data) && (isSuperAdmin() || updateDoesNotApproveAdmission());
       allow delete: if false;
     }
 
@@ -319,7 +397,7 @@ service cloud.firestore {
 
     match /studentAttendanceRecords/{documentId} {
       allow get, list: if staffCan('attendance.view') || canReadStudentRecord(resource.data);
-      allow create, update: if staffCan('attendance.markStudents');
+      allow create, update: if canWriteStudentAttendance(request.resource.data);
       allow delete: if false;
     }
 
