@@ -24,6 +24,7 @@ import {
   summarizeAttendance,
 } from './attendanceUtils';
 import AttendanceTable from './components/AttendanceTable';
+import TimeField12Hour from './components/TimeField12Hour';
 import {
   canMarkStudentAttendanceForEntity,
   filterAttendanceFacultyOptions,
@@ -931,24 +932,14 @@ export default function AttendanceManagement({
                       ))}
                     </select>
                   </label>
-                  <label className="erp-attendance-field">
+                  <div className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Opening Time</span>
-                    <input
-                      type="time"
-                      value={openingTime}
-                      onChange={(event) => setOpeningTime(event.target.value)}
-                      className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    />
-                  </label>
-                  <label className="erp-attendance-field">
+                    <TimeField12Hour ariaLabel="Opening time" value={openingTime} onChange={setOpeningTime} />
+                  </div>
+                  <div className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Closing Time</span>
-                    <input
-                      type="time"
-                      value={closingTime}
-                      onChange={(event) => setClosingTime(event.target.value)}
-                      className="erp-attendance-input w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    />
-                  </label>
+                    <TimeField12Hour ariaLabel="Closing time" value={closingTime} onChange={setClosingTime} />
+                  </div>
                   <div className="erp-attendance-field">
                     <span className="erp-attendance-field-label block text-xs font-semibold text-slate-500 mb-1.5">Topic</span>
                     <input
@@ -1013,7 +1004,7 @@ export default function AttendanceManagement({
                 type="button"
                 onClick={markRemainingPresent}
                 disabled={mode === 'students' ? !canMarkStudents : !canMarkStaff}
-                className="h-10 px-4 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm font-bold disabled:opacity-50"
+                className="erp-attendance-draft-button is-affirm"
               >
                 Mark Remaining Present
               </button>
@@ -1021,7 +1012,7 @@ export default function AttendanceManagement({
                 type="button"
                 onClick={clearDraftAttendance}
                 disabled={!draftCount}
-                className="h-10 px-4 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold disabled:opacity-50"
+                className="erp-attendance-draft-button is-neutral"
               >
                 Clear Draft
               </button>
@@ -1029,7 +1020,7 @@ export default function AttendanceManagement({
                 type="button"
                 onClick={saveDraftAttendance}
                 disabled={!draftCount || savingDraft || (mode === 'students' ? !canMarkStudents : !canMarkStaff)}
-                className="h-10 px-4 rounded-lg bg-[#033500] text-white text-sm font-bold shadow-[0_10px_22px_rgba(3,53,0,0.2)] disabled:opacity-50"
+                className="erp-attendance-draft-button is-primary"
               >
                 {savingDraft ? 'Saving...' : 'Save & Close'}
               </button>

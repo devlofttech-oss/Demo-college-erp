@@ -111,9 +111,9 @@ function ReportTable({ emptyMessage, headers, children }) {
 function CountCells({ row }) {
   return (
     <>
-      <td className="px-4 py-3 font-semibold text-emerald-700">{row.present}</td>
-      <td className="px-4 py-3 font-semibold text-amber-600">{row.late}</td>
-      <td className="px-4 py-3 font-semibold text-rose-600">{row.absent}</td>
+      <td className="erp-count-present px-4 py-3 font-semibold">{row.present}</td>
+      <td className="erp-count-late px-4 py-3 font-semibold">{row.late}</td>
+      <td className="erp-count-absent px-4 py-3 font-semibold">{row.absent}</td>
       <td className="px-4 py-3">{row.leave}</td>
       <td className="px-4 py-3">{row.total}</td>
       <td className="px-4 py-3 font-bold">{row.percentage}%</td>

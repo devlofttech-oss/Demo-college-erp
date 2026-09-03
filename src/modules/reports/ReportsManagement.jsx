@@ -284,7 +284,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
 
   const downloadDayAttendanceCsv = () => {
     if (!attendanceRows.length) {
-      toast.error('No attendance rows to export.');
+      toast.error(`No attendance was marked on ${selectedDayLabel}.`);
       return;
     }
     downloadCsv(
@@ -305,7 +305,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
 
   const downloadDayAttendancePdf = () => {
     if (!attendanceRows.length) {
-      toast.error('No attendance rows to export.');
+      toast.error(`No attendance was marked on ${selectedDayLabel}.`);
       return;
     }
     const opened = openAttendancePdf({
@@ -319,7 +319,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
 
   const downloadRangeAttendanceCsv = () => {
     if (!exportRows.length) {
-      toast.error('No attendance rows in the report range.');
+      toast.error(`No attendance was marked in ${exportRangeLabel}.`);
       return;
     }
     downloadCsv(
@@ -340,7 +340,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
 
   const downloadRangeAttendancePdf = () => {
     if (!exportRows.length) {
-      toast.error('No attendance rows in the report range.');
+      toast.error(`No attendance was marked in ${exportRangeLabel}.`);
       return;
     }
     const opened = openAttendancePdf({
@@ -406,7 +406,6 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
             <button
               type="button"
               onClick={downloadDayAttendanceCsv}
-              disabled={!attendanceRows.length}
               className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Download size={16} /> Day CSV
@@ -414,7 +413,6 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
             <button
               type="button"
               onClick={downloadDayAttendancePdf}
-              disabled={!attendanceRows.length}
               className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <FileText size={16} /> Day PDF
@@ -474,7 +472,6 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
             <button
               type="button"
               onClick={downloadRangeAttendanceCsv}
-              disabled={!exportRows.length}
               className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Download size={16} /> Range CSV
@@ -482,7 +479,6 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
             <button
               type="button"
               onClick={downloadRangeAttendancePdf}
-              disabled={!exportRows.length}
               className="h-11 rounded-lg bg-[#33373e] px-4 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <FileText size={16} /> Range PDF

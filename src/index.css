@@ -3462,6 +3462,66 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   box-shadow:0 0 0 2px rgba(0,255,136,.10)!important;
 }
 
+/* Draft actions carry their own palette in both themes. Tailwind's light utility
+   backgrounds (bg-slate-100, bg-emerald-50) are not remapped by the dark shell, so a
+   remapped text colour on top of them left "Clear Draft" white-on-white. */
+.erp-attendance-draft-button {
+  height:40px;
+  padding:0 16px;
+  border-radius:8px;
+  border:1px solid var(--erp-border);
+  font-size:14px;
+  font-weight:800;
+  color:var(--erp-text);
+  background:rgba(255,255,255,.05);
+  transition:background .16s ease,border-color .16s ease,color .16s ease;
+}
+
+.erp-attendance-draft-button.is-affirm {
+  color:#00ff88;
+  border-color:rgba(0,255,136,.42);
+  background:rgba(0,255,136,.10);
+}
+
+.erp-attendance-draft-button.is-primary {
+  color:#02100d;
+  border-color:var(--erp-accent);
+  background:var(--erp-accent);
+}
+
+.erp-attendance-draft-button:disabled {
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+.erp-shell.light-mode .erp-attendance-draft-button {
+  color:#334155;
+  border-color:#cbd5e1;
+  background:#f1f5f9;
+}
+
+.erp-shell.light-mode .erp-attendance-draft-button.is-affirm {
+  color:#065f46;
+  border-color:#a7f3d0;
+  background:#ecfdf5;
+}
+
+.erp-shell.light-mode .erp-attendance-draft-button.is-primary {
+  color:#ffffff;
+  border-color:#033500;
+  background:#033500;
+}
+
+/* Count colours for the attendance report tables. The Tailwind 600/700 shades sit
+   below 4.5:1 on the dark surface, so each theme gets its own value. */
+.erp-count-present { color:#34d399!important; }
+.erp-count-late { color:#fbbf24!important; }
+.erp-count-absent { color:#fb7185!important; }
+
+.erp-shell.light-mode .erp-count-present { color:#047857!important; }
+.erp-shell.light-mode .erp-count-late { color:#b45309!important; }
+.erp-shell.light-mode .erp-count-absent { color:#be123c!important; }
+
 .erp-attendance-status-button.is-late {
   color:#ffc44d!important;
   border-color:rgba(255,196,77,.70)!important;

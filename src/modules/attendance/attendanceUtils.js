@@ -109,6 +109,35 @@ export function isAttendanceTimeRangeValid(openingTime = '', closingTime = '') {
   return openingMinutes !== null && closingMinutes !== null && closingMinutes > openingMinutes;
 }
 
+// Times are stored as canonical 24-hour "HH:MM" but always shown as 12-hour with a
+// meridiem, so every display path goes through this rather than printing the raw value.
+export function formatAttendanceTime12Hour(value = '') {
+  const normalized = normalizeAttendanceTime(value);
+  if (!normalized) return '';
+  const [hours, minutes] = normalized.split(':').map(Number);
+  const meridiem = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${meridiem}`;
+}
+
+export function splitAttendanceTimeParts(value = '') {
+  const normalized = normalizeAttendanceTime(value);
+  if (!normalized) return { hour: '', minute: '', meridiem: '' };
+  const [hours, minutes] = normalized.split(':').map(Number);
+  return {
+    hour: String(hours % 12 === 0 ? 12 : hours % 12).padStart(2, '0'),
+    minute: String(minutes).padStart(2, '0'),
+    meridiem: hours >= 12 ? 'PM' : 'AM',
+  };
+}
+
+export function joinAttendanceTimeParts({ hour = '', minute = '', meridiem = '' } = {}) {
+  if (!hour || !minute || !meridiem) return '';
+  const hours12 = Number(hour) % 12;
+  const hours24 = meridiem === 'PM' ? hours12 + 12 : hours12;
+  return normalizeAttendanceTime(`${String(hours24).padStart(2, '0')}:${minute}`);
+}
+
 export function formatAttendanceTimeRange(recordOrOpeningTime = '', closingTime = '') {
   const opening = typeof recordOrOpeningTime === 'object'
     ? normalizeAttendanceTime(recordOrOpeningTime.openingTime || recordOrOpeningTime.sessionOpeningTime || recordOrOpeningTime.startTime)
@@ -116,7 +145,7 @@ export function formatAttendanceTimeRange(recordOrOpeningTime = '', closingTime 
   const closing = typeof recordOrOpeningTime === 'object'
     ? normalizeAttendanceTime(recordOrOpeningTime.closingTime || recordOrOpeningTime.sessionClosingTime || recordOrOpeningTime.endTime)
     : normalizeAttendanceTime(closingTime);
-  return opening && closing ? `${opening} - ${closing}` : '';
+  return opening && closing ? `${formatAttendanceTime12Hour(opening)} - ${formatAttendanceTime12Hour(closing)}` : '';
 }
 
 export function recordMatchesAttendanceTimeRange(record = {}, openingTime = '', closingTime = '') {

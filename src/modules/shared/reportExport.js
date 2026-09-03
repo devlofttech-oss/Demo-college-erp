@@ -3,14 +3,22 @@ export function csvValue(value) {
 }
 
 export function downloadCsv(filename, rows = []) {
-  const csv = rows.map((row) => row.map(csvValue).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const csv = rows.map((row) => row.map(csvValue).join(',')).join('\r\n');
+  // The BOM keeps Excel from mangling non-ASCII names in the exported report.
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  link.rel = 'noopener';
+  // The link has to be in the document for the click to count as user-initiated, and
+  // revoking the object URL in the same tick cancels the download before it starts.
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 2000);
 }
 
 export function sanitizeFilenamePart(value = '') {
