@@ -3425,7 +3425,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 }
 
 .erp-attendance-status-wrap {
-  min-width:236px;
+  min-width:300px;
   display:flex;
   flex-wrap:wrap;
   align-items:center;
@@ -3440,8 +3440,8 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
 
 .erp-attendance-status-button {
   height:34px;
-  min-width:96px;
-  padding:0 11px;
+  min-width:88px;
+  padding:0 10px;
   border:1px solid rgba(148,163,184,.28);
   border-radius:999px;
   display:inline-flex;
@@ -3460,6 +3460,13 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   border-color:rgba(0,255,136,.68)!important;
   background:rgba(0,255,136,.13)!important;
   box-shadow:0 0 0 2px rgba(0,255,136,.10)!important;
+}
+
+.erp-attendance-status-button.is-late {
+  color:#ffc44d!important;
+  border-color:rgba(255,196,77,.70)!important;
+  background:rgba(255,196,77,.13)!important;
+  box-shadow:0 0 0 2px rgba(255,196,77,.10)!important;
 }
 
 .erp-attendance-status-button.is-absent {
@@ -3833,6 +3840,12 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   background:rgba(16,185,129,.12)!important;
 }
 
+.erp-shell.light-mode .erp-attendance-status-button.is-late {
+  color:#b45309!important;
+  border-color:rgba(180,83,9,.46)!important;
+  background:rgba(245,158,11,.12)!important;
+}
+
 .erp-shell.light-mode .erp-attendance-status-button.is-absent {
   color:#be123c!important;
   border-color:rgba(190,18,60,.46)!important;
@@ -3978,7 +3991,7 @@ html{color-scheme:dark}::selection{background:rgba(0,255,136,.18);color:#eafff5}
   .erp-attendance-status-actions {
     display:grid!important;
     width:100%;
-    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-columns:repeat(3,minmax(0,1fr));
     gap:8px!important;
   }
 

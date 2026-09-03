@@ -1,11 +1,12 @@
 import { memo, useMemo } from 'react';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, Clock3, XCircle } from 'lucide-react';
 import { formatAttendanceTimeRange, getAttendanceReportDateText } from '../attendanceUtils';
 
 function AttendanceStatusControl({ canMark, record, entity, onMark, recordEditable = true }) {
   const currentStatus = record?.status || '';
   const statuses = [
     { label: 'Present', icon: <CheckCircle size={15} />, activeClass: 'is-present' },
+    { label: 'Late', icon: <Clock3 size={15} />, activeClass: 'is-late' },
     { label: 'Absent', icon: <XCircle size={15} />, activeClass: 'is-absent' },
   ];
   const canEditStatus = canMark && recordEditable;

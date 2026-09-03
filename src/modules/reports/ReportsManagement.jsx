@@ -3,66 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, BookOpen, CalendarDays, ClipboardList, Download, FileText, GraduationCap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AttendanceReports from '../attendance/components/AttendanceReports';
-import { formatAttendanceDateInput, formatAttendanceTimeRange, getAttendanceReportDateText, summarizeAttendance } from '../attendance/attendanceUtils';
+import {
+  ATTENDANCE_STATUSES,
+  formatAttendanceDateInput,
+  formatAttendanceTimeRange,
+  getAttendanceDateInput,
+  getAttendanceReportDateText,
+  normalizeAttendanceStatus,
+  summarizeAttendance,
+} from '../attendance/attendanceUtils';
 import FinancialReports from '../financialReports/FinancialReports';
 import StatusBadge from '../students/components/StatusBadge';
 import { canAccess, canAccessFinancialReports, defaultRoles } from '../userRoles/rolePermissions';
-
-function csvValue(value) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`;
-}
-
-function downloadCsv(filename, rows = []) {
-  const csv = rows.map((row) => row.map(csvValue).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-const DISPLAY_MONTH_INPUTS = {
-  Jan: '01',
-  Feb: '02',
-  Mar: '03',
-  Apr: '04',
-  May: '05',
-  Jun: '06',
-  Jul: '07',
-  Aug: '08',
-  Sep: '09',
-  Sept: '09',
-  Oct: '10',
-  Nov: '11',
-  Dec: '12',
-};
-
-function getLocalDateInput(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-function getAttendanceDateInput(record = {}) {
-  const directDate = String(record.dateInput || record.attendanceDate || record.date || '').trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(directDate)) return directDate;
-
-  const dateText = getAttendanceReportDateText(record);
-  const displayMatch = /^(\d{1,2})\s+([A-Za-z]{3,4})\s+(\d{4})$/.exec(dateText);
-  if (displayMatch) {
-    const [, day, month, year] = displayMatch;
-    const monthInput = DISPLAY_MONTH_INPUTS[month];
-    if (monthInput) return `${year}-${monthInput}-${String(day).padStart(2, '0')}`;
-  }
-
-  const timestamp = record.markedAtIso || record.createdAtIso || '';
-  return timestamp ? getLocalDateInput(new Date(timestamp)) : '';
-}
+import { downloadCsv, openPrintableReport, sanitizeFilenamePart } from '../shared/reportExport';
 
 function getAttendanceDayLabel(selectedDate = '') {
   return formatAttendanceDateInput(selectedDate) || 'No date selected';
@@ -75,7 +28,7 @@ function getAttendanceRangeLabel(fromDate = '', toDate = '') {
   if (fromDate && toDate) return `${fromText} to ${toText}`;
   if (fromDate) return `From ${fromText}`;
   if (toDate) return `Until ${toText}`;
-  return 'No export range selected';
+  return 'No report range selected';
 }
 
 function getAvailableAttendanceDates(records = []) {
@@ -83,7 +36,7 @@ function getAvailableAttendanceDates(records = []) {
 }
 
 function getAttendanceStatus(record = {}) {
-  return String(record.status || '').trim() || 'Unmarked';
+  return normalizeAttendanceStatus(record.status) || 'Unmarked';
 }
 
 function recordMatchesAttendanceFilters(record = {}, statusFilter = 'all', searchTerm = '') {
@@ -135,97 +88,26 @@ function sortAttendanceDetailRows(first, second) {
   );
 }
 
-function sanitizeFilenamePart(value = '') {
-  return String(value || 'all')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'all';
-}
+const ATTENDANCE_DETAIL_HEADERS = ['Date', 'Student', 'Student ID', 'Semester / Class', 'Subject', 'Time', 'Topic', 'Faculty', 'Status'];
 
-function escapeHtml(value = '') {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[character]));
+function toAttendanceDetailCells(row) {
+  return [row.date, row.studentName, row.studentId, row.classLabel, row.subject, row.time, row.topic, row.faculty, row.status];
 }
 
 function openAttendancePdf({ rows = [], summary = {}, subtitle = '', title = 'Attendance Report' }) {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return false;
-  const generatedAt = new Date().toLocaleString('en-GB', { hour12: true });
-  const tableRows = rows.map((row) => `
-    <tr>
-      <td>${escapeHtml(row.date)}</td>
-      <td><strong>${escapeHtml(row.studentName)}</strong><br><span>${escapeHtml(row.studentId)}</span></td>
-      <td>${escapeHtml(row.classLabel)}</td>
-      <td>${escapeHtml(row.subject)}</td>
-      <td>${escapeHtml(row.time)}</td>
-      <td>${escapeHtml(row.topic)}</td>
-      <td>${escapeHtml(row.faculty)}</td>
-      <td><strong>${escapeHtml(row.status)}</strong></td>
-    </tr>
-  `).join('');
-
-  printWindow.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>${escapeHtml(title)}</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #172033; margin: 28px; }
-          h1 { font-size: 24px; margin: 0 0 6px; }
-          p { color: #5f6b7a; margin: 0; }
-          .meta { display: flex; justify-content: space-between; gap: 18px; margin: 18px 0; font-size: 12px; }
-          .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
-          .metric { border: 1px solid #dbe3ea; border-radius: 8px; padding: 10px; }
-          .metric span { color: #64748b; display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-          .metric strong { color: #172033; display: block; font-size: 20px; margin-top: 4px; }
-          table { border-collapse: collapse; width: 100%; font-size: 11px; }
-          th, td { border: 1px solid #dbe3ea; padding: 8px; text-align: left; vertical-align: top; }
-          th { background: #f2f5f8; color: #334155; font-size: 10px; text-transform: uppercase; }
-          td span { color: #64748b; font-size: 10px; }
-          @media print { body { margin: 16px; } .meta { break-after: avoid; } }
-        </style>
-      </head>
-      <body>
-        <h1>${escapeHtml(title)}</h1>
-        <p>${escapeHtml(subtitle)}</p>
-        <div class="meta">
-          <span>Generated: ${escapeHtml(generatedAt)}</span>
-          <span>Total rows: ${rows.length}</span>
-        </div>
-        <div class="summary">
-          <div class="metric"><span>Total</span><strong>${summary.total || 0}</strong></div>
-          <div class="metric"><span>Present</span><strong>${summary.present || 0}</strong></div>
-          <div class="metric"><span>Absent</span><strong>${summary.absent || 0}</strong></div>
-          <div class="metric"><span>Attendance</span><strong>${summary.percentage || 0}%</strong></div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Student</th>
-              <th>Semester / Class</th>
-              <th>Subject</th>
-              <th>Time</th>
-              <th>Topic</th>
-              <th>Faculty</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>${tableRows}</tbody>
-        </table>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => printWindow.print(), 250);
-  return true;
+  return openPrintableReport({
+    headers: ATTENDANCE_DETAIL_HEADERS,
+    metrics: [
+      ['Total', summary.total || 0],
+      ['Present', summary.present || 0],
+      ['Late', summary.late || 0],
+      ['Absent', summary.absent || 0],
+      ['Attendance', `${summary.percentage || 0}%`],
+    ],
+    rows: rows.map(toAttendanceDetailCells),
+    subtitle,
+    title,
+  });
 }
 
 function SummaryCard({ label, value }) {
@@ -345,7 +227,6 @@ function StudentReportsPanel({ academicYear, admissions = [], documents = [], pr
 }
 
 function AttendanceReportsPanel({ academicYear = '', records = [], selectedCourse = null, selectedCourseCode = 'all' }) {
-  const [scope, setScope] = useState('daily');
   const [selectedDateState, setSelectedDateState] = useState({ contextKey: '', value: '' });
   const [exportRangeState, setExportRangeState] = useState({ contextKey: '', from: '', to: '' });
   const [statusFilter, setStatusFilter] = useState('all');
@@ -362,8 +243,10 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
   const exportRange = exportRangeState.contextKey === dateContextKey
     ? exportRangeState
     : { contextKey: dateContextKey, from: '', to: '' };
-  const exportFromDate = exportRange.from || effectiveSelectedDate;
-  const exportToDate = exportRange.to || exportRange.from || effectiveSelectedDate;
+  // The range defaults to every marked date so the subject, student and consolidated
+  // reports open on a full term rather than collapsing to the single selected day.
+  const exportFromDate = exportRange.from || availableDates[0] || effectiveSelectedDate;
+  const exportToDate = exportRange.to || latestDate || exportFromDate;
   const exportRangeLabel = getAttendanceRangeLabel(exportFromDate, exportToDate);
 
   const filteredRecords = useMemo(() => {
@@ -411,20 +294,10 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
         ['Course', selectedCourseLabel],
         ['Academic Year', academicYear || 'All academic years'],
         ['Attendance Date', selectedDayLabel],
-        ['Total', detailSummary.total, 'Present', detailSummary.present, 'Absent', detailSummary.absent, 'Attendance %', detailSummary.percentage],
+        ['Total', detailSummary.total, 'Present', detailSummary.present, 'Late', detailSummary.late, 'Absent', detailSummary.absent, 'Attendance %', detailSummary.percentage],
         [],
-        ['Date', 'Student', 'Student ID', 'Semester / Class', 'Subject', 'Time', 'Topic', 'Faculty', 'Status'],
-        ...attendanceRows.map((row) => [
-          row.date,
-          row.studentName,
-          row.studentId,
-          row.classLabel,
-          row.subject,
-          row.time,
-          row.topic,
-          row.faculty,
-          row.status,
-        ]),
+        ATTENDANCE_DETAIL_HEADERS,
+        ...attendanceRows.map(toAttendanceDetailCells),
       ]
     );
     toast.success('Attendance CSV downloaded');
@@ -446,7 +319,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
 
   const downloadRangeAttendanceCsv = () => {
     if (!exportRows.length) {
-      toast.error('No attendance rows in the export range.');
+      toast.error('No attendance rows in the report range.');
       return;
     }
     downloadCsv(
@@ -455,21 +328,11 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
         ['Attendance Report'],
         ['Course', selectedCourseLabel],
         ['Academic Year', academicYear || 'All academic years'],
-        ['Export Range', exportRangeLabel],
-        ['Total', exportSummary.total, 'Present', exportSummary.present, 'Absent', exportSummary.absent, 'Attendance %', exportSummary.percentage],
+        ['Report Range', exportRangeLabel],
+        ['Total', exportSummary.total, 'Present', exportSummary.present, 'Late', exportSummary.late, 'Absent', exportSummary.absent, 'Attendance %', exportSummary.percentage],
         [],
-        ['Date', 'Student', 'Student ID', 'Semester / Class', 'Subject', 'Time', 'Topic', 'Faculty', 'Status'],
-        ...exportRows.map((row) => [
-          row.date,
-          row.studentName,
-          row.studentId,
-          row.classLabel,
-          row.subject,
-          row.time,
-          row.topic,
-          row.faculty,
-          row.status,
-        ]),
+        ATTENDANCE_DETAIL_HEADERS,
+        ...exportRows.map(toAttendanceDetailCells),
       ]
     );
     toast.success('Attendance range CSV downloaded');
@@ -477,7 +340,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
 
   const downloadRangeAttendancePdf = () => {
     if (!exportRows.length) {
-      toast.error('No attendance rows in the export range.');
+      toast.error('No attendance rows in the report range.');
       return;
     }
     const opened = openAttendancePdf({
@@ -495,22 +358,9 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Attendance Reports</h2>
-          <p className="text-sm text-slate-500 mt-1">{selectedCourseLabel} attendance for {selectedDayLabel}.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {[
-            ['daily', 'Daily'],
-            ['monthly', 'Monthly'],
-            ['yearly', 'Yearly'],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => setScope(value)}
-              className={`h-10 px-4 rounded-md border text-sm font-semibold ${scope === value ? 'bg-[#33373e] text-white border-[#33373e]' : 'bg-white text-slate-600 border-slate-200'}`}
-            >
-              {label}
-            </button>
-          ))}
+          <p className="text-sm text-slate-500 mt-1">
+            {selectedCourseLabel} day view for {selectedDayLabel}. Analytical reports below run over {exportRangeLabel}.
+          </p>
         </div>
       </div>
 
@@ -538,9 +388,9 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
               className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900"
             >
               <option value="all">All Statuses</option>
-              <option value="present">Present</option>
-              <option value="absent">Absent</option>
-              <option value="leave">Leave</option>
+              {ATTENDANCE_STATUSES.map((status) => (
+                <option key={status} value={status.toLowerCase()}>{status}</option>
+              ))}
             </select>
           </label>
           <label className="text-xs font-semibold text-slate-500">
@@ -576,12 +426,12 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
       <section className="mb-5 rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
         <div className="grid md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] gap-3">
           <div className="rounded-lg bg-[#f5f5f6] px-4 py-3">
-            <div className="text-xs font-semibold text-slate-500">Export Range</div>
+            <div className="text-xs font-semibold text-slate-500">Report Range</div>
             <div className="mt-1 text-sm font-extrabold text-slate-900">{exportRangeLabel}</div>
             <div className="mt-1 text-xs font-semibold text-slate-500">{exportRows.length} row{exportRows.length === 1 ? '' : 's'}</div>
           </div>
           <label className="text-xs font-semibold text-slate-500">
-            Export From
+            Report From
             <span className="relative mt-1 block">
               <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -601,7 +451,7 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
             </span>
           </label>
           <label className="text-xs font-semibold text-slate-500">
-            Export To
+            Report To
             <span className="relative mt-1 block">
               <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -641,10 +491,11 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
         </div>
       </section>
 
-      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-6 gap-4 mb-5">
         <SummaryCard label="Date" value={selectedDayLabel} />
         <SummaryCard label="Rows" value={detailSummary.total} />
         <SummaryCard label="Present" value={detailSummary.present} />
+        <SummaryCard label="Late" value={detailSummary.late} />
         <SummaryCard label="Absent" value={detailSummary.absent} />
         <SummaryCard label="Attendance %" value={`${detailSummary.percentage}%`} />
       </div>
@@ -690,7 +541,16 @@ function AttendanceReportsPanel({ academicYear = '', records = [], selectedCours
         </table>
       </section>
 
-      {filteredRecords.length ? <AttendanceReports records={filteredRecords} scope={scope} /> : <EmptyReport message="No attendance report records are available for this selection." />}
+      {exportRecords.length ? (
+        <AttendanceReports
+          academicYear={academicYear}
+          courseLabel={selectedCourseLabel}
+          rangeLabel={exportRangeLabel}
+          records={exportRecords}
+        />
+      ) : (
+        <EmptyReport message="No attendance report records are available for the selected report range." />
+      )}
     </div>
   );
 }

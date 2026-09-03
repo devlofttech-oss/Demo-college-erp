@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle, Search, UserCheck, Users, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle, Clock3, Search, UserCheck, Users, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   createStudentAttendanceRecord,
@@ -365,6 +365,7 @@ export default function AttendanceManagement({
   const summary = summarizeAttendance(selectedDateRecords);
   const stats = [
     { label: 'Present', value: summary.present, icon: <CheckCircle size={22} /> },
+    { label: 'Late', value: summary.late, icon: <Clock3 size={22} /> },
     { label: 'Absent', value: summary.absent, icon: <XCircle size={22} /> },
     { label: 'Attendance %', value: `${summary.percentage}%`, icon: <CalendarDays size={22} /> },
   ];
@@ -569,8 +570,8 @@ export default function AttendanceManagement({
       const entityId = entity.studentId || entity.employeeId;
       const exists = findExistingAttendanceRecord(entity);
       if (exists && !isAttendanceRecordEditable(exists)) return;
-      if (nextDraftStatuses[entityId] === 'Absent') return;
-      if (exists?.status === 'Present' && !nextDraftStatuses[entityId]) return;
+      if (['Absent', 'Late'].includes(nextDraftStatuses[entityId])) return;
+      if (['Present', 'Late'].includes(exists?.status) && !nextDraftStatuses[entityId]) return;
       nextDraftStatuses[entityId] = 'Present';
       changed += 1;
     });
@@ -780,7 +781,7 @@ export default function AttendanceManagement({
 
       {!activeAttendanceTask ? (
       <>
-      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 py-5">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 py-5">
         {stats.map(({ label, value, icon }) => (
           <div key={label} className="bg-[#f5f5f6] rounded-lg p-4 flex items-center gap-4">
             <div className="h-12 w-12 bg-white rounded-lg flex items-center justify-center text-[#34363d] shadow-sm">{icon}</div>

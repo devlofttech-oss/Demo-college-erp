@@ -15,6 +15,7 @@ export default function StatusBadge({ value }) {
     Staff: 'bg-slate-50 text-slate-600 border-slate-200',
     Present: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     Absent: 'bg-rose-50 text-rose-700 border-rose-200',
+    Late: 'bg-amber-50 text-amber-700 border-amber-200',
     Approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     'On Leave': 'bg-amber-50 text-amber-700 border-amber-200',
     Leave: 'bg-amber-50 text-amber-700 border-amber-200',

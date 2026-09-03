@@ -1226,6 +1226,7 @@ function StudentDetailPage({
   const subjectAttendanceRecords = attendanceRecords.filter((item) => item.subjectName || item.subject);
   const generalPresentRecords = generalAttendanceRecords.filter((item) => item.status === 'Present').length;
   const generalAbsentRecords = generalAttendanceRecords.filter((item) => item.status === 'Absent').length;
+  const generalLateRecords = generalAttendanceRecords.filter((item) => item.status === 'Late').length;
   const generalLeaveRecords = generalAttendanceRecords.filter((item) => ['Leave', 'On Leave'].includes(item.status)).length;
   const generalAttendancePercentage = generalAttendanceRecords.length ? Math.round((generalPresentRecords / generalAttendanceRecords.length) * 100) : 0;
   const examRecordCount = marksEntries.length + results.length;
@@ -1284,10 +1285,11 @@ function StudentDetailPage({
   const attendanceSubjectRows = Object.values(subjectAttendanceRecords.reduce((map, record) => {
     const subject = record.subjectName || record.subject;
     if (!subject) return map;
-    const row = map[subject] || { subject, total: 0, present: 0, absent: 0, leave: 0, timeRanges: new Set() };
+    const row = map[subject] || { subject, total: 0, present: 0, absent: 0, late: 0, leave: 0, timeRanges: new Set() };
     row.total += 1;
     if (record.status === 'Present') row.present += 1;
     if (record.status === 'Absent') row.absent += 1;
+    if (record.status === 'Late') row.late += 1;
     if (['Leave', 'On Leave'].includes(record.status)) row.leave += 1;
     const timeRange = formatAttendanceTimeRange(record);
     if (timeRange) row.timeRanges.add(timeRange);
@@ -1372,6 +1374,7 @@ function StudentDetailPage({
       items: [
         ['General Present', generalPresentRecords],
         ['General Absent', generalAbsentRecords],
+        ['General Late', generalLateRecords],
         ['General Leave', generalLeaveRecords],
         ['General Records', generalAttendanceRecords.length],
         ['Subject Records', subjectAttendanceRecords.length],
@@ -1576,9 +1579,10 @@ function StudentDetailPage({
                   <span className="text-xs font-semibold text-slate-500">Present</span>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
                 <div className="rounded-lg bg-[#f5f5f6] p-2"><b className="block text-slate-900">{generalPresentRecords}</b>Present</div>
                 <div className="rounded-lg bg-[#f5f5f6] p-2"><b className="block text-slate-900">{generalAbsentRecords}</b>Absent</div>
+                <div className="rounded-lg bg-[#f5f5f6] p-2"><b className="block text-slate-900">{generalLateRecords}</b>Late</div>
                 <div className="rounded-lg bg-[#f5f5f6] p-2"><b className="block text-slate-900">{generalLeaveRecords}</b>Leave</div>
               </div>
             </div>
@@ -1589,7 +1593,7 @@ function StudentDetailPage({
                   id: row.subject,
                   label: row.subject,
                   helper: [
-                    `Present ${row.present} | Absent ${row.absent} | Leave ${row.leave} | Total ${row.total}`,
+                    `Present ${row.present} | Late ${row.late} | Absent ${row.absent} | Leave ${row.leave} | Total ${row.total}`,
                     row.timeRanges.length ? `Sessions ${row.timeRanges.slice(0, 2).join(', ')}${row.timeRanges.length > 2 ? ` +${row.timeRanges.length - 2}` : ''}` : '',
                   ].filter(Boolean).join(' | '),
                   value: `${row.percentage}%`,

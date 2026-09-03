@@ -73,6 +73,7 @@ export default function AttendanceCard({ attendance }) {
   const selectedTotal = selectedSubject?.total || 0;
   const selectedPresentPercent = selectedTotal ? Math.round((Number(selectedSubject.present || 0) / selectedTotal) * 100) : 0;
   const selectedAbsentPercent = selectedTotal ? Math.round((Number(selectedSubject.absent || 0) / selectedTotal) * 100) : 0;
+  const selectedLatePercent = selectedTotal ? Math.round((Number(selectedSubject.late || 0) / selectedTotal) * 100) : 0;
   const selectedLeavePercent = selectedTotal ? Math.round((Number(selectedSubject.leave || 0) / selectedTotal) * 100) : 0;
 
   return (
@@ -99,6 +100,7 @@ export default function AttendanceCard({ attendance }) {
         </div>
         <div className="parent-attendance-metrics">
           <MetricTile icon={<CheckCircle2 size={17} />} label="Present" value={attendance.present || 0} color="#22c55e" />
+          <MetricTile icon={<Clock3 size={17} />} label="Late" value={attendance.late || 0} color="#f59e0b" />
           <MetricTile icon={<XCircle size={17} />} label="Absent" value={attendance.absent || 0} color="#ef4444" />
           <MetricTile icon={<Clock3 size={17} />} label="Leave" value={attendance.leave || 0} color="#f97316" />
         </div>
@@ -131,6 +133,7 @@ export default function AttendanceCard({ attendance }) {
                 </div>
                 <div className="parent-attendance-subject-counts">
                   <span>Present {item.present || 0}</span>
+                  <span>Late {item.late || 0}</span>
                   <span>Absent {item.absent || 0}</span>
                   <span>Leave {item.leave || 0}</span>
                 </div>
@@ -155,12 +158,14 @@ export default function AttendanceCard({ attendance }) {
 
             <div className="parent-attendance-breakdown">
               <ProgressMetric label="Present" count={selectedSubject.present || 0} percent={selectedPresentPercent} color="#22c55e" />
+              <ProgressMetric label="Late" count={selectedSubject.late || 0} percent={selectedLatePercent} color="#f59e0b" />
               <ProgressMetric label="Absent" count={selectedSubject.absent || 0} percent={selectedAbsentPercent} color="#ef4444" />
               <ProgressMetric label="Leave" count={selectedSubject.leave || 0} percent={selectedLeavePercent} color="#f97316" />
             </div>
 
             <div className="parent-attendance-stack" aria-label="Selected subject attendance split">
               <span style={{ width: `${selectedPresentPercent}%`, background: '#22c55e' }} />
+              <span style={{ width: `${selectedLatePercent}%`, background: '#f59e0b' }} />
               <span style={{ width: `${selectedAbsentPercent}%`, background: '#ef4444' }} />
               <span style={{ width: `${selectedLeavePercent}%`, background: '#f97316' }} />
               {!selectedTotal && <i />}
