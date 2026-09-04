@@ -78,6 +78,7 @@ const SubjectNotesManagement = lazy(() => import('../subjectNotes/SubjectNotesMa
 const TimetableManagement = lazy(() => import('../timetable/TimetableManagement'));
 const UserRoleManagement = lazy(() => import('../userRoles/UserRoleManagement'));
 
+const PREVIOUS_ACADEMIC_YEAR = '2024-2025';
 const DEFAULT_ACADEMIC_YEAR = '2025-2026';
 const NEXT_ACADEMIC_YEAR = '2026-2027';
 
@@ -436,7 +437,10 @@ export default function StudentInformationManagement({ user, onLogout }) {
     loadStudentInformation();
   }, [academicYear]);
 
-  const academicYearOptions = useMemo(() => [DEFAULT_ACADEMIC_YEAR, NEXT_ACADEMIC_YEAR], []);
+  const academicYearOptions = useMemo(
+    () => [PREVIOUS_ACADEMIC_YEAR, DEFAULT_ACADEMIC_YEAR, NEXT_ACADEMIC_YEAR],
+    []
+  );
 
   const recordBelongsToYear = (record) => !academicYear || record.academicYear === academicYear;
   const updateSavedAttendanceRecords = useCallback((savedRecords = []) => {
