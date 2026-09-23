@@ -127,8 +127,23 @@ export function recordMatchesSemester(record = {}, selectedSemester = '') {
   return getSemesterNumbersForAcademicRecord(record).includes(selectedNumber);
 }
 
+// Every programme in CURRICULUM_SEMESTER_SUMMARY runs eight semesters.
+export const PROGRAMME_SEMESTER_COUNT = Math.max(
+  ...Object.values(CURRICULUM_SEMESTER_SUMMARY).map((item) => Number(item.totalSemesterCount) || 0)
+);
+
+export function getAllSemesterNumbers(count = PROGRAMME_SEMESTER_COUNT) {
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
+
+// Offers the full programme range rather than only the semesters the loaded records
+// happen to cover - a first-year-only roster previously limited the picker to 1 and 2.
+// Record-derived numbers are merged in so anything stored outside the range still shows.
 export function buildSemesterOptions(records = []) {
-  const numbers = records.flatMap(getSemesterNumbersForAcademicRecord);
+  const numbers = [
+    ...getAllSemesterNumbers(),
+    ...records.flatMap(getSemesterNumbersForAcademicRecord),
+  ];
   return normalizeSemesterNumbers(numbers).map((number) => ({
     number,
     value: getSemesterLabel(number),
